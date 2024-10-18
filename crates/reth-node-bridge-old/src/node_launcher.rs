@@ -3,7 +3,7 @@ use futures_util::{
     stream_select,
 };
 use futures_util::{stream, StreamExt};
-use reth::{api::FullNodeComponents, builder::FullNode};
+use reth::{api::FullNodeComponents, builder::FullNode, network::FetchClient};
 use reth::{
     api::FullNodeTypes,
     blockchain_tree::{
@@ -21,7 +21,7 @@ use reth::{
     tasks::TaskExecutor,
     transaction_pool::TransactionPool,
 };
-use reth_auto_seal_consensus::AutoSealConsensus;
+use reth_auto_seal_consensus::{AutoSealClient, AutoSealConsensus};
 use reth_beacon_consensus::{
     hooks::{EngineHooks, PruneHook, StaticFileHook},
     BeaconConsensusEngine, EthBeaconConsensus,
@@ -31,19 +31,20 @@ use reth_exex::{ExExContext, ExExHandle, ExExManager, ExExManagerHandle};
 use reth_node_core::{
     engine::EngineMessageStreamExt,
     exit::NodeExitFuture,
+    irys_ext::{IrysExt, IrysExtWrapped},
     version::{CARGO_PKG_VERSION, CLIENT_CODE, NAME_CLIENT, VERGEN_GIT_SHA},
 };
 use reth_node_events::{cl::ConsensusLayerHealthEvents, node};
 use reth_primitives::format_ether;
-use reth_provider::{
-    providers::BlockchainProvider, test_utils::blocks::BlockchainTestData, CanonStateSubscriptions,
-};
+use reth_provider::{providers::BlockchainProvider, CanonStateSubscriptions};
 use reth_rpc_engine_api::EngineApi;
 use reth_rpc_types::engine::ClientVersionV1;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc::unbounded_channel, oneshot};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tracing::{debug, info};
+
+use crate::custom_pipeline::build_custom_pipeline;
 
 // ====================================
 // This file is mostly extracted boilerplate from reth/crates/node/builder/src/launch
@@ -113,11 +114,14 @@ where
             });
 
         // setup the consensus instance
-        let consensus: Arc<dyn Consensus> = if ctx.is_dev() {
-            Arc::new(AutoSealConsensus::new(ctx.chain_spec()))
-        } else {
-            Arc::new(EthBeaconConsensus::new(ctx.chain_spec()))
-        };
+        // let consensus: Arc<dyn Consensus> = if ctx.is_dev() {
+        //     Arc::new(AutoSealConsensus::new(ctx.chain_spec()))
+        // } else {
+        //     Arc::new(EthBeaconConsensus::new(ctx.chain_spec()))
+        // };
+
+        let consensus: Arc<dyn Consensus> = Arc::new(EthBeaconConsensus::new(ctx.chain_spec()));
+
         // let consensus: Arc<dyn Consensus> = Arc::new(AutoSealConsensus::new(ctx.chain_spec()));
 
         debug!(target: "reth::cli", "Spawning stages metrics listener task");
@@ -130,7 +134,6 @@ where
         let head = ctx.lookup_head()?;
 
         // Configure the blockchain tree for the node
-        // let tree_config = BlockchainTreeConfig::default();
         let tree_config = BlockchainTreeConfig::new(50, 51, 256, 200);
 
         // NOTE: This is a temporary workaround to provide the canon state notification sender to the components builder because there's a cyclic dependency between the blockchain provider and the tree component. This will be removed once the Blockchain provider no longer depends on an instance of the tree: <https://github.com/paradigmxyz/reth/issues/7154>
@@ -144,6 +147,12 @@ where
             )),
         )?;
 
+        let (reload_tx, reload_rx) = unbounded_channel();
+
+        let irys_ext = IrysExtWrapped(Arc::new(Mutex::new(IrysExt {
+            reload: Some(reload_tx),
+        })));
+
         let builder_ctx = BuilderContext::new(
             head,
             blockchain_db.clone(),
@@ -151,6 +160,7 @@ where
             ctx.data_dir().clone(),
             ctx.node_config().clone(),
             ctx.toml_config().clone(),
+            irys_ext.clone(),
         );
 
         debug!(target: "reth::cli", "creating components");
@@ -168,10 +178,6 @@ where
             // once the Blockchain provider no longer depends on an instance of the tree
             .with_canon_state_notification_sender(canon_state_notification_sender);
 
-        // tree.state
-        // let data = BlockchainTestData::default_from_number(11);
-        // let (block1, exec1) = data.blocks[0].clone();
-        // tree.state.buffered_blocks.insert_block(block1);
         let canon_state_notification_sender = tree.canon_state_notification_sender();
         let blockchain_tree = Arc::new(ShareableBlockchainTree::new(tree));
 
@@ -297,74 +303,95 @@ where
             .clone()
             .unwrap_or_else(ExExManagerHandle::empty);
 
-        let (pipeline, client) = if ctx.is_dev() {
-            info!(target: "reth::cli", "Starting Reth in dev mode");
+        // let (pipeline, client) = if ctx.is_dev() {
+        //     info!(target: "reth::cli", "Starting Reth in dev mode");
 
-            for (idx, (address, alloc)) in ctx.chain_spec().genesis.alloc.iter().enumerate() {
-                info!(target: "reth::cli", "Allocated Genesis Account: {:02}. {} ({} ETH)", idx, address.to_string(), format_ether(alloc.balance));
-            }
+        //     for (idx, (address, alloc)) in ctx.chain_spec().genesis.alloc.iter().enumerate() {
+        //         info!(target: "reth::cli", "Allocated Genesis Account: {:02}. {} ({} ETH)", idx, address.to_string(), format_ether(alloc.balance));
+        //     }
 
-            // install auto-seal
-            let mining_mode = ctx.dev_mining_mode(
-                node_adapter
-                    .components
-                    .pool()
-                    .pending_transactions_listener(),
-            );
-            info!(target: "reth::cli", mode=%mining_mode, "configuring dev mining mode");
+        //     // install auto-seal
+        //     let mining_mode = ctx.dev_mining_mode(
+        //         node_adapter
+        //             .components
+        //             .pool()
+        //             .pending_transactions_listener(),
+        //     );
+        //     info!(target: "reth::cli", mode=%mining_mode, "configuring dev mining mode");
 
-            let (_, client, mut task) = reth_auto_seal_consensus::AutoSealBuilder::new(
-                ctx.chain_spec(),
-                blockchain_db.clone(),
-                node_adapter.components.pool().clone(),
-                consensus_engine_tx.clone(),
-                canon_state_notification_sender,
-                mining_mode,
-                node_adapter.components.block_executor().clone(),
-            )
-            .build();
+        //     let (_, client, task) = reth_auto_seal_consensus::AutoSealBuilder::new(
+        //         ctx.chain_spec(),
+        //         blockchain_db.clone(),
+        //         node_adapter.components.pool().clone(),
+        //         consensus_engine_tx.clone(),
+        //         canon_state_notification_sender,
+        //         mining_mode,
+        //         node_adapter.components.block_executor().clone(),
+        //     )
+        //     .build();
 
-            let pipeline = reth::builder::setup::build_networked_pipeline(
-                ctx.node_config(),
-                &ctx.toml_config().stages,
-                client.clone(),
-                Arc::clone(&consensus),
-                ctx.provider_factory().clone(),
-                ctx.task_executor(),
-                sync_metrics_tx,
-                ctx.prune_config(),
-                max_block,
-                static_file_producer,
-                node_adapter.components.block_executor().clone(),
-                pipeline_exex_handle,
-            )
-            .await?;
+        //     // let pipeline = reth::builder::setup::build_networked_pipeline(
+        //     //     ctx.node_config(),
+        //     //     &ctx.toml_config().stages,
+        //     //     client.clone(),
+        //     //     Arc::clone(&consensus),
+        //     //     ctx.provider_factory().clone(),
+        //     //     ctx.task_executor(),
+        //     //     sync_metrics_tx,
+        //     //     ctx.prune_config(),
+        //     //     max_block,
+        //     //     static_file_producer,
+        //     //     node_adapter.components.block_executor().clone(),
+        //     //     pipeline_exex_handle,
+        //     // )
+        //     // .await?;
+        //     let pipeline = build_custom_pipeline(
+        //         ctx.provider_factory().clone(),
+        //         &ctx.toml_config().stages,
+        //         sync_metrics_tx,
+        //         ctx.prune_config(),
+        //         static_file_producer,
+        //         node_adapter.components.block_executor().clone(),
+        //         pipeline_exex_handle,
+        //     )
+        //     .await?;
 
-            // let pipeline_events = pipeline.events();
-            // task.set_pipeline_events(pipeline_events);
-            // debug!(target: "reth::cli", "Spawning auto mine task");
-            // ctx.task_executor().spawn(Box::pin(task));
+        //     // let pipeline_events = pipeline.events();
+        //     // task.set_pipeline_events(pipeline_events);
+        //     // debug!(target: "reth::cli", "Spawning auto mine task");
+        //     // ctx.task_executor().spawn(Box::pin(task));
 
-            (pipeline, Either::Left(client))
-        } else {
-            let pipeline = reth::builder::setup::build_networked_pipeline(
-                ctx.node_config(),
-                &ctx.toml_config().stages,
-                network_client.clone(),
-                Arc::clone(&consensus),
-                ctx.provider_factory().clone(),
-                ctx.task_executor(),
-                sync_metrics_tx,
-                ctx.prune_config(),
-                max_block,
-                static_file_producer,
-                node_adapter.components.block_executor().clone(),
-                pipeline_exex_handle,
-            )
-            .await?;
+        //     (pipeline, Either::Left(client))
+        // } else {
+        let pipeline = reth::builder::setup::build_networked_pipeline(
+            ctx.node_config(),
+            &ctx.toml_config().stages,
+            network_client.clone(),
+            Arc::clone(&consensus),
+            ctx.provider_factory().clone(),
+            ctx.task_executor(),
+            sync_metrics_tx,
+            ctx.prune_config(),
+            max_block,
+            static_file_producer,
+            node_adapter.components.block_executor().clone(),
+            pipeline_exex_handle,
+        )
+        .await?;
+        // let pipeline = build_custom_pipeline(
+        //     ctx.provider_factory().clone(),
+        //     &ctx.toml_config().stages,
+        //     sync_metrics_tx,
+        //     ctx.prune_config(),
+        //     static_file_producer,
+        //     node_adapter.components.block_executor().clone(),
+        //     pipeline_exex_handle,
+        // )
+        // .await?;
 
-            (pipeline, Either::Right(network_client.clone()))
-        };
+        // (pipeline, )
+        let client: Either<AutoSealClient, FetchClient> = Either::Right(network_client.clone());
+        // };
 
         let pipeline_events = pipeline.events();
 
@@ -387,7 +414,7 @@ where
             Box::new(ctx.task_executor().clone()),
         ));
 
-        // Configure the consensus engine
+        // // Configure the consensus engine
         let (beacon_consensus_engine, beacon_engine_handle) = BeaconConsensusEngine::with_channel(
             client,
             pipeline,
@@ -404,6 +431,26 @@ where
             hooks,
         )?;
         info!(target: "reth::cli", "Consensus engine initialized");
+
+        // let events = stream_select!(
+        //     node_adapter
+        //         .components
+        //         .network()
+        //         .event_listener()
+        //         .map(Into::into),
+        //     // beacon_engine_handle.event_listener().map(Into::into),
+        //     pipeline_events.map(Into::into),
+        //     if ctx.node_config().debug.tip.is_none() && !ctx.is_dev() {
+        //         Either::Left(
+        //             ConsensusLayerHealthEvents::new(Box::new(blockchain_db.clone()))
+        //                 .map(Into::into),
+        //         )
+        //     } else {
+        //         Either::Right(stream::empty())
+        //     },
+        //     pruner_events.map(Into::into),
+        //     static_file_producer_events.map(Into::into),
+        // );
 
         let events = stream_select!(
             node_adapter
@@ -454,7 +501,7 @@ where
         let jwt_secret = ctx.auth_jwt_secret()?;
 
         // Start RPC servers
-        let (rpc_server_handles, mut rpc_registry) = reth::builder::rpc::launch_rpc_servers(
+        let (rpc_server_handles, rpc_registry) = reth::builder::rpc::launch_rpc_servers(
             node_adapter.clone(),
             engine_api,
             ctx.node_config(),
@@ -463,10 +510,10 @@ where
         )
         .await?;
 
-        // in dev mode we generate 20 random dev-signer accounts
-        if ctx.is_dev() {
-            rpc_registry.eth_api().with_dev_accounts();
-        }
+        // // in dev mode we generate 20 random dev-signer accounts
+        // if ctx.is_dev() {
+        //     rpc_registry.eth_api().with_dev_accounts();
+        // }
 
         // Run consensus engine to completion
         let (tx, rx) = oneshot::channel();
@@ -476,6 +523,12 @@ where
                 let res = beacon_consensus_engine.await;
                 let _ = tx.send(res);
             });
+
+        let cfg = ctx.node_config().clone();
+        dbg!(format!(
+            "RPC config: HTTP: {}, AUTH: {}",
+            &cfg.rpc.http_port, &cfg.rpc.auth_port
+        ));
 
         let full_node = FullNode {
             db: blockchain_db.clone(),
@@ -487,14 +540,15 @@ where
             task_executor: ctx.task_executor().clone(),
             rpc_server_handles,
             rpc_registry,
-            config: ctx.node_config().clone(),
+            config: cfg,
             data_dir: ctx.data_dir().clone(),
+            ext: irys_ext,
         };
         // Notify on node started
         on_node_started.on_event(full_node.clone())?;
 
         let handle = NodeHandle {
-            node_exit_future: NodeExitFuture::new(rx, full_node.config.debug.terminate),
+            node_exit_future: NodeExitFuture::new(rx, reload_rx, full_node.config.debug.terminate),
             node: full_node,
         };
 

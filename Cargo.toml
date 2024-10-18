@@ -3,7 +3,7 @@ resolver = "2"
 
 
 exclude = ["ext/reth", "ext/revm"]
-members = ["crates/irys-chain", "crates/irys-types"]
+members = ["crates/irys-chain", "crates/irys-types", "crates/reth-node-bridge"]
 
 [patch.crates-io]
 revm = { path = "./ext/revm/crates/revm" }
