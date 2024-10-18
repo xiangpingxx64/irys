@@ -1,9 +1,9 @@
 [workspace]
 resolver = "2"
-
+rust-version = "1.82"
 
 exclude = ["ext/reth", "ext/revm"]
-members = ["crates/irys-chain", "crates/irys-types", "crates/reth-node-bridge"]
+members = ["crates/irys-chain", "crates/irys-types", "crates/primitives", "crates/reth-node-bridge"]
 
 [patch.crates-io]
 revm = { path = "./ext/revm/crates/revm" }
