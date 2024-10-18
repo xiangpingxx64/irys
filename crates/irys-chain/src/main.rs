@@ -1,13 +1,14 @@
-mod vdf;
-mod partitions;
 mod app_state;
 mod database;
+mod partitions;
+mod vdf;
 
+use api_server::*;
+use clap::Parser;
 use database::open_or_create_db;
 use partitions::{get_partitions, mine_partition};
-use vdf::run_vdf;
 use std::sync::mpsc;
-use clap::Parser;
+use vdf::run_vdf;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -22,8 +23,7 @@ fn main() {
     let args = Args::parse();
 
     open_or_create_db(&args.database);
-    
-    
+
     let mut part_channels = Vec::new();
 
     for part in get_partitions() {
@@ -34,10 +34,10 @@ fn main() {
 
     std::thread::spawn(move || run_vdf(part_channels));
 
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
 
-    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-
-    let _ = runtime.block_on(async {
-        api_server::run_server().await
-    });
+    let _ = runtime.block_on(async { api_server::run_server().await });
 }
