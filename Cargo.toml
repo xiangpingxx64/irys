@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+
+
+exclude = ["ext/reth", "ext/revm"]
+members = ["crates/reth-node-bridge"]
