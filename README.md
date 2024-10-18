@@ -13,3 +13,8 @@ minimum rust version 1.80
 rustc --version
 rustup update
 ```
+
+other deps:
+```
+clang
+```
