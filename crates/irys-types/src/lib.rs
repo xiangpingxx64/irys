@@ -14,6 +14,7 @@ use std::{ops::Index, slice::SliceIndex, str::FromStr};
 use uint::construct_uint;
 
 pub mod decode;
+pub mod consensus;
 use self::decode::DecodeHash;
 
 #[derive(Clone, Debug, Default, Deserialize)]
