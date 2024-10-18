@@ -7,7 +7,7 @@ git submodule init
 git submodule update --recursive --remote
 ```
 
-minimum rustc version 1.80
+minimum rustc version 1.82
 
 ```cli
 rustc --version
