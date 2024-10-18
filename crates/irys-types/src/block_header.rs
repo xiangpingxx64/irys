@@ -108,3 +108,55 @@ pub struct NonceLimiterInfo {
     #[serde(default, with = "option_u64_stringify")]
     pub next_vdf_difficulty: Option<u64>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_irys_block_header_serialization() {
+        let mut txids = H256List::new();
+
+        // Create a sample IrysBlockHeader object with mock data
+        let header = IrysBlockHeader {
+            diff: U256::from(1000),
+            cumulative_diff: U256::from(5000),
+            last_retarget: 1622543200,
+            solution_hash: H256::zero(),
+            previous_solution_hash: H256::zero(),
+            chunk_hash: H256::zero(),
+            height: 42,
+            block_hash: H256::zero(),
+            previous_block_hash: H256::zero(),
+            previous_cumulative_diff: U256::from(4000),
+            poa: PoaData {
+                option: "default".to_string(),
+                tx_path: Base64::from_str("").unwrap(),
+                data_path: Base64::from_str("").unwrap(),
+                chunk: Base64::from_str("").unwrap(),
+            },
+            reward_address: H256::zero(),
+            reward_key: Base64::from_str("").unwrap(),
+            signature: Base64::from_str("").unwrap(),
+            timestamp: 1622543200,
+            ledgers: vec![TransactionLedger {
+                tx_root: H256::zero(),
+                txids: txids,
+                ledger_size: U256::from(100),
+                expires: Some(1622543200),
+            }],
+        };
+
+        // Serialize the header to a JSON string
+        let serialized = serde_json::to_string(&header).unwrap();
+        println!("{}", serialized);
+
+        // Deserialize back to IrysBlockHeader struct
+        let deserialized: IrysBlockHeader = serde_json::from_str(&serialized).unwrap();
+
+        // Assert that the deserialized object is equal to the original
+        assert_eq!(header, deserialized);
+    }
+}

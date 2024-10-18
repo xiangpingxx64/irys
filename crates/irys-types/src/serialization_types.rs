@@ -1,4 +1,3 @@
-use crate::{H256, U256};
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use serde::{
@@ -6,6 +5,25 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::{ops::Index, slice::SliceIndex, str::FromStr};
+
+use fixed_hash::construct_fixed_hash;
+use uint::construct_uint;
+
+//==============================================================================
+// U256 Type
+//------------------------------------------------------------------------------
+construct_uint! {
+    /// 256-bit unsigned integer.
+    pub struct U256(4);
+}
+
+//==============================================================================
+// H256 Type
+//------------------------------------------------------------------------------
+construct_fixed_hash! {
+    /// A 256-bit hash type (32 bytes)
+    pub struct H256(32);
+}
 
 //==============================================================================
 // Option<u64>
