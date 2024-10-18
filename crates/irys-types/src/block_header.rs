@@ -1,0 +1,110 @@
+//! Contains a common set of types used across all of the `irys-chain` modules.
+//!
+//! This module implements a single location where these types are managed,
+//! making them easy to reference and maintain.
+
+use crate::{option_u64_stringify, Base64, H256List, H256, U256};
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+/// Stores deserialized fields from a JSON formatted Irys block header.
+pub struct IrysBlockHeader {
+    /// Difficulty threshold used to produce the current block.
+    pub diff: U256,
+
+    /// The sum of the average number of hashes computed by the network to
+    /// produce the past blocks including this one.
+    pub cumulative_diff: U256,
+
+    /// Unix timestamp of the last difficulty adjustment
+    pub last_retarget: u64,
+
+    /// The solution hash for the block
+    pub solution_hash: H256,
+
+    /// The solution hash of the previous block in the chain.
+    pub previous_solution_hash: H256,
+
+    /// `SHA-256` hash of the PoA chunk (unencoded) bytes.
+    pub chunk_hash: H256,
+
+    /// The block height.
+    pub height: u64,
+
+    /// The block identifier.
+    pub block_hash: H256,
+
+    // Previous block identifier.
+    pub previous_block_hash: H256,
+    pub previous_cumulative_diff: U256,
+
+    /// The recall chunk proof
+    pub poa: PoaData,
+
+    /// Address of the miner claiming the block reward, also used in validation
+    /// of the poa chunks as the packing key.
+    pub reward_address: H256,
+
+    /// {KeyType, PubKey} - the public key the block was signed with. The only
+    // supported KeyType is currently {rsa, 65537}.
+    pub reward_key: Base64,
+
+    /// The block signature
+    pub signature: Base64,
+
+    /// timestamp of when the block was discovered/produced
+    pub timestamp: u64,
+
+    /// A list of transaction ledgers, one for each active data ledger
+    /// Maintains the block->tx_root->data_root relationship for each block
+    /// and ledger.
+    pub ledgers: Vec<TransactionLedger>,
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+/// Stores deserialized fields from a `poa` (Proof of Access) JSON
+pub struct PoaData {
+    pub option: String,
+    pub tx_path: Base64,
+    pub data_path: Base64,
+    pub chunk: Base64,
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct TransactionLedger {
+    pub tx_root: H256,
+    /// List of transaction ids included in the block
+    pub txids: H256List,
+    pub ledger_size: U256,
+    pub expires: Option<u64>,
+}
+
+/// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct NonceLimiterInfo {
+    /// The output of the latest step - the source of the entropy for the mining nonces.
+    pub output: H256,
+    /// The global sequence number of the nonce limiter step at which the block was found.
+    pub global_step_number: u64,
+    /// The hash of the latest block mined below the current reset line.
+    pub seed: H256,
+    /// The hash of the latest block mined below the future reset line.
+    pub next_seed: H256,
+    /// The output of the latest step of the previous block
+    pub prev_output: H256,
+    /// NUM_CHECKPOINTS_IN_VDF_STEP from the most recent step in the nonce limiter process.
+    pub last_step_checkpoints: H256List,
+    /// A list of the output of each step of the nonce limiting process. Note: each step
+    /// has NUM_CHECKPOINTS_IN_VDF_STEP, the last of which is that step's output.
+    /// This field would be more accurately named "steps" as checkpoints are between steps.
+    pub checkpoints: H256List,
+    /// The number of SHA2-256 iterations in a single VDF checkpoint. The protocol aims to keep the
+    /// checkpoint calculation time to around 40ms by varying this parameter. Note: there are
+    /// 25 checkpoints in a single VDF step - so the protocol aims to keep the step calculation at
+    /// 1 second by varying this parameter.
+    #[serde(default, with = "option_u64_stringify")]
+    pub vdf_difficulty: Option<u64>,
+    /// The VDF difficulty scheduled for to be applied after the next VDF reset line.
+    #[serde(default, with = "option_u64_stringify")]
+    pub next_vdf_difficulty: Option<u64>,
+}

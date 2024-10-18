@@ -3,7 +3,7 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
-use base58::{FromBase58, ToBase58};
+use base58::ToBase58;
 use eyre::Error;
 use fixed_hash::construct_fixed_hash;
 use serde::{
