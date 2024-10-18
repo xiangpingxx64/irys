@@ -4839,6 +4839,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "irys-primitives"
+version = "0.1.0"
+
+[[package]]
 name = "irys-types"
 version = "0.1.0"
 dependencies = [
