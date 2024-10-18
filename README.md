@@ -6,3 +6,10 @@ You need submodules yo.
 git submodule init
 git submodule update --recursive --remote
 ```
+
+minimum rust version 1.80
+
+```cli
+rustc --version
+rustup update
+```
