@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 sha2 = "0.10.8"
 tokio = { version = "1.40.0", features = ["rt"] }
+reth-db = { path = "../../ext/reth/crates/storage/db" }

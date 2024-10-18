@@ -7,6 +7,6 @@ pub fn run_vdf(partition_channels: Vec<Sender<String>>) {
     let result = hasher.finalize().to_vec();
 
     for c in partition_channels {
-        c.send(String::from(result));
+        // c.send(String::from(result));
     }
 }
