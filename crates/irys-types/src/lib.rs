@@ -3,12 +3,14 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
+use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use fixed_hash::construct_fixed_hash;
 use serde::{
     de::{self, Error as _},
     Deserialize, Deserializer, Serialize, Serializer,
 };
+use serde_derive::Deserialize;
 use std::{ops::Index, slice::SliceIndex, str::FromStr};
 use uint::construct_uint;
 
@@ -147,16 +149,16 @@ pub struct Base64(pub Vec<u8>);
 
 impl std::fmt::Display for Base64 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let string = base64_url::encode(&self.0);
+        let string = &self.0.as_slice().to_base58();
         write!(f, "{}", string)
     }
 }
 
 /// Converts a base64url encoded string to a Base64 struct.
 impl FromStr for Base64 {
-    type Err = base64_url::base64::DecodeError;
-    fn from_str(str: &str) -> Result<Self, base64_url::base64::DecodeError> {
-        let result = base64_url::decode(str)?;
+    type Err = base58::FromBase58Error;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        let result = FromBase58::from_base58(str)?;
         Ok(Self(result))
     }
 }
@@ -203,7 +205,7 @@ impl<'de> Deserialize<'de> for Base64 {
             }
 
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                base64_url::decode(v)
+                FromBase58::from_base58(v)
                     .map(Base64)
                     .map_err(|_| de::Error::custom("failed to decode base64 string"))
             }
@@ -262,7 +264,7 @@ impl Serialize for H256 {
     where
         S: Serializer,
     {
-        serializer.serialize_str(base64_url::encode(self.as_bytes()).as_str())
+        serializer.serialize_str(self.as_bytes().to_base58().as_ref())
     }
 }
 
