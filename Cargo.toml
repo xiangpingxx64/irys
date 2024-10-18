@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-
+rust-version = "1.82"
 
 exclude = ["ext/reth", "ext/revm"]
 members = ["crates/irys-chain", "crates/irys-types", "crates/reth-node-bridge"]
