@@ -17,7 +17,7 @@ pub mod consensus;
 pub mod decode;
 use self::decode::DecodeHash;
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
     /// Difficulty threshold used to produce the current block.
@@ -72,7 +72,7 @@ pub struct IrysBlockHeader {
     pub ledgers: Vec<TransactionLedger>,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 /// Stores deserialized fields from a `poa` (Proof of Access) JSON
 pub struct PoaData {
     pub option: String,
@@ -81,7 +81,7 @@ pub struct PoaData {
     pub chunk: Base64,
 }
 
-#[derive(Default, Clone, Debug, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct TransactionLedger {
     pub tx_root: H256,
     /// List of transaction ids included in the block
@@ -163,16 +163,16 @@ pub struct Base64(pub Vec<u8>);
 
 impl std::fmt::Display for Base64 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let string = &self.0.as_slice().to_base58();
+        let string = base64_url::encode(&self.0);
         write!(f, "{}", string)
     }
 }
 
 /// Converts a base64url encoded string to a Base64 struct.
 impl FromStr for Base64 {
-    type Err = base58::FromBase58Error;
-    fn from_str(str: &str) -> Result<Self, Self::Err> {
-        let result = FromBase58::from_base58(str)?;
+    type Err = base64_url::base64::DecodeError;
+    fn from_str(str: &str) -> Result<Self, base64_url::base64::DecodeError> {
+        let result = base64_url::decode(str)?;
         Ok(Self(result))
     }
 }
@@ -219,7 +219,7 @@ impl<'de> Deserialize<'de> for Base64 {
             }
 
             fn visit_str<E: de::Error>(self, v: &str) -> Result<Self::Value, E> {
-                FromBase58::from_base58(v)
+                base64_url::decode(v)
                     .map(Base64)
                     .map_err(|_| de::Error::custom("failed to decode base64 string"))
             }
@@ -300,6 +300,16 @@ impl<'de> Deserialize<'de> for H256 {
 pub struct H256List(pub Vec<H256>);
 
 impl H256List {
+    // Constructor for an empty H256List
+    pub fn new() -> Self {
+        H256List(Vec::new())
+    }
+
+    // Constructor for an initialized H256List
+    pub fn with_capacity(capacity: usize) -> Self {
+        H256List(Vec::with_capacity(capacity))
+    }
+
     pub fn push(&mut self, value: H256) {
         self.0.push(value)
     }
@@ -364,5 +374,56 @@ impl<'de> Deserialize<'de> for H256List {
     {
         // Deserialize a Vec<Base64> and then wrap it in Base64Array
         Vec::<H256>::deserialize(deserializer).map(H256List)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json;
+
+    #[test]
+    fn test_irys_block_header_serialization() {
+        let mut txids = H256List::new();
+
+        // Create a sample IrysBlockHeader object with mock data
+        let header = IrysBlockHeader {
+            diff: U256::from(1000),
+            cumulative_diff: U256::from(5000),
+            last_retarget: 1622543200,
+            solution_hash: H256::zero(),
+            previous_solution_hash: H256::zero(),
+            chunk_hash: H256::zero(),
+            height: 42,
+            block_hash: H256::zero(),
+            previous_block_hash: H256::zero(),
+            previous_cumulative_diff: U256::from(4000),
+            poa: PoaData {
+                option: "default".to_string(),
+                tx_path: Base64::from_str("").unwrap(),
+                data_path: Base64::from_str("").unwrap(),
+                chunk: Base64::from_str("").unwrap(),
+            },
+            reward_address: H256::zero(),
+            reward_key: Base64::from_str("").unwrap(),
+            signature: Base64::from_str("").unwrap(),
+            timestamp: 1622543200,
+            ledgers: vec![TransactionLedger {
+                tx_root: H256::zero(),
+                txids: txids,
+                ledger_size: U256::from(100),
+                expires: Some(1622543200),
+            }],
+        };
+
+        // Serialize the header to a JSON string
+        let serialized = serde_json::to_string(&header).unwrap();
+        println!("{}", serialized);
+
+        // Deserialize back to IrysBlockHeader struct
+        let deserialized: IrysBlockHeader = serde_json::from_str(&serialized).unwrap();
+
+        // Assert that the deserialized object is equal to the original
+        assert_eq!(header, deserialized);
     }
 }

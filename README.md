@@ -23,3 +23,8 @@ other deps:
 ```
 clang
 ```
+
+Testing Block Serialization
+```cli
+cargo test -p irys-types  -- --nocapture
+```
