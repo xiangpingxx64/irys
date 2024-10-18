@@ -10,7 +10,6 @@ use serde::{
     de::{self, Error as _},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use serde_derive::Deserialize;
 use std::{ops::Index, slice::SliceIndex, str::FromStr};
 use uint::construct_uint;
 
