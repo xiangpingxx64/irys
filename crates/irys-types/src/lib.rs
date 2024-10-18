@@ -13,8 +13,8 @@ use serde::{
 use std::{ops::Index, slice::SliceIndex, str::FromStr};
 use uint::construct_uint;
 
-pub mod decode;
 pub mod consensus;
+pub mod decode;
 use self::decode::DecodeHash;
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -65,6 +65,11 @@ pub struct IrysBlockHeader {
 
     /// timestamp of when the block was discovered/produced
     pub timestamp: u64,
+
+    /// A list of transaction ledgers, one for each active data ledger
+    /// Maintains the block->tx_root->data_root relationship for each block
+    /// and ledger.
+    pub ledgers: Vec<TransactionLedger>,
 }
 
 #[derive(Default, Clone, Debug, Deserialize)]
@@ -74,6 +79,15 @@ pub struct PoaData {
     pub tx_path: Base64,
     pub data_path: Base64,
     pub chunk: Base64,
+}
+
+#[derive(Default, Clone, Debug, Deserialize)]
+pub struct TransactionLedger {
+    pub tx_root: H256,
+    /// List of transaction ids included in the block
+    pub txids: H256List,
+    pub ledger_size: U256,
+    pub expires: Option<u64>,
 }
 
 /// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
