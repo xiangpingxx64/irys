@@ -2,15 +2,7 @@
 //!
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
-
-use base58::ToBase58;
-use eyre::Error;
 use fixed_hash::construct_fixed_hash;
-use serde::{
-    de::{self, Error as _},
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-use std::{ops::Index, slice::SliceIndex, str::FromStr};
 use uint::construct_uint;
 
 pub mod block_header;
@@ -40,6 +32,7 @@ construct_fixed_hash! {
 mod tests {
     use super::*;
     use serde_json;
+    use std::str::FromStr;
 
     #[test]
     fn test_irys_block_header_serialization() {
