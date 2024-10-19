@@ -1,4 +1,5 @@
 mod app_state;
+mod config;
 mod database;
 mod partitions;
 mod vdf;
@@ -19,10 +20,10 @@ struct Args {
     database: String,
 }
 
-fn main() {
+fn main() -> eyre::Result<()> {
     let args = Args::parse();
 
-    open_or_create_db(&args.database);
+    let db = open_or_create_db(&args.database)?;
 
     let mut part_channels = Vec::new();
 
@@ -40,4 +41,6 @@ fn main() {
         .unwrap();
 
     let _ = runtime.block_on(async { api_server::run_server().await });
+
+    Ok(())
 }

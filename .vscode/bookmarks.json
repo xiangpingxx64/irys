@@ -6,7 +6,7 @@
 				{
 					"line": 32,
 					"column": 0,
-					"label": "create and open DB"
+					"label": "Init mdbx database"
 				}
 			]
 		}

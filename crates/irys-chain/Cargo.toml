@@ -11,3 +11,5 @@ tokio = { version = "1.40.0", features = ["rt"] }
 reth-db = { path = "../../ext/reth/crates/storage/db" }
 clap = "4.5.20"
 api-server = { path = "../api-server" }
+eyre = "0.6.8"
+color-eyre = "0.6.2"

@@ -2066,6 +2066,8 @@ version = "0.1.0"
 dependencies = [
  "api-server",
  "clap",
+ "color-eyre",
+ "eyre",
  "reth-db",
  "sha2",
  "tokio",
