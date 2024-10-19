@@ -1,7 +1,7 @@
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
-use alloy_primitives::{Bytes, Signature, B256, U256};
+use alloy_primitives::Signature;
 
 use crate::H256;
 
