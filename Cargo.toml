@@ -24,6 +24,7 @@ proptest-derive = "0.5"
 serde = { version = "1.0", default-features = false }
 serde_json = "1.0.94"
 thiserror = "1.0"
+test-fuzz = "6"
 
 
 [patch.crates-io]

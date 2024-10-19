@@ -1,5 +1,7 @@
+use alloy_primitives::bytes;
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
+use reth_codecs::Compact;
 use serde::{
     de::{self, Error as _},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -127,6 +129,24 @@ impl DecodeHash for H256 {
 
     fn empty() -> Self {
         H256::zero()
+    }
+}
+
+impl Compact for H256 {
+    #[inline]
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: bytes::BufMut + AsMut<[u8]>,
+    {
+        self.0.to_compact(buf)
+    }
+
+    #[inline]
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        // Disambiguate and call the correct H256::from method
+        let (v, remaining_buf) = <[u8; 32]>::from_compact(buf, len);
+        // Fully qualify this call to avoid calling DecodeHash::from
+        (<H256 as From<[u8; 32]>>::from(v), remaining_buf)
     }
 }
 

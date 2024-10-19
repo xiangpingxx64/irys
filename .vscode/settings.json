@@ -3,6 +3,8 @@
 		"Irys",
 		"mdbx",
 		"rngs",
+		"secp",
+		"Seedable",
 		"txids"
 	]
 }

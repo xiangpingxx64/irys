@@ -2097,14 +2097,21 @@ dependencies = [
 name = "irys-types"
 version = "0.1.0"
 dependencies = [
+ "alloy-genesis 0.4.2",
+ "alloy-primitives 0.8.8",
+ "alloy-serde 0.4.2",
  "base58",
  "base64-url",
+ "bytes",
  "color-eyre",
  "eyre",
  "fixed-hash",
+ "modular-bitfield",
  "rand",
+ "reth-codecs",
  "serde",
  "serde_json",
+ "test-fuzz",
  "uint",
 ]
 

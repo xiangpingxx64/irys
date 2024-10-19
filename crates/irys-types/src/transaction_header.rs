@@ -1,8 +1,11 @@
+use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
-use crate::{Base64, H256};
+use alloy_primitives::{Bytes, Signature, B256, U256};
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+use crate::H256;
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Compact)]
 /// Stores deserialized fields from a JSON formatted Irys transaction header.
 /// We include the Irys prefix to differentiate from EVM transactions.
 pub struct IrysTransactionHeader {
@@ -36,10 +39,28 @@ pub struct IrysTransactionHeader {
     pub bundle_format: u64,
 
     /// Indicating the type of transaction, pledge, data, schema, etc.
-    pub tx_type: u8,
+    pub tx_type: u64,
 
     /// Transaction signature bytes
-    pub signature: Base64, // TODO: Possibly this becomes a smaller Base58 encoded type
+    pub signature: Signature,
+}
+
+impl Default for IrysTransactionHeader {
+    fn default() -> Self {
+        IrysTransactionHeader {
+            id: H256::zero(),
+            anchor: H256::zero(),
+            signer: H256::zero(),
+            data_root: H256::zero(),
+            data_size: 0,
+            term_fee: 0,
+            perm_fee: None,
+            ledger_num: None,
+            bundle_format: 0,
+            tx_type: 0,
+            signature: Signature::test_signature(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -63,7 +84,8 @@ mod tests {
             ledger_num: Some(1),
             bundle_format: 0,
             tx_type: 1,
-            signature: Base64::from_str("").unwrap(),
+            signature: Signature::from_str("0x12c2b67f2adf5b924d41e4f62a1f5e432f4e9e1cced5ecb442efb567d2f5e2e36e457fc021469d8de7252e7eaa3640c6a9b9082a3fb28f75642f81a5d6e4df881b"
+            ).expect("signature to parse"),
         };
 
         // Serialize the IrysTransactionHeader to JSON

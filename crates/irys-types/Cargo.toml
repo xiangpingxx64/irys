@@ -13,3 +13,13 @@ uint = "0.9.5"
 base58 = "0.2.0"
 base64-url = "2.0.0"
 rand = "0.8.5"
+reth-codecs = { path = "../../ext/reth/crates/storage/codecs" }
+
+alloy-genesis.workspace = true
+alloy-primitives.workspace = true
+alloy-serde.workspace = true
+
+test-fuzz.workspace = true
+
+modular-bitfield.workspace = true
+bytes.workspace = true
