@@ -3,7 +3,28 @@ resolver = "2"
 rust-version = "1.82"
 
 exclude = ["ext/reth", "ext/revm"]
-members = ["crates/irys-chain", "crates/irys-types", "crates/primitives", "crates/reth-node-bridge"]
+members = [
+    "crates/irys-chain",
+    "crates/irys-types",
+    "crates/primitives",
+    # "crates/reth-node-bridge",
+]
+
+[workspace.dependencies]
+alloy-eips = { version = "0.4.2", default-features = false }
+alloy-genesis = { version = "0.4.2", default-features = false }
+alloy-primitives = { version = "0.8.7", default-features = false }
+alloy-rlp = "0.3.4"
+alloy-serde = { version = "0.4.2", default-features = false }
+arbitrary = "1.3"
+bytes = "1.5"
+derive_more = { version = "1", features = ["full"] }
+modular-bitfield = "0.11.2"
+proptest-derive = "0.5"
+serde = { version = "1.0", default-features = false }
+serde_json = "1.0.94"
+thiserror = "1.0"
+
 
 [patch.crates-io]
 revm = { path = "./ext/revm/crates/revm" }
