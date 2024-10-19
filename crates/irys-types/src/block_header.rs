@@ -112,15 +112,16 @@ pub struct NonceLimiterInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
     use serde_json;
     use std::str::FromStr;
 
     #[test]
     fn test_irys_block_header_serialization() {
-        let mut txids = H256List::new();
+        let txids = H256List::new();
 
         // Create a sample IrysBlockHeader object with mock data
-        let header = IrysBlockHeader {
+        let mut header = IrysBlockHeader {
             diff: U256::from(1000),
             cumulative_diff: U256::from(5000),
             last_retarget: 1622543200,
@@ -149,9 +150,23 @@ mod tests {
             }],
         };
 
+        // Use a specific seed
+        let seed: [u8; 32] = [0; 32]; // Example: use an array of zeros as the seed
+
+        // Create a seeded RNG
+        let mut rng = StdRng::from_seed(seed);
+
+        // Populate some deterministic random hash data (will not pass consensus checks)
+        rng.fill(&mut header.chunk_hash.as_bytes_mut()[..]);
+        rng.fill(&mut header.solution_hash.as_bytes_mut()[..]);
+        rng.fill(&mut header.previous_solution_hash.as_bytes_mut()[..]);
+        rng.fill(&mut header.previous_block_hash.as_bytes_mut()[..]);
+        rng.fill(&mut header.block_hash.as_bytes_mut()[..]);
+        rng.fill(&mut header.reward_address.as_bytes_mut()[..]);
+
         // Serialize the header to a JSON string
         let serialized = serde_json::to_string(&header).unwrap();
-        println!("{}", serialized);
+        println!("\n{}", serialized);
 
         // Deserialize back to IrysBlockHeader struct
         let deserialized: IrysBlockHeader = serde_json::from_str(&serialized).unwrap();

@@ -5,6 +5,9 @@
 pub mod block_header;
 pub mod consensus;
 pub mod serialization_types;
+pub mod transaction_header;
 
 pub use block_header::*;
+pub use consensus::*;
 pub use serialization_types::*;
+pub use transaction_header::*;
