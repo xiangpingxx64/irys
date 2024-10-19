@@ -1,0 +1,14 @@
+{
+	"files": [
+		{
+			"path": "ext/reth/crates/storage/db/src/mdbx.rs",
+			"bookmarks": [
+				{
+					"line": 32,
+					"column": 0,
+					"label": "create and open DB"
+				}
+			]
+		}
+	]
+}
