@@ -9,6 +9,16 @@
 					"label": "Init mdbx database"
 				}
 			]
+		},
+		{
+			"path": "ext/reth/crates/chainspec/src/spec.rs",
+			"bookmarks": [
+				{
+					"line": 660,
+					"column": 0,
+					"label": "Genesis -> ChainSpec"
+				}
+			]
 		}
 	]
 }

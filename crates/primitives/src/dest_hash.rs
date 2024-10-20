@@ -18,6 +18,8 @@ use crate::IrysTxId;
 // )]
 
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
+#[derive(arbitrary::Arbitrary)]
+
 pub enum DestHash {
     Address(Address),
     // txId has the same length as part_hash

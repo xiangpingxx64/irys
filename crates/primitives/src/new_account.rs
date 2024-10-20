@@ -13,6 +13,8 @@ use super::{
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable)]
 #[rlp(trailing)]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct NewAccountState {
     /// Account balance.
     pub balance: Option<U256>,
@@ -33,13 +35,19 @@ pub struct NewAccountState {
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable, Default)]
 #[rlp(trailing)]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct WrappedStake(pub Option<Stake>);
 
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable, Default)]
 #[rlp(trailing)]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct WrappedCommitments(pub Option<Commitments>);
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(Debug, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable, Default)]
 #[rlp(trailing)]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct WrappedLastTx(pub Option<LastTx>);

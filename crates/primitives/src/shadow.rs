@@ -29,7 +29,7 @@ use super::new_account::NewAccountState;
     RlpDecodable
 )]
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
-
+#[derive(arbitrary::Arbitrary)]
 
 pub struct ShadowTx {
     pub tx_id: IrysTxId,
@@ -38,9 +38,10 @@ pub struct ShadowTx {
     pub address: Address,
     pub tx: ShadowTxType,
 }
+
 #[derive( Debug, Clone, Eq, PartialEq, Hash)]
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
-
+#[derive(arbitrary::Arbitrary)]
 pub enum ShadowTxType {
     Null, // because default is a required derive TODO: replace with a null TransferShadow or some other no-op
     Transfer(TransferShadow),
@@ -193,6 +194,7 @@ impl Default for ShadowTxType {
     Default
 )]
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
+#[derive(arbitrary::Arbitrary)]
 
 pub struct TransferShadow {
     pub to: Address,
@@ -213,6 +215,7 @@ pub struct TransferShadow {
     Default
 
 )]
+#[derive(arbitrary::Arbitrary)]
 
 pub struct DataShadow {
     pub fee: U256,
@@ -232,6 +235,7 @@ pub struct DataShadow {
     Default
 
 )]
+#[derive(arbitrary::Arbitrary)]
 
 pub struct MiningAddressStakeShadow {
     pub value: U256,
@@ -252,6 +256,7 @@ pub struct MiningAddressStakeShadow {
     Default
 
 )]
+#[derive(arbitrary::Arbitrary)]
 
 pub struct PartitionPledgeShadow {
     pub quantity: U256,
@@ -275,6 +280,8 @@ pub struct PartitionPledgeShadow {
     Default
 
 )]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct PartitionUnPledgeShadow {
     pub part_hash: IrysTxId,
 }
@@ -291,6 +298,7 @@ pub struct PartitionUnPledgeShadow {
     RlpDecodable,
     Default
 )]
+#[derive(arbitrary::Arbitrary)]
 
 pub struct UnstakeShadow {}
 
@@ -307,6 +315,8 @@ pub struct UnstakeShadow {}
     RlpDecodable,
     Default
 )]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct SlashShadow {
     pub slashed_addr: Address,
 }
@@ -324,6 +334,8 @@ pub struct SlashShadow {
     RlpDecodable,
     Default
 )]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct BlockRewardShadow {
     pub reward: U256,
 }
@@ -339,13 +351,16 @@ pub struct BlockRewardShadow {
     RlpDecodable,
     Default
 )]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct DiffShadow {
     pub new_state: NewAccountState,
 }
 
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
-
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash, RlpEncodableWrapper, RlpDecodableWrapper)]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct Shadows(Vec<ShadowTx>);
 
 

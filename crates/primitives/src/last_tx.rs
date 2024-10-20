@@ -10,6 +10,7 @@ use super::commitment::{IrysBlockHash, IrysTxId};
 
 #[derive(PartialEq, Debug, Eq, Clone, Copy, Hash)]
 #[derive( serde::Serialize, serde::Deserialize, Compact)]
+#[derive(arbitrary::Arbitrary)]
 pub enum LastTx {
     BlockHash(IrysBlockHash),
     TxId(IrysTxId),

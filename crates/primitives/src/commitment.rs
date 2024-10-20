@@ -22,6 +22,8 @@ use super::DestHash;
     RlpDecodable,
 )]
 #[rlp(trailing)]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct Commitment {
     pub tx_id: IrysTxId,
     pub quantity: U256,
@@ -51,6 +53,8 @@ impl Commitment {
 
 #[derive(PartialEq, Debug, Default, Eq, Clone, Copy, Hash)]
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
+#[derive(arbitrary::Arbitrary)]
+
 pub enum CommitmentStatus {
     #[default]
     /// Stake is pending epoch activation
@@ -110,6 +114,8 @@ impl Decodable for CommitmentStatus {
 
 #[derive(PartialEq, Debug, Default, Eq, Clone, Copy, Hash)]
 #[derive(Compact, serde::Serialize, serde::Deserialize)]
+#[derive(arbitrary::Arbitrary)]
+
 pub enum CommitmentType {
     #[default]
     Stake = 2,
@@ -171,6 +177,8 @@ impl Decodable for CommitmentType {
     serde::Serialize,
     serde::Deserialize
 )]
+#[derive(arbitrary::Arbitrary)]
+
 pub struct Commitments(pub Vec<Commitment>);
 
 // impl Commitments {
@@ -252,6 +260,7 @@ impl From<Vec<Commitment>> for Commitments {
     RlpEncodable,
     RlpDecodable,
 )]
+#[derive(arbitrary::Arbitrary)]
 pub struct Stake {
     pub tx_id: IrysTxId,
     pub quantity: U256,

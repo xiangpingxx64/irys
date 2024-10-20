@@ -1,86 +1,66 @@
-use crate::{chain::get_chain_spec_with_path, node_launcher::CustomNodeLauncher};
-use alloy_signer_wallet::LocalWallet;
+use alloy_rpc_types::BlockId;
+use alloy_signer_local::LocalWallet;
 use clap::Parser;
+use foldhash::fast::RandomState;
+use irys_primitives::{Address, Genesis, GenesisAccount};
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
 use jsonrpsee_core::async_trait;
 use jsonrpsee_types::ErrorObjectOwned;
-use reth::api::FullNodeTypesAdapter;
-use reth::builder::components::{Components, ComponentsBuilder};
-use reth::builder::{
-    NodeAdapter, NodeBuilder, NodeBuilderWithComponents, NodeHandle, WithLaunchContext,
-};
-use reth::commands::node::NoArgs;
-use reth::network::NetworkHandle;
-use reth::tasks::TaskManager;
-use reth::transaction_pool::blobstore::DiskFileBlobStore;
-use reth::transaction_pool::{
-    CoinbaseTipOrdering, EthPooledTransaction, EthTransactionValidator, Pool,
-    TransactionValidationTaskExecutor,
-};
-use reth::{
-    builder::NodeConfig,
-    cli::{Cli, Commands},
-    commands::node::NodeCommand,
-    CliContext, CliRunner,
-};
+
+use reth::network::{NetworkHandle, PeersHandleProvider};
+
+
+use reth::payload::database::CachedReads;
+use reth::primitives::static_file::find_fixed_range;
+use reth::primitives::{Account, ShadowReceipt, StaticFileSegment};
+use reth::revm::database::StateProviderDatabase;
+use reth::revm::state_change::{apply_shadow, simulate_apply_shadow_thin};
+use reth::transaction_pool::{PeerId, TransactionPool};
+use reth_chainspec::ChainSpec;
 use reth_db::database::Database;
 use reth_db::static_file::iter_static_files;
 use reth_db::table::Table;
-use reth_db::transaction::DbTxMut;
-use reth_db::{init_db, transaction::DbTx};
-use reth_db::{DatabaseEnv, TableViewer, Tables};
-
-use reth_e2e_test_utils::transaction::{tx, TransactionTestContext};
-use reth_interfaces::provider::ProviderResult;
-use reth_primitives::Bytes;
+use reth_db::transaction::{DbTx, DbTxMut};
+use reth_db::{DatabaseEnv, DatabaseError, TableViewer, Tables};
 
 use alloy_eips::eip2718::Encodable2718;
+
+use reth_e2e_test_utils::transaction::{tx, TransactionTestContext};
+use reth_node_builder::{NodeTypesWithDB, NodeTypesWithDBAdapter, NodeTypesWithEngine};
 use reth_node_core::irys_ext::{IrysExtWrapped, NodeExitReason, ReloadPayload};
-use reth_node_ethereum::node::{
-    EthereumExecutorBuilder, EthereumNetworkBuilder, EthereumPoolBuilder,
-};
-use reth_node_ethereum::{EthEvmConfig, EthExecutorProvider, EthereumNode};
-use reth_payload_builder::database::CachedReads;
-use reth_primitives::static_file::find_fixed_range;
-use reth_primitives::ShadowReceipt;
-use reth_primitives::{Account, Address, ChainSpec, StaticFileSegment};
-use reth_provider::providers::BlockchainProvider;
+
+
+use reth_node_ethereum::EthereumNode;
+use reth_provider::providers::{BlockchainProvider, BlockchainProvider2};
 use reth_provider::{
-    BlockIdReader, ChainSpecProvider, FullBundleStateDataProvider, ProviderError, StateProvider,
-    StateProviderFactory, StaticFileProviderFactory,
+    BlockIdReader, ChainSpecProvider, FullExecutionDataProvider, FullProvider, ProviderError, StateProvider, StateProviderFactory, StaticFileProviderFactory
 };
-use reth_revm::database::StateProviderDatabase;
-use reth_revm::state_change::{apply_shadow, simulate_apply_shadow_thin};
-use reth_rpc_types::{BlockId, PeerId};
+
 use revm::db::{CacheDB, State};
 use revm::{DatabaseCommit, JournaledState};
+
+use irys_primitives::shadow::{ShadowTx, Shadows};
 use revm_primitives::hex::ToHexExt;
 use revm_primitives::ruint::Uint;
-use revm_primitives::shadow::{ShadowTx, Shadows};
-use revm_primitives::{AccountInfo, Bytecode, FixedBytes, GenesisAccount, HashSet, SpecId, B256};
+use revm_primitives::{AccountInfo, Bytecode, Bytes, FixedBytes, HashSet, SpecId, B256};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use std::fmt;
-use std::fs::File;
-use std::io::Write as _;
+use std::hash::BuildHasher;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
 use strum::IntoEnumIterator;
-use tokio::runtime::Handle;
-use tokio::time::sleep;
-use tracing::{debug, error, info, trace};
 
-// We use jemalloc for performance reasons.
-#[cfg(all(feature = "jemalloc", unix))]
-#[global_allocator]
-static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+use tracing::{debug, error, };
 
+// // We use jemalloc for performance reasons.
+// #[cfg(all(feature = "jemalloc", unix))]
+// #[global_allocator]
+// static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
+
+// #[rpc(server, client, namespace = "irys")]
 #[cfg_attr(not(test), rpc(server, namespace = "irys"))]
 #[cfg_attr(test, rpc(server, client, namespace = "irys"))]
-
 pub trait AccountStateExtApi {
     // #[method(name = "updateBasicAccount")]
     // fn update_basic_account(&self, address: Address, new_balance: U256) -> RpcResult<bool>;
@@ -114,7 +94,7 @@ pub trait AccountStateExtApi {
         // accounts: Vec<(Address, GenesisAccount)>,
         // shadows: Option<Shadows>,
         info: GenesisInfo,
-    ) -> RpcResult<ChainSpec>;
+    ) -> RpcResult<Genesis>;
 
     #[method(name = "testApplyShadow")]
     fn test_apply_shadow(&self, parent: BlockId, shadow: ShadowTx) -> RpcResult<ShadowReceipt>;
@@ -142,8 +122,11 @@ pub trait AccountStateExtApi {
     ) -> RpcResult<HashMap<Address, Option<Account>>>;
 }
 
-pub struct AccountStateExt {
-    pub provider: BlockchainProvider<Arc<DatabaseEnv>>,
+pub struct AccountStateExt  {//<DB: NodeTypesWithDB> { //<DB: FullProvider<dyn NodeTypesWithDB>>  {
+    // pub provider: DB,
+    // pub provider: BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    pub provider:BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    // pub provider: dyn FullProvider<NodeTypesWithDB + NodeTypesWithEngine>,
     pub irys_ext: IrysExtWrapped,
     pub network: NetworkHandle,
 }
@@ -176,7 +159,9 @@ pub enum Either<L, R> {
 }
 
 #[async_trait]
+// impl<DB> AccountStateExtApiServer for AccountStateExt<DB> where DB: NodeTypesWithDB + StateProviderFactory  {
 impl AccountStateExtApiServer for AccountStateExt {
+    
     fn add_peer(&self, peer_id: PeerId, addr: String) -> RpcResult<()> {
         dbg!(&addr);
         let socket_addr = SocketAddr::from_str(addr.as_str()).map_err(|e| {
@@ -238,7 +223,7 @@ impl AccountStateExtApiServer for AccountStateExt {
         block_id: Option<BlockId>,
     ) -> RpcResult<Option<Account>> {
         // get provider for latest state
-        let state_provider: Either<Box<dyn StateProvider>, Box<dyn FullBundleStateDataProvider>> =
+        let state_provider: Either<Box<dyn StateProvider>,Box<dyn FullExecutionDataProvider>> =
             match block_id {
                 Some(block_id) => match block_id {
                     BlockId::Number(n) => self
@@ -272,7 +257,7 @@ impl AccountStateExtApiServer for AccountStateExt {
                     Some(e.to_string()),
                 )
             })?,
-            Either::Right(ref provider) => provider.state().account(&address).flatten(),
+            Either::Right(provider) => provider.execution_outcome().state().account(&address).map(|a| a.account_info().map(|a2| a2.into())).flatten(),
         };
 
         return Ok(acc);
@@ -321,7 +306,7 @@ impl AccountStateExtApiServer for AccountStateExt {
         block_id: Option<BlockId>,
     ) -> RpcResult<HashMap<Address, Option<Account>>> {
         // get state provider
-        let state_provider: Either<Box<dyn StateProvider>, Box<dyn FullBundleStateDataProvider>> =
+        let state_provider: Either<Box<dyn StateProvider>, Box<dyn FullExecutionDataProvider>> =
             match block_id {
                 Some(block_id) => match block_id {
                     BlockId::Number(n) => self
@@ -362,7 +347,9 @@ impl AccountStateExtApiServer for AccountStateExt {
                         })?
                     }
                     Either::Right(ref provider) => {
-                        provider.state().account(address).flatten() /* .ok_or_else(|| {
+                        provider.execution_outcome().state().account(&address).map(|a| a.account_info().map(|a2| a2.into())).flatten()
+                        // provider.state().account(address).flatten()
+                         /* .ok_or_else(|| {
                                                                         ErrorObjectOwned::owned::<String>(
                                                                             -32072,
                                                                             "error getting account info from pending state provider",
@@ -381,7 +368,7 @@ impl AccountStateExtApiServer for AccountStateExt {
         Ok("pong".to_string())
     }
 
-    fn add_genesis_block(&self, info: GenesisInfo) -> RpcResult<ChainSpec> {
+    fn add_genesis_block(&self, info: GenesisInfo) -> RpcResult<Genesis> {
         let GenesisInfo {
             accounts,
             shadows,
@@ -401,16 +388,26 @@ impl AccountStateExtApiServer for AccountStateExt {
                 })?;
 
             if let Some(segment_static_files) = static_files.get(&segment) {
+                // for (block_range, _) in segment_static_files {
+                //     static_file_provider
+                //         .delete_jar(segment, find_fixed_range(block_range.start()))
+                //         .map_err(|e| {
+                //             ErrorObjectOwned::owned::<String>(
+                //                 -32073,
+                //                 "error getting database provider",
+                //                 Some(e.to_string()),
+                //             )
+                //         })?;
+                // }
                 for (block_range, _) in segment_static_files {
-                    static_file_provider
-                        .delete_jar(segment, find_fixed_range(block_range.start()))
-                        .map_err(|e| {
-                            ErrorObjectOwned::owned::<String>(
-                                -32073,
-                                "error getting database provider",
-                                Some(e.to_string()),
-                            )
-                        })?;
+                    static_file_provider.delete_jar(segment, block_range.start())
+                    .map_err(|e| {            //         .map_err(|e| {
+                                    ErrorObjectOwned::owned::<String>(
+                                        -32073,
+                                        "error getting database provider",
+                                        Some(e.to_string()),
+                                    )
+                                })?;
                 }
             }
         }
@@ -437,7 +434,8 @@ impl AccountStateExtApiServer for AccountStateExt {
         // StateProviderDatabase implements the required DatabaseRef trait
         let db = StateProviderDatabase::new(self.provider.latest().unwrap());
         let mut cache_db = CacheDB::new(db);
-        let mut journaled_state = JournaledState::new(SpecId::LATEST, HashSet::new());
+        // let random_state = RandomState::default();
+        let mut journaled_state = JournaledState::new(SpecId::LATEST, HashSet::<Address,RandomState>::with_hasher(RandomState::default()));
 
         // TODO: inhereting alloc from the loaded chain requires that we add reth state resets between runs in a single erlang shell
         // otherwise the 'new' genesis alloc will have different values
@@ -515,14 +513,22 @@ impl AccountStateExtApiServer for AccountStateExt {
 
         // trigger reload
         // todo: redo this Arc<Mutex<...>> nonsense, ideally with a oneshot channel
-        let v = self.irys_ext.0.lock().map_err(|e| {
-            ErrorObjectOwned::owned::<String>(
-                -32080,
-                "error locking reload channel",
-                Some(e.to_string()),
-            )
-        })?;
+        // let v = self.irys_ext.0.lock().map_err(|e| {
+        //     ErrorObjectOwned::owned::<String>(
+        //         -32080,
+        //         "error locking reload channel",
+        //         Some(e.to_string()),
+        //     )
+        // })?;
 
+        let v = self.irys_ext.0.write().map_err(|e| {
+                ErrorObjectOwned::owned::<String>(
+                    -32080,
+                    "error locking reload channel",
+                    Some(e.to_string()),
+                )
+            })?;
+        
         let hash = chain.genesis_hash();
         let header = serde_json::to_string(&chain.sealed_genesis_header())
             .expect("Unable to serialize genesis header");
@@ -539,7 +545,7 @@ impl AccountStateExtApiServer for AccountStateExt {
             None => (),
         }
 
-        Ok(chain.clone())
+        Ok(chain.genesis)
     }
 
     fn test_apply_shadow(&self, parent: BlockId, shadow: ShadowTx) -> RpcResult<ShadowReceipt> {
@@ -575,7 +581,8 @@ impl AccountStateExtApiServer for AccountStateExt {
             .with_database_ref(cached_reads.as_db(state))
             .with_bundle_update()
             .build();
-        let mut journaled_state = JournaledState::new(SpecId::LATEST, HashSet::new());
+        // TODO @JesseTheRobot - fix this (it seems like it's a dep & feature re-export issue)
+        let mut journaled_state = JournaledState::new(SpecId::LATEST,  HashSet::<Address,RandomState>::with_hasher(RandomState::default()));
         // let res = apply_shadow(shadow, &mut journaled_state, &mut db);
         let res = simulate_apply_shadow_thin(shadow, &mut journaled_state, &mut db);
         return Ok(res.map_err(|e| {
@@ -640,7 +647,7 @@ impl AccountStateExtApiServer for AccountStateExt {
                 "error executing shadow",
                 None,
             ))?;
-        let tx = tx(4096, None, account.nonce);
+        let tx = tx(4096, 210000, None, None, account.nonce);
 
         let signed = TransactionTestContext::sign_tx(wallet, tx).await;
         let raw_tx: Bytes = signed.encoded_2718().into();
@@ -666,358 +673,30 @@ impl AccountStateExtApiServer for AccountStateExt {
 //     pub enable_irys_ext: bool,
 // }
 
-#[macro_export]
-macro_rules! vec_of_strings {
-    ($($x:expr),*) => (vec![$($x.to_string()),*]);
+
+
+
+/// trait interface for a custom rpc namespace: `txpool`
+///
+/// This defines an additional namespace where all methods are configured as trait functions.
+#[cfg_attr(not(test), rpc(server, namespace = "txpoolExt"))]
+#[cfg_attr(test, rpc(server, client, namespace = "txpoolExt"))]
+pub trait TxpoolExtApi {
+    /// Returns the number of transactions in the pool.
+    #[method(name = "transactionCount")]
+    fn transaction_count(&self) -> RpcResult<usize>;
 }
 
-pub fn main() -> eyre::Result<()> {
-    let mut os_args: Vec<String> = std::env::args().collect();
-    let bp = os_args.remove(0);
-    // let mut args = vec_of_strings![
-    //     "node",
-    //     "-vvvvvv",
-    //     "--disable-discovery",
-    //     "--http",
-    //     "--http.api",
-    //     "debug,rpc,reth,eth"
-    // ];
-
-    // let mut args = vec_of_strings![
-    //     "node",
-    //     "-vvvvv",
-    //     "--disable-discovery",
-    //     "--http",
-    //     "--http.api",
-    //     "debug,rpc,reth,eth",
-    //     "--datadir",
-    //     "/workspaces/irys/.reth",
-    //     "--log.file.directory",
-    //     "/workspaces/irys/.reth/logs",
-    //     "--log.file.format",
-    //     "json",
-    //     "--log.stdout.format",
-    //     "json",
-    //     "--log.file.filter",
-    //     "trace"
-    // ];
-
-    let mut args = match false /* <- true if running manually :) */ {
-        true => vec_of_strings![
-            "node",
-            "-vvvvv",
-            "--instance", 
-            "1",
-            "--disable-discovery",
-            "--http",
-            "--http.api",
-            "debug,rpc,reth,eth",
-            "--datadir",
-            "/workspaces/irys/.reth",
-            "--log.file.directory",
-            "/workspaces/irys/.reth/logs",
-            "--log.file.format",
-            "json",
-            "--log.stdout.format",
-            "json",
-            "--log.stdout.filter",
-            "trace",
-            "--log.file.filter",
-            "trace"
-        ],
-        false => vec_of_strings![
-            "node",
-            "-vvvvvv",
-            "--disable-discovery",
-            "--http",
-            "--http.api",
-            "debug,rpc,reth,eth"
-        ],
-    };
-
-    args.insert(0, bp.to_string());
-    args.append(&mut os_args);
-    // dbg!(&args);
-    info!("Running with args: {:#?}", &args);
-    // loop is flawed, retains too much global set-once state
-    let cli = Cli::<NoArgs>::parse_from(args.clone());
-    let _guard = cli.logs.init_tracing()?;
-    loop {
-        let runner = CliRunner::default();
-
-        // this loop allows us to 'reload' the reth node with a new config very quickly, without having to actually restart the entire process
-        // mainly used to provide and then restart with a new genesis block.
-        // TODO: extract run_command_until_exit to re-use async context to prevent global thread pool error on reload
-
-        let exit_reason = runner.run_command_until_exit(|ctx| run_custom_node(ctx, cli.clone()))?;
-        match exit_reason {
-            NodeExitReason::Normal => break,
-            NodeExitReason::Reload(_) => {
-                trace!("reloading node!");
-            } // NodeExitReason::Reload(payload) => match payload {
-              //     ReloadPayload::ReloadConfig(chain_spec) => {
-              //         // sleep(Duration::from_millis(500)).await;
-              //         let ser = serde_json::to_string_pretty(&chain_spec)?;
-              //         let pb =
-              //             PathBuf::from(launched.node.data_dir.data_dir().join("dev_genesis.json"));
-              //         let mut f = File::create(pb)?;
-              //         f.write_all(ser.as_bytes())?;
-              //     }
-              // },
-        }
-    }
-    Ok(())
+/// The type that implements the `txpool` rpc namespace trait
+pub struct TxpoolExt<Pool> {
+    pub pool: Pool,
 }
 
-pub fn get_custom_node<Ext>(
-    ctx: CliContext,
-    node_command: NodeCommand<Ext>,
-) -> Result<
-    WithLaunchContext<
-        NodeBuilderWithComponents<
-            FullNodeTypesAdapter<
-                EthereumNode,
-                Arc<DatabaseEnv>,
-                BlockchainProvider<Arc<DatabaseEnv>>,
-            >,
-            ComponentsBuilder<
-                FullNodeTypesAdapter<
-                    EthereumNode,
-                    Arc<DatabaseEnv>,
-                    BlockchainProvider<Arc<DatabaseEnv>>,
-                >,
-                EthereumPoolBuilder,
-                reth_node_ethereum::node::EthereumPayloadBuilder,
-                EthereumNetworkBuilder,
-                EthereumExecutorBuilder,
-            >,
-        >,
-    >,
-    eyre::Error,
->
+impl<Pool> TxpoolExtApiServer for TxpoolExt<Pool>
 where
-    Ext: clap::Args + Clone + fmt::Debug,
+    Pool: TransactionPool + Clone + 'static,
 {
-    // if with_unused_ports {
-    //     node_config = node_config.with_unused_ports();
-    // }
-
-    let NodeCommand {
-        datadir,
-        config,
-        chain,
-        metrics,
-        instance,
-        with_unused_ports,
-        network,
-        rpc,
-        txpool,
-        builder,
-        debug,
-        db,
-        dev,
-        pruning,
-        ext,
-    } = node_command;
-
-    let mut node_config = NodeConfig {
-        config,
-        chain,
-        metrics,
-        instance,
-        network: network.clone(),
-        rpc: rpc.clone(),
-        txpool,
-        builder,
-        debug,
-        db,
-        dev,
-        pruning,
-    };
-
-    let chain_spec =
-        get_chain_spec_with_path(vec![], &datadir.unwrap_or_default().as_ref(), dev.dev);
-
-    node_config = node_config.with_chain(chain_spec);
-
-    let data_dir = datadir.unwrap_or_chain_default(node_config.chain.chain);
-    // let mut rpc_config = RpcServerArgs::default().with_http();
-    // rpc_config.ipcdisable = true;
-
-    let db_path = data_dir.db();
-
-    tracing::info!(target: "reth::cli", path = ?db_path, "Opening database");
-    let database =
-        Arc::new(init_db(db_path.clone(), node_config.db.database_args())?.with_metrics());
-
-    // let node_config = NodeConfig::test()
-    //     .dev()
-    //     .with_rpc(rpc_config)
-    //     .with_network(network)
-    //     .with_chain(chain_spec);
-
-    node_config =/*  node_config.with_chain(chain_spec) */node_config.with_rpc(rpc.clone());
-
-    let node = EthereumNode::default();
-    // let components = node
-    //     .components_builder()
-    //     .payload(CustomPayloadBuilder::default());
-    // components.payload();
-
-    Ok(NodeBuilder::new(node_config)
-        // .testing_node(ctx.task_executor)
-        .with_database(database)
-        .with_launch_context(ctx.task_executor, data_dir)
-        // .with_components(node)
-        .node(node)
-        // .with_types::<EthereumNode>()
-        // .with_components(EthereumNode::components().payload(CustomPayloadBuilder::default()))
-        // .with_components(EthereumNode::components().payload(CustomPayloadBuilder::default()))
-        .extend_rpc_modules(move |ctx| {
-            // let node = ctx.node().clone();
-            let provider = ctx.provider().clone();
-
-            let irys_ext = ctx.node().components.irys_ext.clone();
-            let network = ctx.network().clone();
-            // dbg!(serde_json::to_string(network.peer_id()).expect("unable to serialize addr"))
-            // let rpc= ctx.
-            // provider.database.db.begin_rw_txn()
-            let ext = AccountStateExt {
-                provider,
-                irys_ext,
-                network,
-            };
-            ctx.modules.merge_configured(ext.into_rpc())?;
-            println!("extension added!");
-            Ok(())
-        }))
-}
-
-async fn run_custom_node<Ext>(ctx: CliContext, cli: Cli<Ext>) -> eyre::Result<NodeExitReason>
-where
-    Ext: clap::Args + Clone + fmt::Debug,
-{
-    // from reth/bin/reth/src/commands/node/mod.rs:137
-    let matched_cmd = match cli.command {
-        Commands::Node(command) => Some(command),
-        _ => None,
-    };
-
-    let node_command = matched_cmd.expect("unable to get cmd_cfg");
-
-    let NodeCommand {
-        config,
-        chain,
-        metrics,
-        instance,
-        network,
-        rpc,
-        txpool,
-        builder,
-        debug,
-        db,
-        dev,
-        pruning,
-        ..
-    } = node_command.clone();
-
-    let node_config = NodeConfig {
-        config,
-        chain,
-        metrics,
-        instance,
-        network: network.clone(),
-        rpc: rpc.clone(),
-        txpool,
-        builder,
-        debug,
-        db,
-        dev,
-        pruning,
-    };
-
-    // tracing & metric guards
-
-    let _prom_recorder = node_config.install_prometheus_recorder()?;
-    // must configure logging before tracing init
-    let node = get_custom_node(ctx, node_command)?;
-    let launcher = CustomNodeLauncher::new(node.task_executor, node.data_dir);
-    let launched = node.builder.launch_with(launcher).await?;
-    let exit_reason = launched.node_exit_future.await?;
-    // TODO: fix
-    if true
-    /* launched.node.config.dev.dev */
-    {
-        match exit_reason.clone() {
-            NodeExitReason::Normal => (),
-            NodeExitReason::Reload(payload) => match payload {
-                ReloadPayload::ReloadConfig(chain_spec) => {
-                    // delay here so the genesis submission RPC reponse is able to make it back before the server dies
-
-                    let ser = serde_json::to_string_pretty(&chain_spec)?;
-                    let pb =
-                        PathBuf::from(launched.node.data_dir.data_dir().join("dev_genesis.json"));
-                    // remove_file(&pb)?;
-                    let mut f = File::create(&pb)?;
-                    f.write_all(ser.as_bytes())?;
-                    info!("Written dev_genesis.json");
-                    sleep(Duration::from_millis(500)).await;
-                }
-            },
-        }
+    fn transaction_count(&self) -> RpcResult<usize> {
+        Ok(self.pool.pool_size().total)
     }
-
-    Ok(exit_reason)
-}
-
-pub async fn get_dev_node() -> eyre::Result<
-    NodeHandle<
-        NodeAdapter<
-            FullNodeTypesAdapter<
-                EthereumNode,
-                Arc<DatabaseEnv>,
-                BlockchainProvider<Arc<DatabaseEnv>>,
-            >,
-            Components<
-                FullNodeTypesAdapter<
-                    EthereumNode,
-                    Arc<DatabaseEnv>,
-                    BlockchainProvider<Arc<DatabaseEnv>>,
-                >,
-                Pool<
-                    TransactionValidationTaskExecutor<
-                        EthTransactionValidator<
-                            BlockchainProvider<Arc<DatabaseEnv>>,
-                            EthPooledTransaction,
-                        >,
-                    >,
-                    CoinbaseTipOrdering<EthPooledTransaction>,
-                    DiskFileBlobStore,
-                >,
-                EthEvmConfig,
-                EthExecutorProvider,
-            >,
-        >,
-    >,
-> {
-    // don't use AsyncCliRunner here as it spawns it's own nested runtime, but get a handle to the current runtime and use that.
-    // let AsyncCliRunner { context, .. } = AsyncCliRunner::new()?;
-    let tokio_handle = Handle::try_current()?;
-    let task_manager = TaskManager::new(tokio_handle.clone());
-    let task_executor = task_manager.executor();
-    let context = CliContext { task_executor };
-    // trick reth
-    let args = vec_of_strings!["reth", "node", "--dev", "-vvvvv"];
-    let cli = Cli::<NoArgs>::parse_from(args);
-    let matched_cmd = match cli.command {
-        Commands::Node(command) => Some(command),
-        _ => None,
-    };
-
-    let node_command = matched_cmd.expect("unable to get cmd_cfg");
-    let node = get_custom_node(context, node_command)?;
-    let launcher = CustomNodeLauncher::new(node.task_executor, node.data_dir);
-
-    let launched = node.builder.launch_with(launcher).await?;
-    Ok(launched)
 }
