@@ -30,7 +30,7 @@ construct_fixed_hash! {
     /// A 256-bit hash type (32 bytes)
     pub struct H256(32);
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Eq, Debug)]
 pub struct IrysSignature {
     pub reth_signature: Signature,
 }
@@ -255,7 +255,7 @@ impl Compact for H256 {
 /// A struct of [`Vec<u8>`] used for all `base64_url` encoded fields. This is
 /// used for large fields like proof chunk data.
 
-#[derive(Default, Debug, Clone, PartialEq, Compact)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Compact)]
 pub struct Base64(pub Vec<u8>);
 
 impl std::fmt::Display for Base64 {
@@ -329,7 +329,7 @@ impl<'de> Deserialize<'de> for Base64 {
 // H256List Type
 //------------------------------------------------------------------------------
 /// A struct of [`Vec<H256>`] used for lists of [`Base64`] encoded hashes
-#[derive(Debug, Default, Clone, PartialEq, Compact)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Compact)]
 pub struct H256List(pub Vec<H256>);
 
 impl H256List {

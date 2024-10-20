@@ -3,12 +3,14 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
+use std::str::FromStr;
+
 use crate::{option_u64_stringify, Base64, H256List, IrysSignature, H256};
-use alloy_primitives::U256;
+use alloy_primitives::{Signature, U256};
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Compact)]
+#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Compact)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
     /// Difficulty threshold used to produce the current block.
@@ -63,7 +65,44 @@ pub struct IrysBlockHeader {
     pub ledgers: Vec<TransactionLedger>,
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize, Compact)]
+impl IrysBlockHeader {
+    pub fn new() -> Self {
+        let txids = H256List::new();
+
+        // Create a sample IrysBlockHeader object with mock data
+        IrysBlockHeader {
+            diff: U256::from(1000),
+            cumulative_diff: U256::from(5000),
+            last_retarget: 1622543200,
+            solution_hash: H256::zero(),
+            previous_solution_hash: H256::zero(),
+            chunk_hash: H256::zero(),
+            height: 42,
+            block_hash: H256::zero(),
+            previous_block_hash: H256::zero(),
+            previous_cumulative_diff: U256::from(4000),
+            poa: PoaData {
+                tx_path: Base64::from_str("").unwrap(),
+                data_path: Base64::from_str("").unwrap(),
+                chunk: Base64::from_str("").unwrap(),
+            },
+            reward_address: H256::zero(),
+            reward_key: Base64::from_str("").unwrap(),
+            signature: IrysSignature {
+                reth_signature: Signature::test_signature(),
+            },
+            timestamp: 1622543200,
+            ledgers: vec![TransactionLedger {
+                tx_root: H256::zero(),
+                txids: txids,
+                ledger_size: U256::from(100),
+                expires: Some(1622543200),
+            }],
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact)]
 /// Stores deserialized fields from a `poa` (Proof of Access) JSON
 pub struct PoaData {
     pub tx_path: Base64,
@@ -71,7 +110,7 @@ pub struct PoaData {
     pub chunk: Base64,
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize, Compact)]
+#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact)]
 pub struct TransactionLedger {
     pub tx_root: H256,
     /// List of transaction ids included in the block
@@ -81,7 +120,7 @@ pub struct TransactionLedger {
 }
 
 /// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Compact)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, Compact)]
 pub struct NonceLimiterInfo {
     /// The output of the latest step - the source of the entropy for the mining nonces.
     pub output: H256,

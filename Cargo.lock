@@ -4969,14 +4969,24 @@ dependencies = [
 name = "irys-chain"
 version = "0.1.0"
 dependencies = [
+ "arbitrary",
+ "bytes",
  "clap",
  "color-eyre",
  "eyre",
  "irys-types",
+ "modular-bitfield",
  "rand",
+ "reth-codecs",
+ "reth-codecs-derive",
  "reth-db",
+ "reth-db-models",
  "reth-node-bridge",
+ "reth-primitives",
+ "serde",
+ "serde_json",
  "sha2 0.10.8",
+ "test-fuzz",
  "tokio",
 ]
 
@@ -6218,6 +6228,23 @@ dependencies = [
  "op-alloy-consensus",
  "op-alloy-genesis",
  "serde",
+]
+
+[[package]]
+name = "op-alloy-rpc-types"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "323c65880e2561aa87f74f8af260fd15b9cc930c448c88a60ae95af86c88c634"
+dependencies = [
+ "alloy-consensus",
+ "alloy-eips",
+ "alloy-network-primitives",
+ "alloy-primitives",
+ "alloy-rpc-types-eth",
+ "alloy-serde",
+ "op-alloy-consensus",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -8839,6 +8866,7 @@ dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "alloy-rpc-types",
+ "alloy-serde",
  "arbitrary",
  "bytes",
  "c-kzg",
@@ -8848,6 +8876,7 @@ dependencies = [
  "modular-bitfield",
  "once_cell",
  "op-alloy-consensus",
+ "op-alloy-rpc-types",
  "proptest",
  "rand",
  "rayon",

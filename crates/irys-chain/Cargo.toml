@@ -9,10 +9,33 @@ edition = "2021"
 sha2 = "0.10.8"
 tokio = { version = "1.40.0", features = ["rt"] }
 reth-db = { path = "../../ext/reth/crates/storage/db" }
+reth-codecs = { path = "../../ext/reth/crates/storage/codecs" }
+reth-codecs-derive = { path = "../../ext/reth/crates/storage/codecs/derive" }
 # reth-node-bridge = { path = "../reth-node-bridge" }
+reth-primitives = { path = "../../ext/reth/crates/primitives" }
+reth-db-models = { path = "../../ext/reth/crates/storage/db-models" }
 irys-types = { path = "../irys-types" }
 clap = "4.5.20"
 eyre = "0.6.8"
 color-eyre = "0.6.2"
 rand = "0.8.5"
 reth-node-bridge = { path = "../reth-node-bridge" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.107"
+
+test-fuzz.workspace = true
+modular-bitfield.workspace = true
+bytes.workspace = true
+
+arbitrary = { workspace = true, optional = true, features = [
+	"derive",
+] } # arbitrary.workspace = true
+
+[features]
+# test-utils = ["arbitrary"]
+# arbitrary = [
+# 	"reth-primitives/arbitrary",
+# 	"reth-db-models/arbitrary",
+# 	"dep:arbitrary",
+# 	"dep:proptest",
+# ]
