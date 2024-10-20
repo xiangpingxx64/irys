@@ -9,8 +9,10 @@ use crate::{option_u64_stringify, Base64, H256List, IrysSignature, H256};
 use alloy_primitives::{Signature, U256};
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
+use arbitrary::Arbitrary;
 
 #[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Compact)]
+#[derive(Arbitrary)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
     /// Difficulty threshold used to produce the current block.
@@ -102,7 +104,7 @@ impl IrysBlockHeader {
     }
 }
 
-#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact)]
+#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact, Arbitrary)]
 /// Stores deserialized fields from a `poa` (Proof of Access) JSON
 pub struct PoaData {
     pub tx_path: Base64,
@@ -110,7 +112,7 @@ pub struct PoaData {
     pub chunk: Base64,
 }
 
-#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact)]
+#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact, Arbitrary)]
 pub struct TransactionLedger {
     pub tx_root: H256,
     /// List of transaction ids included in the block

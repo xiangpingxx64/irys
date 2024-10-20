@@ -1,4 +1,5 @@
 use alloy_primitives::{bytes, Parity, Signature, U256 as RethU256};
+use arbitrary::Arbitrary;
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use reth_codecs::Compact;
@@ -30,7 +31,7 @@ construct_fixed_hash! {
     /// A 256-bit hash type (32 bytes)
     pub struct H256(32);
 }
-#[derive(Clone, Eq, Debug)]
+#[derive(Clone, Eq, Debug, Arbitrary)]
 pub struct IrysSignature {
     pub reth_signature: Signature,
 }
@@ -255,7 +256,7 @@ impl Compact for H256 {
 /// A struct of [`Vec<u8>`] used for all `base64_url` encoded fields. This is
 /// used for large fields like proof chunk data.
 
-#[derive(Default, Debug, Clone, Eq, PartialEq, Compact)]
+#[derive(Default, Debug, Clone, Eq, PartialEq, Compact, Arbitrary)]
 pub struct Base64(pub Vec<u8>);
 
 impl std::fmt::Display for Base64 {
@@ -329,7 +330,7 @@ impl<'de> Deserialize<'de> for Base64 {
 // H256List Type
 //------------------------------------------------------------------------------
 /// A struct of [`Vec<H256>`] used for lists of [`Base64`] encoded hashes
-#[derive(Debug, Default, Clone, Eq, PartialEq, Compact)]
+#[derive(Debug, Default, Clone, Eq, PartialEq, Compact, Arbitrary)]
 pub struct H256List(pub Vec<H256>);
 
 impl H256List {

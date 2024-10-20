@@ -5019,6 +5019,7 @@ dependencies = [
  "alloy-genesis",
  "alloy-primitives",
  "alloy-serde",
+ "arbitrary",
  "base58",
  "base64-url",
  "bytes",

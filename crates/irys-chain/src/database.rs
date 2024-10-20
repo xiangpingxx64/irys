@@ -49,7 +49,7 @@ macro_rules! add_wrapper_struct {
         $(
             /// Wrapper struct so it can use StructFlags from Compact, when used as pure table values.
             #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Compact)]
-            #[cfg_attr(any(test, feature = "arbitrary"), derive(arbitrary::Arbitrary))]
+            #[derive(arbitrary::Arbitrary)]
             #[add_arbitrary_tests(compact)]
             pub struct $wrapper(pub $name);
 
