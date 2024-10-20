@@ -30,9 +30,17 @@ construct_fixed_hash! {
     /// A 256-bit hash type (32 bytes)
     pub struct H256(32);
 }
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct IrysSignature {
     pub reth_signature: Signature,
+}
+
+impl PartialEq for IrysSignature {
+    fn eq(&self, other: &Self) -> bool {
+        self.reth_signature.r() == other.reth_signature.r()
+            && self.reth_signature.s() == other.reth_signature.s()
+            && self.reth_signature.v().y_parity() == other.reth_signature.v().y_parity()
+    }
 }
 
 impl From<Signature> for IrysSignature {

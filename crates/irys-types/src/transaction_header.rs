@@ -70,35 +70,38 @@ mod tests {
     use super::*;
     use serde_json;
 
-    // #[test]
-    // fn test_irys_transaction_header_serde() {
-    //     // Create a sample IrysTransactionHeader
-    //     let original_header = IrysTransactionHeader {
-    //         id: H256::from([0u8; 32]),
-    //         anchor: H256::from([1u8; 32]),
-    //         signer: H256::from([2u8; 32]),
-    //         data_root: H256::from([3u8; 32]),
-    //         data_size: 1024,
-    //         term_fee: 100,
-    //         perm_fee: Some(200),
-    //         ledger_num: Some(1),
-    //         bundle_format: 0,
-    //         tx_type: 1,
-    //         signature: IrysSignature {
-    //             reth_signature: Signature::test_signature(),
-    //         },
-    //     };
+    #[test]
+    fn test_irys_transaction_header_serde() {
+        // Create a sample IrysTransactionHeader
+        let original_header = IrysTransactionHeader {
+            id: H256::from([0u8; 32]),
+            anchor: H256::from([1u8; 32]),
+            signer: H256::from([2u8; 32]),
+            data_root: H256::from([3u8; 32]),
+            data_size: 1024,
+            term_fee: 100,
+            perm_fee: Some(200),
+            ledger_num: Some(1),
+            bundle_format: 0,
+            tx_type: 1,
+            signature: IrysSignature {
+                reth_signature: Signature::test_signature(),
+            },
+        };
 
-    //     // Serialize the IrysTransactionHeader to JSON
-    //     let serialized = serde_json::to_string(&original_header).expect("Failed to serialize");
+        // Serialize the IrysTransactionHeader to JSON
+        let serialized = serde_json::to_string(&original_header).expect("Failed to serialize");
 
-    //     println!("\n{}", serialized);
+        //println!("\n{}\n", serialized);
 
-    //     // Deserialize the JSON back to IrysTransactionHeader
-    //     let deserialized: IrysTransactionHeader =
-    //         serde_json::from_str(&serialized).expect("Failed to deserialize");
+        // Deserialize the JSON back to IrysTransactionHeader
+        let deserialized: IrysTransactionHeader =
+            serde_json::from_str(&serialized).expect("Failed to deserialize");
 
-    //     // Ensure the deserialized struct matches the original
-    //     assert_eq!(original_header, deserialized);
-    // }
+        // println!("\n original_header: {:?}\n", original_header);
+        // println!("\n deserialized: {:?}\n", deserialized);
+
+        // Ensure the deserialized struct matches the original
+        assert_eq!(original_header, deserialized);
+    }
 }
