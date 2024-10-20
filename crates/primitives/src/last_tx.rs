@@ -8,9 +8,18 @@ use reth_codecs::Compact;
 
 use super::commitment::{IrysBlockHash, IrysTxId};
 
-#[derive(PartialEq, Debug, Eq, Clone, Copy, Hash)]
-#[derive( serde::Serialize, serde::Deserialize, Compact)]
-#[derive(arbitrary::Arbitrary)]
+#[derive(
+    PartialEq,
+    Debug,
+    Eq,
+    Clone,
+    Copy,
+    Hash,
+    serde::Serialize,
+    serde::Deserialize,
+    Compact,
+    arbitrary::Arbitrary,
+)]
 pub enum LastTx {
     BlockHash(IrysBlockHash),
     TxId(IrysTxId),
@@ -18,7 +27,7 @@ pub enum LastTx {
 
 impl Default for LastTx {
     fn default() -> Self {
-        Self::BlockHash(IrysBlockHash::default()) 
+        Self::BlockHash(IrysBlockHash::default())
     }
 }
 

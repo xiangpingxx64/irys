@@ -107,7 +107,7 @@ impl IrysBlockHeader {
             timestamp: 1622543200,
             ledgers: vec![TransactionLedger {
                 tx_root: H256::zero(),
-                txids: txids,
+                txids,
                 ledger_size: U256::from(100),
                 expires: Some(1622543200),
             }],
@@ -199,7 +199,7 @@ mod tests {
             timestamp: 1622543200,
             ledgers: vec![TransactionLedger {
                 tx_root: H256::zero(),
-                txids: txids,
+                txids,
                 ledger_size: U256::from(100),
                 expires: Some(1622543200),
             }],

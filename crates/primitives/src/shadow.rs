@@ -26,10 +26,12 @@ use super::new_account::NewAccountState;
     Eq,
     Hash,
     RlpEncodable,
-    RlpDecodable
+    RlpDecodable,
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    arbitrary::Arbitrary,
 )]
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct ShadowTx {
     pub tx_id: IrysTxId,
@@ -39,9 +41,17 @@ pub struct ShadowTx {
     pub tx: ShadowTxType,
 }
 
-#[derive( Debug, Clone, Eq, PartialEq, Hash)]
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(arbitrary::Arbitrary)]
+#[derive(
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    arbitrary::Arbitrary,
+)]
 pub enum ShadowTxType {
     Null, // because default is a required derive TODO: replace with a null TransferShadow or some other no-op
     Transfer(TransferShadow),
@@ -181,7 +191,6 @@ impl Default for ShadowTxType {
     }
 }
 
-
 #[derive(
     Debug,
     Copy,
@@ -191,19 +200,22 @@ impl Default for ShadowTxType {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
+    Default,
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    arbitrary::Arbitrary,
 )]
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct TransferShadow {
     pub to: Address,
     pub amount: U256,
 }
 
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-
 #[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -212,18 +224,17 @@ pub struct TransferShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
-
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct DataShadow {
     pub fee: U256,
 }
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-
 #[derive(
-
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -232,19 +243,18 @@ pub struct DataShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
-
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct MiningAddressStakeShadow {
     pub value: U256,
     pub height: u64,
 }
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-
 #[derive(
-
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -253,10 +263,9 @@ pub struct MiningAddressStakeShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
-
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct PartitionPledgeShadow {
     pub quantity: U256,
@@ -265,10 +274,10 @@ pub struct PartitionPledgeShadow {
 }
 
 // todo: below are NOT FINAL
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-
 #[derive(
-
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -277,17 +286,17 @@ pub struct PartitionPledgeShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
-
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct PartitionUnPledgeShadow {
     pub part_hash: IrysTxId,
 }
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(
-
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -296,15 +305,16 @@ pub struct PartitionUnPledgeShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct UnstakeShadow {}
 
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(
-
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -313,17 +323,18 @@ pub struct UnstakeShadow {}
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct SlashShadow {
     pub slashed_addr: Address,
 }
 
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(
-
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Copy,
     Clone,
@@ -332,16 +343,18 @@ pub struct SlashShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct BlockRewardShadow {
     pub reward: U256,
 }
 
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
 #[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
     Debug,
     Clone,
     Eq,
@@ -349,20 +362,30 @@ pub struct BlockRewardShadow {
     Hash,
     RlpEncodable,
     RlpDecodable,
-    Default
+    Default,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct DiffShadow {
     pub new_state: NewAccountState,
 }
 
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(Debug, Clone, PartialEq, Eq, Default, Hash, RlpEncodableWrapper, RlpDecodableWrapper)]
-#[derive(arbitrary::Arbitrary)]
+#[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Default,
+    Hash,
+    RlpEncodableWrapper,
+    RlpDecodableWrapper,
+    arbitrary::Arbitrary,
+)]
 
 pub struct Shadows(Vec<ShadowTx>);
-
 
 impl Shadows {
     /// Create a new Shadows instance.

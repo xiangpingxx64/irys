@@ -9,7 +9,6 @@ use jsonrpsee_types::ErrorObjectOwned;
 
 use reth::network::{NetworkHandle, PeersHandleProvider};
 
-
 use reth::payload::database::CachedReads;
 use reth::primitives::static_file::find_fixed_range;
 use reth::primitives::{Account, ShadowReceipt, StaticFileSegment};
@@ -29,11 +28,11 @@ use reth_e2e_test_utils::transaction::{tx, TransactionTestContext};
 use reth_node_builder::{NodeTypesWithDB, NodeTypesWithDBAdapter, NodeTypesWithEngine};
 use reth_node_core::irys_ext::{IrysExtWrapped, NodeExitReason, ReloadPayload};
 
-
 use reth_node_ethereum::EthereumNode;
 use reth_provider::providers::{BlockchainProvider, BlockchainProvider2};
 use reth_provider::{
-    BlockIdReader, ChainSpecProvider, FullExecutionDataProvider, FullProvider, ProviderError, StateProvider, StateProviderFactory, StaticFileProviderFactory
+    BlockIdReader, ChainSpecProvider, FullExecutionDataProvider, FullProvider, ProviderError,
+    StateProvider, StateProviderFactory, StaticFileProviderFactory, TreeViewer,
 };
 
 use revm::db::{CacheDB, State};
@@ -51,7 +50,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use strum::IntoEnumIterator;
 
-use tracing::{debug, error, };
+use tracing::{debug, error};
 
 // // We use jemalloc for performance reasons.
 // #[cfg(all(feature = "jemalloc", unix))]
@@ -78,12 +77,12 @@ pub trait AccountStateExtApi {
         block_id: Option<BlockId>,
     ) -> RpcResult<HashMap<Address, Option<Account>>>;
 
-    #[method(name = "getAccount2")]
-    fn get_account2(
-        &self,
-        address: Address,
-        block_hash: Option<BlockId>,
-    ) -> RpcResult<Option<Account>>;
+    // #[method(name = "getAccount2")]
+    // fn get_account2(
+    //     &self,
+    //     address: Address,
+    //     block_hash: Option<BlockId>,
+    // ) -> RpcResult<Option<Account>>;
 
     #[method(name = "ping")]
     fn ping(&self) -> RpcResult<String>;
@@ -114,18 +113,21 @@ pub trait AccountStateExtApi {
     #[method(name = "toEthAddress")]
     fn to_address(&self, private_key: B256) -> RpcResult<Address>;
 
-    #[method(name = "getAccounts2")]
-    fn get_accounts2(
-        &self,
-        addresses: Vec<Address>,
-        block_id: Option<BlockId>,
-    ) -> RpcResult<HashMap<Address, Option<Account>>>;
+    // #[method(name = "getAccounts2")]
+    // fn get_accounts2(
+    //     &self,
+    //     addresses: Vec<Address>,
+    //     block_id: Option<BlockId>,
+    // ) -> RpcResult<HashMap<Address, Option<Account>>>;
 }
 
-pub struct AccountStateExt  {//<DB: NodeTypesWithDB> { //<DB: FullProvider<dyn NodeTypesWithDB>>  {
+pub struct AccountStateExt {
+    //<DB: NodeTypesWithDB> { //<DB: FullProvider<dyn NodeTypesWithDB>>  {
     // pub provider: DB,
     // pub provider: BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
-    pub provider:BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    // pub provider:BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    pub provider: BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    // pub tree:  Arc<dyn TreeViewer>,
     // pub provider: dyn FullProvider<NodeTypesWithDB + NodeTypesWithEngine>,
     pub irys_ext: IrysExtWrapped,
     pub network: NetworkHandle,
@@ -161,7 +163,6 @@ pub enum Either<L, R> {
 #[async_trait]
 // impl<DB> AccountStateExtApiServer for AccountStateExt<DB> where DB: NodeTypesWithDB + StateProviderFactory  {
 impl AccountStateExtApiServer for AccountStateExt {
-    
     fn add_peer(&self, peer_id: PeerId, addr: String) -> RpcResult<()> {
         dbg!(&addr);
         let socket_addr = SocketAddr::from_str(addr.as_str()).map_err(|e| {
@@ -194,7 +195,7 @@ impl AccountStateExtApiServer for AccountStateExt {
         let state = match block_id {
             Some(block_id) => match block_id {
                 BlockId::Number(n) => self.provider.state_by_block_number_or_tag(n),
-                BlockId::Hash(h) => self.provider.history_by_block_hash(h.into()),
+                BlockId::Hash(h) => self.provider.state_by_block_hash(h.into()),
             },
             None => self.provider.latest(),
         }
@@ -217,51 +218,52 @@ impl AccountStateExtApiServer for AccountStateExt {
         return r2;
     }
 
-    fn get_account2(
-        &self,
-        address: Address,
-        block_id: Option<BlockId>,
-    ) -> RpcResult<Option<Account>> {
-        // get provider for latest state
-        let state_provider: Either<Box<dyn StateProvider>,Box<dyn FullExecutionDataProvider>> =
-            match block_id {
-                Some(block_id) => match block_id {
-                    BlockId::Number(n) => self
-                        .provider
-                        .state_by_block_number_or_tag(n)
-                        .map(|p| Either::Left(p)),
-                    BlockId::Hash(h) => match self.provider.history_by_block_hash(h.into()) {
-                        Ok(s) => Ok(Either::Left(s)),
-                        Err(_) => self
-                            .provider
-                            .tree
-                            .pending_state_provider(h.into())
-                            .map(|p| Either::Right(p)),
-                    },
-                },
-                None => self.provider.latest().map(|p| Either::Left(p)),
-            }
-            .map_err(|e: ProviderError| {
-                ErrorObjectOwned::owned::<String>(
-                    -32071,
-                    "error getting state provider",
-                    Some(e.to_string()),
-                )
-            })?;
+    // fn get_account2(
+    //     &self,
+    //     address: Address,
+    //     block_id: Option<BlockId>,
+    // ) -> RpcResult<Option<Account>> {
+    //     // get provider for latest state
+    //     self.provider.pending_state_by_hash(block_hash)
+    //     let state_provider: Either<Box<dyn StateProvider>,Box<dyn FullExecutionDataProvider>> =
+    //         match block_id {
+    //             Some(block_id) => match block_id {
+    //                 BlockId::Number(n) => self
+    //                     .provider
+    //                     .state_by_block_number_or_tag(n)
+    //                     .map(|p| Either::Left(p)),
+    //                 BlockId::Hash(h) => match self.provider.history_by_block_hash(h.into()) {
+    //                     Ok(s) => Ok(Either::Left(s)),
+    //                     Err(_) => self
+    //                         .provider
+    //                         .tree
+    //                         .pending_state_provider(h.into())
+    //                         .map(|p| Either::Right(p)),
+    //                 },
+    //             },
+    //             None => self.provider.latest().map(|p| Either::Left(p)),
+    //         }
+    //         .map_err(|e: ProviderError| {
+    //             ErrorObjectOwned::owned::<String>(
+    //                 -32071,
+    //                 "error getting state provider",
+    //                 Some(e.to_string()),
+    //             )
+    //         })?;
 
-        let acc = match state_provider {
-            Either::Left(ref provider) => provider.basic_account(address.clone()).map_err(|e| {
-                ErrorObjectOwned::owned::<String>(
-                    -32072,
-                    "error getting account info",
-                    Some(e.to_string()),
-                )
-            })?,
-            Either::Right(provider) => provider.execution_outcome().state().account(&address).map(|a| a.account_info().map(|a2| a2.into())).flatten(),
-        };
+    //     let acc = match state_provider {
+    //         Either::Left(ref provider) => provider.basic_account(address.clone()).map_err(|e| {
+    //             ErrorObjectOwned::owned::<String>(
+    //                 -32072,
+    //                 "error getting account info",
+    //                 Some(e.to_string()),
+    //             )
+    //         })?,
+    //         Either::Right(provider) => provider.execution_outcome().state().account(&address).map(|a| a.account_info().map(|a2| a2.into())).flatten(),
+    //     };
 
-        return Ok(acc);
-    }
+    //     return Ok(acc);
+    // }
 
     fn get_accounts(
         &self,
@@ -272,7 +274,7 @@ impl AccountStateExtApiServer for AccountStateExt {
         let state = match block_id {
             Some(block_id) => match block_id {
                 BlockId::Number(n) => self.provider.state_by_block_number_or_tag(n),
-                BlockId::Hash(h) => self.provider.history_by_block_hash(h.into()),
+                BlockId::Hash(h) => self.provider.state_by_block_hash(h.into()),
             },
             None => self.provider.latest(),
         }
@@ -300,69 +302,69 @@ impl AccountStateExtApiServer for AccountStateExt {
         Ok(hm)
     }
 
-    fn get_accounts2(
-        &self,
-        addresses: Vec<Address>,
-        block_id: Option<BlockId>,
-    ) -> RpcResult<HashMap<Address, Option<Account>>> {
-        // get state provider
-        let state_provider: Either<Box<dyn StateProvider>, Box<dyn FullExecutionDataProvider>> =
-            match block_id {
-                Some(block_id) => match block_id {
-                    BlockId::Number(n) => self
-                        .provider
-                        .state_by_block_number_or_tag(n)
-                        .map(|p| Either::Left(p)),
-                    BlockId::Hash(h) => match self.provider.history_by_block_hash(h.into()) {
-                        Ok(s) => Ok(Either::Left(s)),
-                        Err(_) => self
-                            .provider
-                            .tree
-                            .pending_state_provider(h.into())
-                            .map(|p| Either::Right(p)),
-                    },
-                },
-                None => self.provider.latest().map(|p| Either::Left(p)),
-            }
-            .map_err(|e: ProviderError| {
-                ErrorObjectOwned::owned::<String>(
-                    -32071,
-                    "error getting state provider",
-                    Some(e.to_string()),
-                )
-            })?;
+    // fn get_accounts2(
+    //     &self,
+    //     addresses: Vec<Address>,
+    //     block_id: Option<BlockId>,
+    // ) -> RpcResult<HashMap<Address, Option<Account>>> {
+    // get state provider
+    //     let state_provider: Either<Box<dyn StateProvider>, Box<dyn FullExecutionDataProvider>> =
+    //         match block_id {
+    //             Some(block_id) => match block_id {
+    //                 BlockId::Number(n) => self
+    //                     .provider
+    //                     .state_by_block_number_or_tag(n)
+    //                     .map(|p| Either::Left(p)),
+    //                 BlockId::Hash(h) => match self.provider.history_by_block_hash(h.into()) {
+    //                     Ok(s) => Ok(Either::Left(s)),
+    //                     Err(_) => self
+    //                         .provider
+    //                         .tree
+    //                         .pending_state_provider(h.into())
+    //                         .map(|p| Either::Right(p)),
+    //                 },
+    //             },
+    //             None => self.provider.latest().map(|p| Either::Left(p)),
+    //         }
+    //         .map_err(|e: ProviderError| {
+    //             ErrorObjectOwned::owned::<String>(
+    //                 -32071,
+    //                 "error getting state provider",
+    //                 Some(e.to_string()),
+    //             )
+    //         })?;
 
-        let mut hm = HashMap::new();
-        for address in addresses.iter() {
-            hm.insert(
-                address.clone(),
-                match state_provider {
-                    Either::Left(ref provider) => {
-                        provider.basic_account(address.clone()).map_err(|e| {
-                            ErrorObjectOwned::owned::<String>(
-                                -32072,
-                                "error getting account info",
-                                Some(e.to_string()),
-                            )
-                        })?
-                    }
-                    Either::Right(ref provider) => {
-                        provider.execution_outcome().state().account(&address).map(|a| a.account_info().map(|a2| a2.into())).flatten()
-                        // provider.state().account(address).flatten()
-                         /* .ok_or_else(|| {
-                                                                        ErrorObjectOwned::owned::<String>(
-                                                                            -32072,
-                                                                            "error getting account info from pending state provider",
-                                                                            Some(address.to_string()),
-                                                                        )
-                                                                    })? */
-                    }
-                },
-            );
-        }
+    //     let mut hm = HashMap::new();
+    //     for address in addresses.iter() {
+    //         hm.insert(
+    //             address.clone(),
+    //             match state_provider {
+    //                 Either::Left(ref provider) => {
+    //                     provider.basic_account(address.clone()).map_err(|e| {
+    //                         ErrorObjectOwned::owned::<String>(
+    //                             -32072,
+    //                             "error getting account info",
+    //                             Some(e.to_string()),
+    //                         )
+    //                     })?
+    //                 }
+    //                 Either::Right(ref provider) => {
+    //                     provider.execution_outcome().state().account(&address).map(|a| a.account_info().map(|a2| a2.into())).flatten()
+    //                     // provider.state().account(address).flatten()
+    //                      /* .ok_or_else(|| {
+    //                                                                     ErrorObjectOwned::owned::<String>(
+    //                                                                         -32072,
+    //                                                                         "error getting account info from pending state provider",
+    //                                                                         Some(address.to_string()),
+    //                                                                     )
+    //                                                                 })? */
+    //                 }
+    //             },
+    //         );
+    //     }
 
-        Ok(hm)
-    }
+    //     Ok(hm)
+    // }
 
     fn ping(&self) -> RpcResult<String> {
         Ok("pong".to_string())
@@ -400,14 +402,16 @@ impl AccountStateExtApiServer for AccountStateExt {
                 //         })?;
                 // }
                 for (block_range, _) in segment_static_files {
-                    static_file_provider.delete_jar(segment, block_range.start())
-                    .map_err(|e| {            //         .map_err(|e| {
-                                    ErrorObjectOwned::owned::<String>(
-                                        -32073,
-                                        "error getting database provider",
-                                        Some(e.to_string()),
-                                    )
-                                })?;
+                    static_file_provider
+                        .delete_jar(segment, block_range.start())
+                        .map_err(|e| {
+                            //         .map_err(|e| {
+                            ErrorObjectOwned::owned::<String>(
+                                -32073,
+                                "error getting database provider",
+                                Some(e.to_string()),
+                            )
+                        })?;
                 }
             }
         }
@@ -435,7 +439,10 @@ impl AccountStateExtApiServer for AccountStateExt {
         let db = StateProviderDatabase::new(self.provider.latest().unwrap());
         let mut cache_db = CacheDB::new(db);
         // let random_state = RandomState::default();
-        let mut journaled_state = JournaledState::new(SpecId::LATEST, HashSet::<Address,RandomState>::with_hasher(RandomState::default()));
+        let mut journaled_state = JournaledState::new(
+            SpecId::LATEST,
+            HashSet::<Address, RandomState>::with_hasher(RandomState::default()),
+        );
 
         // TODO: inhereting alloc from the loaded chain requires that we add reth state resets between runs in a single erlang shell
         // otherwise the 'new' genesis alloc will have different values
@@ -522,13 +529,13 @@ impl AccountStateExtApiServer for AccountStateExt {
         // })?;
 
         let v = self.irys_ext.0.write().map_err(|e| {
-                ErrorObjectOwned::owned::<String>(
-                    -32080,
-                    "error locking reload channel",
-                    Some(e.to_string()),
-                )
-            })?;
-        
+            ErrorObjectOwned::owned::<String>(
+                -32080,
+                "error locking reload channel",
+                Some(e.to_string()),
+            )
+        })?;
+
         let hash = chain.genesis_hash();
         let header = serde_json::to_string(&chain.sealed_genesis_header())
             .expect("Unable to serialize genesis header");
@@ -582,7 +589,10 @@ impl AccountStateExtApiServer for AccountStateExt {
             .with_bundle_update()
             .build();
         // TODO @JesseTheRobot - fix this (it seems like it's a dep & feature re-export issue)
-        let mut journaled_state = JournaledState::new(SpecId::LATEST,  HashSet::<Address,RandomState>::with_hasher(RandomState::default()));
+        let mut journaled_state = JournaledState::new(
+            SpecId::LATEST,
+            HashSet::<Address, RandomState>::with_hasher(RandomState::default()),
+        );
         // let res = apply_shadow(shadow, &mut journaled_state, &mut db);
         let res = simulate_apply_shadow_thin(shadow, &mut journaled_state, &mut db);
         return Ok(res.map_err(|e| {
@@ -672,9 +682,6 @@ impl AccountStateExtApiServer for AccountStateExt {
 //     #[arg(long, default_value_t = true)]
 //     pub enable_irys_ext: bool,
 // }
-
-
-
 
 /// trait interface for a custom rpc namespace: `txpool`
 ///

@@ -28,13 +28,14 @@ reth-node-builder = { path = "../../ext/reth/crates/node/builder" }
 reth-node-core = { path = "../../ext/reth/crates/node/core" }
 reth-node-ethereum = { path = "../../ext/reth/crates/ethereum/node" }
 reth-node-metrics = { path = "../../ext/reth/crates/node/metrics" }
-# reth-auto-seal-consensus = { path = "../../ext/reth/crates/consensus/auto-seal" }
+
+reth-auto-seal-consensus = { path = "../../ext/reth/crates/consensus/auto-seal" }
 # reth-basic-payload-builder = { path = "../../ext/reth/crates/payload/basic" }
 reth-beacon-consensus = { path = "../../ext/reth/crates/consensus/beacon" }
 # reth-cli-runner = { path = "../../ext/reth/crates/cli/runner" }
 # reth-codecs = { path = "../../ext/reth/crates/storage/codecs" }
 # reth-config = { path = "../../ext/reth/crates/config" }
-# reth-consensus = { path = "../../ext/reth/crates/consensus/consensus" }
+reth-consensus = { path = "../../ext/reth/crates/consensus/consensus" }
 # reth-db = { path = "../../ext/reth/crates/storage/db" }
 # reth-db-common = { path = "../../ext/reth/crates/storage/db-common" }
 reth-e2e-test-utils = { path = "../../ext/reth/crates/e2e-test-utils" }
@@ -46,26 +47,33 @@ reth-engine-service = { path = "../../ext/reth/crates/engine/service" }
 reth-engine-tree = { path = "../../ext/reth/crates/engine/tree" }
 reth-engine-util = { path = "../../ext/reth/crates/engine/util" }
 
-
+alloy-primitives.workspace = true
 reth-blockchain-tree = { path = "../../ext/reth/crates/blockchain-tree" }
+reth-network = { path = "../../ext/reth/crates/net/network" }
+reth-network-api = { path = "../../ext/reth/crates/net/network-api" }
+reth-node-api = { path = "../../ext/reth/crates/node/api" }
+reth-payload-primitives = { path = "../../ext/reth/crates/payload/primitives" }
 
-# reth-node-api = { path = "../../ext/reth/crates/node/api" }
+reth-rpc-eth-types = { path = "../../ext/reth/crates/rpc/rpc-eth-types" }
+reth-tasks = { path = "../../ext/reth/crates/tasks" }
+reth-transaction-pool = { path = "../../ext/reth/crates/transaction-pool" }
 # reth-node-core = { path = "../../ext/reth/crates/node-core" }
-# reth-node-events = { path = "../../ext/reth/crates/node/events" }
+reth-node-events = { path = "../../ext/reth/crates/node/events" }
 # reth-payload-builder = { path = "../../ext/reth/crates/payload/builder" }
-# reth-primitives = { path = "../../ext/reth/crates/primitives" }
+reth-primitives = { path = "../../ext/reth/crates/primitives" }
 reth-provider = { path = "../../ext/reth/crates/storage/provider" }
 # reth-revm = { path = "../../ext/reth/crates/revm" }
-# reth-rpc-engine-api = { path = "../../ext/reth/crates/rpc/rpc-engine-api" }
+reth-rpc-engine-api = { path = "../../ext/reth/crates/rpc/rpc-engine-api" }
 # reth-rpc-types = { path = "../../ext/reth/crates/rpc/rpc-types" }
 # reth-stages = { path = "../../ext/reth/crates/stages" }
 # reth-static-file = { path = "../../ext/reth/crates/static-file" }
 reth-tracing = { path = "../../ext/reth/crates/tracing" }
 # reth-transaction-pool = { path = "../../ext/reth/crates/transaction-pool" }
-foldhash = { version = "0.1", default-features = false }
 api-server = { path = "../api-server" }
-irys-types = { path = "../irys-types" }
+foldhash = { version = "0.1", default-features = false }
 futures.workspace = true
+irys-types = { path = "../irys-types" }
+reth-tokio-util = { path = "../../ext/reth/crates/tokio-util" }
 
 
 revm = { path = "../../ext/revm/crates/revm" }

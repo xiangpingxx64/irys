@@ -3,14 +3,14 @@ use crate::{
     tables::{self, CompactIrysBlockHeader, IrysBlockHeaders, TableType, Tables},
 };
 use irys_types::{IrysBlockHeader, H256};
+use reth_db::transaction::DbTx;
+use reth_db::transaction::DbTxMut;
 use reth_db::{
     create_db as reth_create_db,
     mdbx::{DatabaseArguments, DatabaseFlags, MaxReadTransactionDuration},
     ClientVersion, Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives::revm_primitives::B256;
-use reth_db::transaction::DbTxMut;
-use reth_db::transaction::DbTx;
 
 /// Opens up an existing database or creates a new one at the specified path. Creates tables if
 /// necessary. Read/Write mode.

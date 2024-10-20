@@ -9,11 +9,9 @@ use crate::{
     shadow::Shadows,
     Address,
 };
-use alloy_primitives::{Bytes, B256, U256};
 use alloy_genesis::{ChainConfig, CliqueConfig};
-use alloy_serde::{
-    storage::deserialize_storage_map,
-};
+use alloy_primitives::{Bytes, B256, U256};
+use alloy_serde::storage::deserialize_storage_map;
 
 use serde::{Deserialize, Serialize};
 
@@ -84,7 +82,6 @@ use super::last_tx::LastTx;
 //     pub shadows: Option<Shadows>,
 // }
 
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Genesis {
@@ -118,19 +115,35 @@ pub struct Genesis {
     // should NOT be set in a real genesis file, but are included here for compatibility with
     // consensus tests, which have genesis files with these fields populated.
     /// The genesis header base fee
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "alloy_serde::quantity::opt")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "alloy_serde::quantity::opt"
+    )]
     pub base_fee_per_gas: Option<u128>,
     /// The genesis header excess blob gas
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "alloy_serde::quantity::opt")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "alloy_serde::quantity::opt"
+    )]
     pub excess_blob_gas: Option<u128>,
     /// The genesis header blob gas used
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "alloy_serde::quantity::opt")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "alloy_serde::quantity::opt"
+    )]
     pub blob_gas_used: Option<u128>,
     /// The genesis block number
-    #[serde(default, skip_serializing_if = "Option::is_none", with = "alloy_serde::quantity::opt")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "alloy_serde::quantity::opt"
+    )]
     pub number: Option<u64>,
 
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shadows: Option<Shadows>,
 }
 
@@ -278,12 +291,15 @@ impl Genesis {
     }
 }
 
-
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct GenesisAccount {
     /// The nonce of the account at genesis.
-    #[serde(skip_serializing_if = "Option::is_none", with = "alloy_serde::quantity::opt", default)]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "alloy_serde::quantity::opt",
+        default
+    )]
     pub nonce: Option<u64>,
     /// The balance of the account at genesis.
     pub balance: U256,
@@ -311,17 +327,13 @@ pub struct GenesisAccount {
     pub last_tx: Option<LastTx>,
 }
 
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[derive(Compact, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Compact, Serialize, Deserialize)]
 
 struct StorageEntries {
     entries: Vec<StorageEntry>,
 }
 
-
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[derive(Compact, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Compact, Serialize, Deserialize)]
 
 struct StorageEntry {
     key: B256,
@@ -329,8 +341,7 @@ struct StorageEntry {
 }
 
 // compactable variant of GenesisAccount
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[derive(Compact, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Compact, Serialize, Deserialize)]
 
 struct CompactGenesisAccount {
     /// The nonce of the account at genesis.

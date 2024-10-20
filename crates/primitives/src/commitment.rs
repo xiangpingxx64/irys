@@ -14,13 +14,7 @@ use super::DestHash;
 
 #[derive(PartialEq, Debug, Default, Eq, Clone, Copy, Hash)]
 // #[main_codec(no_arbitrary)]
-#[derive(
-    Compact,
-    serde::Serialize,
-    serde::Deserialize,
-    RlpEncodable,
-    RlpDecodable,
-)]
+#[derive(Compact, serde::Serialize, serde::Deserialize, RlpEncodable, RlpDecodable)]
 #[rlp(trailing)]
 #[derive(arbitrary::Arbitrary)]
 
@@ -51,9 +45,19 @@ impl Commitment {
 //     Unstake = 5,
 // }
 
-#[derive(PartialEq, Debug, Default, Eq, Clone, Copy, Hash)]
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(arbitrary::Arbitrary)]
+#[derive(
+    PartialEq,
+    Debug,
+    Default,
+    Eq,
+    Clone,
+    Copy,
+    Hash,
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    arbitrary::Arbitrary,
+)]
 
 pub enum CommitmentStatus {
     #[default]
@@ -112,9 +116,19 @@ impl Decodable for CommitmentStatus {
     }
 }
 
-#[derive(PartialEq, Debug, Default, Eq, Clone, Copy, Hash)]
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(arbitrary::Arbitrary)]
+#[derive(
+    PartialEq,
+    Debug,
+    Default,
+    Eq,
+    Clone,
+    Copy,
+    Hash,
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    arbitrary::Arbitrary,
+)]
 
 pub enum CommitmentType {
     #[default]
@@ -171,13 +185,20 @@ impl Decodable for CommitmentType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Hash, Eq, Default, RlpEncodableWrapper, RlpDecodableWrapper)]
 #[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Hash,
+    Eq,
+    Default,
+    RlpEncodableWrapper,
+    RlpDecodableWrapper,
     Compact,
     serde::Serialize,
-    serde::Deserialize
+    serde::Deserialize,
+    arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 
 pub struct Commitments(pub Vec<Commitment>);
 
@@ -254,13 +275,8 @@ impl From<Vec<Commitment>> for Commitments {
 // #[main_codec(no_arbitrary)]
 // #[derive(PledgeArbitrary, PledgePropTestArbitrary, RlpEncodable, RlpDecodable)]
 #[derive(
-    Compact,
-    serde::Serialize,
-    serde::Deserialize,
-    RlpEncodable,
-    RlpDecodable,
+    Compact, serde::Serialize, serde::Deserialize, RlpEncodable, RlpDecodable, arbitrary::Arbitrary,
 )]
-#[derive(arbitrary::Arbitrary)]
 pub struct Stake {
     pub tx_id: IrysTxId,
     pub quantity: U256,

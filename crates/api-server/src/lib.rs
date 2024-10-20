@@ -3,7 +3,6 @@ mod routes;
 use actix_web::{web, App, HttpServer};
 use routes::{chunks, index, proxy::proxy, tx};
 
-
 pub async fn run_server() {
     HttpServer::new(|| {
         let awc_client = awc::Client::new();

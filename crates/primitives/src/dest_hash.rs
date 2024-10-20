@@ -5,7 +5,6 @@ use reth_codecs::Compact;
 
 use crate::IrysTxId;
 
-
 #[derive(PartialEq, Debug, Eq, Clone, Copy, Hash)]
 // #[main_codec(no_arbitrary)]
 // #[derive(PledgeArbitrary, PledgePropTestArbitrary)]
@@ -16,9 +15,7 @@ use crate::IrysTxId;
 //     RlpEncodable,
 //     RlpDecodable
 // )]
-
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(arbitrary::Arbitrary)]
+#[derive(Compact, serde::Serialize, serde::Deserialize, arbitrary::Arbitrary)]
 
 pub enum DestHash {
     Address(Address),

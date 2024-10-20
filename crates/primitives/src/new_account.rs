@@ -8,10 +8,19 @@ use super::{
     last_tx::LastTx,
 };
 
-
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-
-#[derive(Debug, Default, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable)]
+#[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Default,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
+)]
 #[rlp(trailing)]
 #[derive(arbitrary::Arbitrary)]
 
@@ -32,21 +41,54 @@ pub struct NewAccountState {
     pub mining_permission: Option<bool>,
 }
 // weird how many problems can be solved with wrapper structs
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable, Default)]
+#[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
+    Default,
+)]
 #[rlp(trailing)]
 #[derive(arbitrary::Arbitrary)]
 
 pub struct WrappedStake(pub Option<Stake>);
 
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable, Default)]
+#[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
+    Default,
+)]
 #[rlp(trailing)]
 #[derive(arbitrary::Arbitrary)]
 
 pub struct WrappedCommitments(pub Option<Commitments>);
-#[derive(Compact, serde::Serialize, serde::Deserialize)]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, RlpEncodable, RlpDecodable, Default)]
+#[derive(
+    Compact,
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    Eq,
+    PartialEq,
+    Hash,
+    RlpEncodable,
+    RlpDecodable,
+    Default,
+)]
 #[rlp(trailing)]
 #[derive(arbitrary::Arbitrary)]
 

@@ -1,4 +1,7 @@
-use actix_web::{web::{Data, Json}, FromRequest, HttpResponse};
+use actix_web::{
+    web::{Data, Json},
+    FromRequest, HttpResponse,
+};
 use irys_types::IrysTransactionHeader;
 
 pub async fn post_tx(body: Json<IrysTransactionHeader>) -> actix_web::Result<HttpResponse> {
