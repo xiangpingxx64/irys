@@ -36,7 +36,7 @@ fn main() -> eyre::Result<()> {
 
     let (new_seed_tx, new_seed_rx) = mpsc::channel();
 
-    std::thread::spawn(move || run_vdf(H256::rand(), new_seed_rx, part_channels));
+    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels));
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

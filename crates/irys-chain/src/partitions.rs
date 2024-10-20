@@ -1,6 +1,6 @@
 use std::{ops::Index, sync::mpsc::Receiver};
 
-use irys_types::{CHUNK_SIZE, H256, NUM_OF_CHUNKS_IN_PARTITION};
+use irys_types::{CHUNK_SIZE, H256, NUM_OF_CHUNKS_IN_PARTITION, U256};
 use sha2::{Digest, Sha256};
 
 pub struct Partition {
@@ -38,20 +38,20 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
         let mining_hash_number = NUM_OF_CHUNKS_IN_PARTITION % mining_hash_chunk_index;
 
 
-        let chunks_buffer: Vec<u8> = Vec::with_capacity(NUM_OF_CHUNKS_IN_PARTITION * CHUNK_SIZE);
+        let chunks_buffer: Vec<u8> = Vec::with_capacity((NUM_OF_CHUNKS_IN_PARTITION * CHUNK_SIZE) as usize);
 
         // TODO: read chunks
 
-        let hasher = Sha256::new();
-        for i in 0..(NUM_OF_CHUNKS_IN_PARTITION*CHUNK_SIZE) {
-            let x = chunks_buffer[i..i+CHUNK_SIZE];
+        let mut hasher = Sha256::new();
+        for i in (0..(NUM_OF_CHUNKS_IN_PARTITION*CHUNK_SIZE)).step_by(CHUNK_SIZE as usize) {
+            let chunk: &[u8] = &chunks_buffer[(i as usize)..(i+CHUNK_SIZE) as usize];
 
-            hasher.update(hash);
-            let hash = hasher.finalize_reset().as_slice();
+            hasher.update(chunk);
+            let hash = hasher.finalize_reset().to_vec();
 
             // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
         
-            if hash_to_number(hash) >= difficulty {
+            if hash_to_number(&hash) >= U256::from(difficulty) {
                 let solution = SolutionContext {
                     partition_id: partition.id,
                     chunk_index: todo!(),
@@ -64,13 +64,11 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
                 // Once solution is sent stop mining and let all other partitions know
                 break;
             }
-
-            *i = *i + CHUNK_SIZE;
         }
     }
 }
 
 
-fn hash_to_number(hash: &[u8]) -> u64 {
-    u64::from_le_bytes(hash)
+fn hash_to_number(hash: &[u8]) -> U256 {
+    U256::from_little_endian(hash)
 }
