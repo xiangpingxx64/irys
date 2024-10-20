@@ -1,12 +1,33 @@
-use std::sync::mpsc::Sender;
+use std::{io::Write, sync::mpsc::{Receiver, Sender}};
 use sha2::{Digest, Sha256};
+use irys_types::{H256, HASHES_PER_CHECKPOINT, NUM_CHECKPOINTS_IN_VDF_STEP, VDF_SHA_1S};
 
-pub fn run_vdf(partition_channels: Vec<Sender<String>>) {
+
+
+pub fn run_vdf(seed: H256, new_seed_listener: Receiver<H256>, partition_channels: Vec<Sender<H256>>) {
     let mut hasher = Sha256::new();
-    hasher.update(b"hello world");
-    let result = hasher.finalize().to_vec();
 
-    for c in partition_channels {
-        // c.send(String::from(result));
+    let mut hash: &[u8] = seed.as_bytes();
+
+    loop {
+        let checkpoints = Vec::with_capacity(NUM_CHECKPOINTS_IN_VDF_STEP);
+        for i in 0..VDF_SHA_1S {
+            hasher.update(hash);
+            hash = hasher.finalize_reset().as_slice();
+            if (i+1) % HASHES_PER_CHECKPOINT == 0 {
+                // write checkpoint
+                checkpoints[(i+1) / HASHES_PER_CHECKPOINT] = hash;
+            }
+        }
+
+        for c in partition_channels {
+            dbg!("Sending hash {} to all partitions", hash);
+            c.send(H256::from_slice(hash));
+        }
+
+        if let Ok(h) = new_seed_listener.try_recv() {
+            hash = h.as_bytes();
+        }
     }
+    
 }

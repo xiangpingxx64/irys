@@ -7,9 +7,10 @@ mod vdf;
 use api_server::*;
 use clap::Parser;
 use database::open_or_create_db;
-use partitions::{get_partitions, mine_partition};
+use partitions::{get_partitions, mine_partition, Partition};
 use std::sync::mpsc;
 use vdf::run_vdf;
+use irys_types::H256;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -30,10 +31,12 @@ fn main() -> eyre::Result<()> {
     for part in get_partitions() {
         let (tx, rx) = mpsc::channel();
         part_channels.push(tx);
-        std::thread::spawn(move || mine_partition(rx));
+        std::thread::spawn(move || mine_partition(part, rx));
     }
 
-    std::thread::spawn(move || run_vdf(part_channels));
+    let (new_seed_tx, new_seed_rx) = mpsc::channel();
+
+    std::thread::spawn(move || run_vdf(H256::rand(), new_seed_rx, part_channels));
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
