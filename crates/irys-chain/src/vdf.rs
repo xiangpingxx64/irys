@@ -22,7 +22,6 @@ pub fn run_vdf(seed: H256, new_seed_listener: Receiver<H256>, partition_channels
         }
 
         for c in &partition_channels {
-            dbg!("Sending hash {} to all partitions", hash);
             c.send(hash);
         }
 

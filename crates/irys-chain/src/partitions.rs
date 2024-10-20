@@ -68,7 +68,6 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
             // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
         
             let solution_number = hash_to_number(&hash);
-            dbg!("Solution attempt is {}", solution_number);
             if solution_number >= U256::from(difficulty) {
                 dbg!("SOLUTION FOUND!!!!!!!!!");
                 let solution = SolutionContext {

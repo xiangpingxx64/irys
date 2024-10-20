@@ -50,7 +50,9 @@ fn main() -> eyre::Result<()> {
         c.send(H256::zero());
     }
 
-    let _ = runtime.block_on(async { api_server::run_server().await });
+    let _ = runtime.block_on(async { 
+        dbg!(api_server::run_server().await)
+     });
 
     Ok(())
 }
