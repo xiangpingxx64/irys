@@ -1,4 +1,4 @@
-use reth_node_bridge::custom_node;
+use reth_node_bridge::node;
 
 
 #[global_allocator]
@@ -12,6 +12,6 @@ pub fn main() -> eyre::Result<()> {
         std::env::set_var("RUST_BACKTRACE", "1");
     };
     
-    custom_node::run_node()
+    node::run_node()
 }
 

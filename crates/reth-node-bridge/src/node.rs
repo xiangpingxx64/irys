@@ -12,7 +12,7 @@ use tracing::{info};
 use clap::Parser;
 use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
 
-use crate::custom_rpc::{AccountStateExt, AccountStateExtApiServer};
+use crate::rpc::{AccountStateExt, AccountStateExtApiServer};
 
 
 // use crate::node_launcher::CustomNodeLauncher;
@@ -158,6 +158,7 @@ pub fn run_node() -> eyre::Result<()> {
                         // })
                         .launch()
                         .await?;
+                    
                     let exit_reason = handle.node_exit_future.await?;
                 // }
             //     true => {
