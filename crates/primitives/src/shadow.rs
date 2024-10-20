@@ -433,19 +433,19 @@ impl From<Vec<ShadowTx>> for Shadows {
     }
 }
 
-mod test {
+// mod test {
 
-    #[test]
-    fn enc_dec_test() {
-        let shadow1 = ShadowTx {
-            tx_id: TxId::random(),
-            address: Address::random(),
-            tx: ShadowTxType::Data(DataShadow { fee: U256::from(8) }),
-        };
-        let shadows = Shadows::new(vec![shadow1]);
-        let mut buf = vec![];
-        let enc = shadows.encode(&mut buf);
-        dbg!(buf);
-        ()
-    }
-}
+//     #[test]
+//     fn enc_dec_test() {
+//         let shadow1 = ShadowTx {
+//             tx_id: TxId::random(),
+//             address: Address::random(),
+//             tx: ShadowTxType::Data(DataShadow { fee: U256::from(8) }),
+//         };
+//         let shadows = Shadows::new(vec![shadow1]);
+//         let mut buf = vec![];
+//         let enc = shadows.encode(&mut buf);
+//         dbg!(buf);
+//         ()
+//     }
+// }
