@@ -17,19 +17,23 @@ color-eyre = "0.6.2"
 eyre = "0.6.8"
 irys-types = { path = "../irys-types" }
 rand = "0.8.5"
+reth-db-api = { path = "../../ext/reth/crates/storage/db-api" }
 reth-db-models = { path = "../../ext/reth/crates/storage/db-models" }
 reth-node-bridge = { path = "../reth-node-bridge" }
 reth-primitives = { path = "../../ext/reth/crates/primitives" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.107"
 
-bytes.workspace = true
-modular-bitfield.workspace = true
-test-fuzz.workspace = true
 
 arbitrary = { workspace = true, features = [
 	"derive",
-] } # arbitrary.workspace = true
+] } # arbitrary.workspace = truebytes.workspace = true
+modular-bitfield.workspace = true
+test-fuzz.workspace = true
+alloy-rlp.workspace = true
+alloy-serde.workspace = true
+bytes.workspace = true
+
 
 [features]
 # test-utils = ["arbitrary"]

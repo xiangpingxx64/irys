@@ -4969,6 +4969,8 @@ dependencies = [
 name = "irys-chain"
 version = "0.1.0"
 dependencies = [
+ "alloy-rlp",
+ "alloy-serde",
  "arbitrary",
  "bytes",
  "clap",
@@ -4980,6 +4982,7 @@ dependencies = [
  "reth-codecs",
  "reth-codecs-derive",
  "reth-db",
+ "reth-db-api",
  "reth-db-models",
  "reth-node-bridge",
  "reth-primitives",

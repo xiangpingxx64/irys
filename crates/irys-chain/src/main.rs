@@ -2,14 +2,15 @@ mod app_state;
 mod config;
 mod database;
 mod partitions;
+mod tables;
 mod vdf;
 
 use clap::Parser;
 use database::open_or_create_db;
+use irys_types::H256;
 use partitions::{get_partitions, mine_partition, Partition};
 use std::{str::FromStr, sync::mpsc};
 use vdf::run_vdf;
-use irys_types::H256;
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]

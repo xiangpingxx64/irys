@@ -11,7 +11,19 @@ use arbitrary::Arbitrary;
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Compact, Arbitrary)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Compact,
+    Arbitrary,
+    RlpEncodableWrapper,
+    RlpDecodableWrapper,
+)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
     /// Difficulty threshold used to produce the current block.
