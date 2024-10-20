@@ -428,8 +428,8 @@ impl DerefMut for Shadows {
 }
 
 impl From<Vec<ShadowTx>> for Shadows {
-    fn from(withdrawals: Vec<ShadowTx>) -> Self {
-        Self(withdrawals)
+    fn from(shadows: Vec<ShadowTx>) -> Self {
+        Self(shadows)
     }
 }
 
