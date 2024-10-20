@@ -3,7 +3,7 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
-use crate::{option_u64_stringify, Base64, H256List, H256};
+use crate::{option_u64_stringify, Base64, H256List, IrysSignature, H256};
 use alloy_primitives::U256;
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
@@ -52,7 +52,7 @@ pub struct IrysBlockHeader {
     pub reward_key: Base64,
 
     /// The block signature
-    pub signature: Base64,
+    pub signature: IrysSignature,
 
     /// timestamp of when the block was discovered/produced
     pub timestamp: u64,
@@ -113,6 +113,7 @@ pub struct NonceLimiterInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy_primitives::Signature;
     use rand::{rngs::StdRng, Rng, SeedableRng};
     use serde_json;
     use std::str::FromStr;
@@ -140,7 +141,9 @@ mod tests {
             },
             reward_address: H256::zero(),
             reward_key: Base64::from_str("").unwrap(),
-            signature: Base64::from_str("").unwrap(),
+            signature: IrysSignature {
+                reth_signature: Signature::test_signature(),
+            },
             timestamp: 1622543200,
             ledgers: vec![TransactionLedger {
                 tx_root: H256::zero(),

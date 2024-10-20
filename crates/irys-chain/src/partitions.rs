@@ -6,12 +6,15 @@ use sha2::{Digest, Sha256};
 
 pub struct Partition {
     id: u64,
-    mining_addr: H256
+    mining_addr: H256,
 }
 
 impl Default for Partition {
     fn default() -> Self {
-        Self { id: 0, mining_addr: H256::random() }
+        Self {
+            id: 0,
+            mining_addr: H256::random(),
+        }
     }
 }
 
@@ -22,7 +25,7 @@ pub fn get_partitions() -> Vec<Partition> {
 pub struct SolutionContext {
     partition_id: u64,
     chunk_index: u64,
-    mining_address: H256
+    mining_address: H256,
 }
 
 pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256>) {
@@ -46,10 +49,9 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
         // Starting chunk index within partition
         let mining_hash_number = NUM_OF_CHUNKS_IN_PARTITION % mining_hash_chunk_index;
 
-
         // Create a contiguous piece of memory on the heap where chunks can be written into
-        let mut chunks_buffer: Vec<[u8; CHUNK_SIZE as usize]> = Vec::with_capacity((RECALL_RANGE_CHUNK_COUNTER * CHUNK_SIZE) as usize);
-
+        let mut chunks_buffer: Vec<[u8; CHUNK_SIZE as usize]> =
+            Vec::with_capacity((RECALL_RANGE_CHUNK_COUNTER * CHUNK_SIZE) as usize);
 
         // TODO: read chunks. For now creates random
         for _ in 0..RECALL_RANGE_CHUNK_COUNTER {
@@ -66,7 +68,7 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
             let hash = hasher.finalize_reset().to_vec();
 
             // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
-        
+
             let solution_number = hash_to_number(&hash);
             if solution_number >= U256::from(difficulty) {
                 dbg!("SOLUTION FOUND!!!!!!!!!");
@@ -86,7 +88,6 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
         }
     }
 }
-
 
 fn hash_to_number(hash: &[u8]) -> U256 {
     U256::from_little_endian(hash)

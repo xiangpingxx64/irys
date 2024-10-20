@@ -143,6 +143,17 @@ pub mod option_u64_stringify {
 //==============================================================================
 // U256
 //------------------------------------------------------------------------------
+impl Default for IrysSignature {
+    fn default() -> Self {
+        IrysSignature {
+            reth_signature: Signature::new(
+                RethU256::default(),
+                RethU256::default(),
+                Parity::Eip155(0), // Assuming 0 as default parity
+            ),
+        }
+    }
+}
 /// Implement Serialize for U256
 impl Serialize for U256 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
