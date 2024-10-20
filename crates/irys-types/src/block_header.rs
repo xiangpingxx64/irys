@@ -7,12 +7,11 @@ use std::str::FromStr;
 
 use crate::{option_u64_stringify, Base64, H256List, IrysSignature, H256};
 use alloy_primitives::{Signature, U256};
+use arbitrary::Arbitrary;
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
-use arbitrary::Arbitrary;
 
-#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Compact)]
-#[derive(Arbitrary)]
+#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Compact, Arbitrary)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
     /// Difficulty threshold used to produce the current block.

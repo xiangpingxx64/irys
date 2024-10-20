@@ -1,5 +1,5 @@
 use alloy_primitives::{bytes, Parity, Signature, U256 as RethU256};
-use arbitrary::Arbitrary;
+use arbitrary::{Arbitrary, Unstructured};
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use reth_codecs::Compact;
@@ -30,6 +30,13 @@ construct_uint! {
 construct_fixed_hash! {
     /// A 256-bit hash type (32 bytes)
     pub struct H256(32);
+}
+
+// Manually implement Arbitrary for H256
+impl<'a> Arbitrary<'a> for H256 {
+    fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
+        Ok(H256::random())
+    }
 }
 #[derive(Clone, Eq, Debug, Arbitrary)]
 pub struct IrysSignature {
