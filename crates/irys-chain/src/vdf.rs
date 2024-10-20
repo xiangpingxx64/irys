@@ -17,7 +17,7 @@ pub fn run_vdf(seed: H256, new_seed_listener: Receiver<H256>, partition_channels
             hash = H256::from_slice(&hash_result);
             if (i+1) % HASHES_PER_CHECKPOINT == 0 {
                 // write checkpoint
-                checkpoints[((i+1) / HASHES_PER_CHECKPOINT) as usize] = hash;
+                checkpoints.push(hash);
             }
         }
 

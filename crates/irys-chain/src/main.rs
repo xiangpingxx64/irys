@@ -8,7 +8,7 @@ use api_server::*;
 use clap::Parser;
 use database::open_or_create_db;
 use partitions::{get_partitions, mine_partition, Partition};
-use std::sync::mpsc;
+use std::{str::FromStr, sync::mpsc};
 use vdf::run_vdf;
 use irys_types::H256;
 
@@ -30,18 +30,25 @@ fn main() -> eyre::Result<()> {
 
     for part in get_partitions() {
         let (tx, rx) = mpsc::channel();
-        part_channels.push(tx);
+        part_channels.push(tx.clone());
         std::thread::spawn(move || mine_partition(part, rx));
     }
 
     let (new_seed_tx, new_seed_rx) = mpsc::channel();
 
-    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels));
+    let part_channels_cloned = part_channels.clone();
+    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels_cloned));
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
+
+    dbg!(&part_channels);
+
+    for c in &part_channels {
+        c.send(H256::zero());
+    }
 
     let _ = runtime.block_on(async { api_server::run_server().await });
 
