@@ -1,7 +1,7 @@
 mod routes;
 
 use actix_web::{web, App, HttpServer};
-use routes::proxy::proxy;
+use routes::{chunks, proxy::proxy};
 
 
 pub async fn run_server() -> std::io::Result<()> {
@@ -10,6 +10,7 @@ pub async fn run_server() -> std::io::Result<()> {
 
         App::new()
             .app_data(awc_client)
+            .route("/chunk", web::post().to(chunks::post_chunk))
             .route("/", web::post().to(proxy))
             .route("/", web::get().to(proxy))
     })
