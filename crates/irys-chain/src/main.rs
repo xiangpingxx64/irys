@@ -34,21 +34,14 @@ fn main() -> eyre::Result<()> {
         std::thread::spawn(move || mine_partition(part, rx));
     }
 
-    let (new_seed_tx, new_seed_rx) = mpsc::channel();
+    let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
 
-    let part_channels_cloned = part_channels.clone();
-    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels_cloned));
+    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels));
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-
-    dbg!(&part_channels);
-
-    for c in &part_channels {
-        c.send(H256::zero());
-    }
 
     let _ = runtime.block_on(async { 
         dbg!(api_server::run_server().await)
