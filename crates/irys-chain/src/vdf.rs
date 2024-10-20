@@ -10,7 +10,7 @@ pub fn run_vdf(seed: H256, new_seed_listener: Receiver<H256>, partition_channels
     let mut hash: &[u8] = seed.as_bytes();
 
     loop {
-        let checkpoints = Vec::with_capacity(NUM_CHECKPOINTS_IN_VDF_STEP);
+        let mut checkpoints: Vec<&[u8]> = Vec::with_capacity(NUM_CHECKPOINTS_IN_VDF_STEP);
         for i in 0..VDF_SHA_1S {
             hasher.update(hash);
             hash = hasher.finalize_reset().as_slice();
