@@ -166,7 +166,7 @@ mod tests {
 
         // Serialize the header to a JSON string
         let serialized = serde_json::to_string(&header).unwrap();
-        println!("\n{}", serialized);
+        // println!("\n{}", serialized);
 
         // Deserialize back to IrysBlockHeader struct
         let deserialized: IrysBlockHeader = serde_json::from_str(&serialized).unwrap();

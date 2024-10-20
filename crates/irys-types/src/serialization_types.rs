@@ -1,4 +1,4 @@
-use alloy_primitives::bytes;
+use alloy_primitives::{bytes, Parity, Signature, U256 as RethU256};
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use reth_codecs::Compact;
@@ -6,7 +6,11 @@ use serde::{
     de::{self, Error as _},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{ops::Index, slice::SliceIndex, str::FromStr};
+use std::{
+    ops::{Index, RemAssign},
+    slice::SliceIndex,
+    str::FromStr,
+};
 
 use fixed_hash::construct_fixed_hash;
 use uint::construct_uint;
@@ -25,6 +29,82 @@ construct_uint! {
 construct_fixed_hash! {
     /// A 256-bit hash type (32 bytes)
     pub struct H256(32);
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct IrysSignature {
+    pub reth_signature: Signature,
+}
+
+impl From<Signature> for IrysSignature {
+    fn from(sig: Signature) -> Self {
+        IrysSignature {
+            reth_signature: sig, // Directly wrapping the Signature struct
+        }
+    }
+}
+
+impl Compact for IrysSignature {
+    #[inline]
+    fn to_compact<B>(&self, buf: &mut B) -> usize
+    where
+        B: bytes::BufMut + AsMut<[u8]>,
+    {
+        self.reth_signature.to_compact(buf)
+    }
+
+    #[inline]
+    fn from_compact(buf: &[u8], len: usize) -> (Self, &[u8]) {
+        let compact = Signature::from_compact(buf, len);
+        (
+            IrysSignature {
+                reth_signature: compact.0,
+            },
+            compact.1,
+        )
+    }
+}
+
+// Implement Serialize for H256
+impl Serialize for IrysSignature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let bytes = self.reth_signature.as_bytes();
+        serializer.serialize_str(bytes.to_base58().as_ref())
+    }
+}
+
+// Implement Deserialize for H256
+impl<'de> Deserialize<'de> for IrysSignature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        // First, deserialize the base58-encoded string
+        let s: String = Deserialize::deserialize(deserializer)?;
+
+        // Decode the base58 string into bytes
+        let bytes = FromBase58::from_base58(s.as_str())
+            .map_err(|e| format!("Failed to decode from base58 {:?}", e))
+            .expect("base58 should prase");
+
+        // Ensure the byte array is exactly 65 bytes (r, s, and v values of the signature)
+        if bytes.len() != 65 {
+            return Err(de::Error::invalid_length(
+                bytes.len(),
+                &"expected 65 bytes for signature",
+            ));
+        }
+
+        // Convert the byte array into a Signature struct using TryFrom
+        let sig = Signature::try_from(bytes.as_slice()).map_err(de::Error::custom)?;
+
+        // Return the IrysSignature by wrapping the Signature
+        Ok(IrysSignature {
+            reth_signature: sig,
+        })
+    }
 }
 
 //==============================================================================

@@ -956,6 +956,7 @@ dependencies = [
  "actix-proxy",
  "actix-web",
  "awc",
+ "serde",
 ]
 
 [[package]]
@@ -4918,6 +4919,8 @@ dependencies = [
  "clap",
  "color-eyre",
  "eyre",
+ "irys-types",
+ "rand",
  "reth-db",
  "sha2 0.10.8",
  "tokio",
