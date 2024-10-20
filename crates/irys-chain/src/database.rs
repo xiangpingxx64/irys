@@ -9,6 +9,8 @@ use reth_db::{
     ClientVersion, Database, DatabaseEnv, DatabaseError,
 };
 use reth_primitives::revm_primitives::B256;
+use reth_db::transaction::DbTxMut;
+use reth_db::transaction::DbTx;
 
 /// Opens up an existing database or creates a new one at the specified path. Creates tables if
 /// necessary. Read/Write mode.
@@ -44,10 +46,10 @@ pub fn open_or_create_db(cli_args: &str) -> eyre::Result<DatabaseEnv> {
     let value = IrysBlockHeader::new();
     let key: B256 = B256::from(value.block_hash.0);
 
-    // let tx = db.tx_mut().expect("create a mutable tx");
-    // tx.put::<IrysBlockHeaders>(key, value.clone())
-    //     .expect("expected to put");
-    // tx.commit().expect("expected to commit");
+    let tx = db.tx_mut().expect("create a mutable tx");
+    tx.put::<IrysBlockHeaders>(key, value.clone().into())
+        .expect("expected to put");
+    tx.commit().expect("expected to commit");
 
     Ok(db)
 }
