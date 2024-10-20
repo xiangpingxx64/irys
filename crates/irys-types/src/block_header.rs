@@ -3,10 +3,12 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
-use crate::{option_u64_stringify, Base64, H256List, H256, U256};
+use crate::{option_u64_stringify, Base64, H256List, H256};
+use alloy_primitives::U256;
+use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Compact)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
     /// Difficulty threshold used to produce the current block.
@@ -61,16 +63,15 @@ pub struct IrysBlockHeader {
     pub ledgers: Vec<TransactionLedger>,
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize, Compact)]
 /// Stores deserialized fields from a `poa` (Proof of Access) JSON
 pub struct PoaData {
-    pub option: String,
     pub tx_path: Base64,
     pub data_path: Base64,
     pub chunk: Base64,
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, PartialEq, Serialize, Deserialize, Compact)]
 pub struct TransactionLedger {
     pub tx_root: H256,
     /// List of transaction ids included in the block
@@ -80,7 +81,7 @@ pub struct TransactionLedger {
 }
 
 /// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Compact)]
 pub struct NonceLimiterInfo {
     /// The output of the latest step - the source of the entropy for the mining nonces.
     pub output: H256,
@@ -133,7 +134,6 @@ mod tests {
             previous_block_hash: H256::zero(),
             previous_cumulative_diff: U256::from(4000),
             poa: PoaData {
-                option: "default".to_string(),
                 tx_path: Base64::from_str("").unwrap(),
                 data_path: Base64::from_str("").unwrap(),
                 chunk: Base64::from_str("").unwrap(),
