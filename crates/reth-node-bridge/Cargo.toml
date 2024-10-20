@@ -63,7 +63,8 @@ reth-provider = { path = "../../ext/reth/crates/storage/provider" }
 reth-tracing = { path = "../../ext/reth/crates/tracing" }
 # reth-transaction-pool = { path = "../../ext/reth/crates/transaction-pool" }
 foldhash = { version = "0.1", default-features = false }
-
+api-server = { path = "../api-server" }
+irys-types = { path = "../irys-types" }
 futures.workspace = true
 
 

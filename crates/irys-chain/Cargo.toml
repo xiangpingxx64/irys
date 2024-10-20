@@ -12,7 +12,7 @@ reth-db = { path = "../../ext/reth/crates/storage/db" }
 # reth-node-bridge = { path = "../reth-node-bridge" }
 irys-types = { path = "../irys-types" }
 clap = "4.5.20"
-api-server = { path = "../api-server" }
 eyre = "0.6.8"
 color-eyre = "0.6.2"
 rand = "0.8.5"
+reth-node-bridge = { path = "../reth-node-bridge" }

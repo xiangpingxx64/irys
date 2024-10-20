@@ -1,6 +1,8 @@
 use core::fmt;
-use std::{fs::File, future::Future, io::Write, path::PathBuf, sync::Arc, time::Duration};
+use std::{fs::File, future::Future, io::Write, path::PathBuf, sync::{mpsc::Sender, Arc}, time::Duration};
 
+use api_server::run_server;
+use irys_types::H256;
 use reth::{chainspec::EthereumChainSpecParser, cli::{Cli, Commands}, core::irys_ext::{NodeExitReason, ReloadPayload}, prometheus_exporter::install_prometheus_recorder, version, CliContext, CliRunner};
 use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
@@ -22,7 +24,10 @@ macro_rules! vec_of_strings {
     ($($x:expr),*) => (vec![$($x.to_string()),*]);
 }
 
-pub fn run_node() -> eyre::Result<()> {
+#[global_allocator]
+static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
+
+pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
     let mut os_args: Vec<String> = std::env::args().collect();
     let bp = os_args.remove(0);
     // let mut args = vec_of_strings![
@@ -134,6 +139,8 @@ pub fn run_node() -> eyre::Result<()> {
 
                             let irys_ext = ctx.node().components.irys_ext.clone();
                             let network = ctx.network().clone();
+
+                            ctx.node().task_executor.spawn(run_server());
 
                             let ext = AccountStateExt {
                                 provider,

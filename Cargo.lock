@@ -4969,13 +4969,13 @@ dependencies = [
 name = "irys-chain"
 version = "0.1.0"
 dependencies = [
- "api-server",
  "clap",
  "color-eyre",
  "eyre",
  "irys-types",
  "rand",
  "reth-db",
+ "reth-node-bridge",
  "sha2 0.10.8",
  "tokio",
 ]
@@ -8539,6 +8539,7 @@ dependencies = [
  "alloy-eips",
  "alloy-rpc-types",
  "alloy-signer-local",
+ "api-server",
  "bs58",
  "clap",
  "eyre",
@@ -8546,6 +8547,7 @@ dependencies = [
  "futures",
  "futures-util",
  "irys-primitives",
+ "irys-types",
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-http-client",

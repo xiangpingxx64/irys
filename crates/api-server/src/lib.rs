@@ -4,7 +4,7 @@ use actix_web::{web, App, HttpServer};
 use routes::{chunks, index, proxy::proxy, tx};
 
 
-pub async fn run_server() -> std::io::Result<()> {
+pub async fn run_server() {
     HttpServer::new(|| {
         let awc_client = awc::Client::new();
 
@@ -16,7 +16,9 @@ pub async fn run_server() -> std::io::Result<()> {
             .route("/", web::post().to(proxy))
             .route("/", web::get().to(proxy))
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("127.0.0.1", 8080))
+    .unwrap()
     .run()
     .await
+    .unwrap();
 }

@@ -4,7 +4,6 @@ mod database;
 mod partitions;
 mod vdf;
 
-use api_server::*;
 use clap::Parser;
 use database::open_or_create_db;
 use partitions::{get_partitions, mine_partition, Partition};
@@ -38,14 +37,7 @@ fn main() -> eyre::Result<()> {
 
     std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels));
 
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap();
-
-    let _ = runtime.block_on(async { 
-        dbg!(api_server::run_server().await)
-     });
+    reth_node_bridge::run_node(new_seed_tx).unwrap();
 
     Ok(())
 }
