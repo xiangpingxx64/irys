@@ -348,6 +348,7 @@ pub struct DiffShadow {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Hash, RlpEncodableWrapper, RlpDecodableWrapper)]
 pub struct Shadows(Vec<ShadowTx>);
 
+
 impl Shadows {
     /// Create a new Shadows instance.
     pub fn new(shadows: Vec<ShadowTx>) -> Self {

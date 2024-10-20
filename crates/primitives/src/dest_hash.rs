@@ -1,11 +1,10 @@
 use alloy_primitives::Address;
 use alloy_rlp::{Decodable, Encodable, Error as RlpError};
-use arbitrary::Arbitrary as PledgeArbitrary;
 use bytes::Buf;
-use proptest_derive::Arbitrary as PledgePropTestArbitrary;
 use reth_codecs::Compact;
 
-use super::commitment::IrysTxId;
+use crate::IrysTxId;
+
 
 #[derive(PartialEq, Debug, Eq, Clone, Copy, Hash)]
 // #[main_codec(no_arbitrary)]

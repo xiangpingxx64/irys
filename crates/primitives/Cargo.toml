@@ -5,18 +5,20 @@ version = "0.1.0"
 
 [dependencies]
 
+alloy-consensus.workspace = true
 alloy-eips.workspace = true
 alloy-genesis.workspace = true
 alloy-primitives.workspace = true
 alloy-rlp.workspace = true
+# alloy-rpc-types-engine.workspace = true
 alloy-serde.workspace = true
 arbitrary.workspace = true
 bytes.workspace = true
 derive_more.workspace = true
 modular-bitfield.workspace = true
 proptest-derive.workspace = true
+reth-codecs = { path = "../../ext/reth/crates/storage/codecs" }
 serde.workspace = true
 serde_json.workspace = true
+test-fuzz.workspace = true
 thiserror.workspace = true
-
-reth-codecs = { path = "../../ext/reth/crates/storage/codecs" }
