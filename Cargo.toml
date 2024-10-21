@@ -1,6 +1,6 @@
 [workspace]
 exclude = ["ext/"]
-members = [
+members = [ "crates/c",
     "crates/irys-chain",
     "crates/irys-types",
     "crates/primitives",
