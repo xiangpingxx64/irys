@@ -3,6 +3,7 @@ use std::{
     fs::File,
     future::Future,
     io::Write,
+    ops::Deref,
     path::PathBuf,
     sync::{mpsc::Sender, Arc},
     time::Duration,
@@ -18,7 +19,7 @@ use reth::{
     prometheus_exporter::install_prometheus_recorder,
     version, CliContext, CliRunner,
 };
-use reth_chainspec::{EthChainSpec, EthereumHardforks};
+use reth_chainspec::{ChainSpec, EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{node::NoArgs, NodeCommand};
 use reth_db::{init_db, DatabaseEnv};
@@ -35,6 +36,7 @@ use tokio::time::sleep;
 use tracing::info;
 
 use crate::{
+    chainspec::IrysChainSpecParser,
     launcher::CustomEngineNodeLauncher,
     rpc::{AccountStateExt, AccountStateExtApiServer},
 };
@@ -101,7 +103,10 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
             "--log.stdout.filter",
             "trace",
             "--log.file.filter",
-            "trace"
+            "trace",
+            // TODO @JesseTheRobot - make sure this lines up with the path dev_genesis.json is written to
+            "--chain",
+            ".reth/dev_genesis.json"
         ],
         false => vec_of_strings![
             "node",
@@ -118,7 +123,7 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
     // dbg!(&args);
     info!("Running with args: {:#?}", &args);
     // loop is flawed, retains too much global set-once state
-    let cli = Cli::<EthereumChainSpecParser, EngineArgs>::parse_from(args.clone());
+    let cli = Cli::<IrysChainSpecParser, EngineArgs>::parse_from(args.clone());
     let _guard = cli.logs.init_tracing()?;
 
     loop {
@@ -178,8 +183,7 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
                         NodeExitReason::Reload(payload) => match payload {
                             ReloadPayload::ReloadConfig(chain_spec) => {
                                 // delay here so the genesis submission RPC reponse is able to make it back before the server dies
-
-                                let ser = serde_json::to_string_pretty(&chain_spec)?;
+                                let ser = serde_json::to_string_pretty(&chain_spec.genesis)?;
                                 let pb = PathBuf::from(
                                     handle.node.data_dir.data_dir().join("dev_genesis.json"),
                                 );
@@ -206,7 +210,7 @@ async fn run_custom_node<Ext, C, L, Fut>(
     launcher: L,
 ) -> eyre::Result<NodeExitReason>
 where
-    C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks>,
+    C: ChainSpecParser<ChainSpec: EthChainSpec + EthereumHardforks + EthChainSpec>,
     Ext: clap::Args + Clone + fmt::Debug,
     L: Fn(WithLaunchContext<NodeBuilder<Arc<DatabaseEnv>, C::ChainSpec>>, Ext) -> Fut,
     Fut: Future<Output = eyre::Result<NodeExitReason>>,
@@ -246,8 +250,8 @@ where
     let mut node_config = NodeConfig {
         datadir,
         config,
-        // chain: Arc::new(chain_spec),
         chain,
+        // chain: Arc::new(chain_spec),
         metrics,
         instance,
         network,
@@ -270,7 +274,6 @@ where
     tracing::info!(target: "reth::cli", path = ?db_path, "Opening database");
     let database = Arc::new(init_db(db_path.clone(), db.database_args())?.with_metrics());
 
-    // node_config = node_config.with_chain(chain_spec);
     if with_unused_ports {
         node_config = node_config.with_unused_ports();
     }

@@ -14,9 +14,19 @@
 			"path": "ext/reth/crates/chainspec/src/spec.rs",
 			"bookmarks": [
 				{
-					"line": 660,
+					"line": 661,
 					"column": 0,
 					"label": "Genesis -> ChainSpec"
+				}
+			]
+		},
+		{
+			"path": "ext/reth/crates/cli/cli/src/chainspec.rs",
+			"bookmarks": [
+				{
+					"line": 8,
+					"column": 0,
+					"label": "parse chain arg"
 				}
 			]
 		}
