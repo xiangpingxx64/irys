@@ -4,7 +4,7 @@ use reth_db::{
     table::{DupSort, Table},
     tables, DatabaseError,
 };
-use reth_db::{HasName, TableType, TableViewer};
+use reth_db::{HasName, HasTableType, TableType, TableViewer};
 use reth_db_api::table::{Compress, Decompress};
 use reth_primitives::revm_primitives::B256;
 use serde::{Deserialize, Serialize};
