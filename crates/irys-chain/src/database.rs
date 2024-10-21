@@ -40,10 +40,10 @@ pub fn insert_block(db: &DatabaseEnv, block: &IrysBlockHeader) -> Result<(), Dat
     let value = block;
     let key: B256 = B256::from(value.block_hash.0);
 
-    let tx = db.tx_mut().expect("create a mutable tx");
-    tx.put::<IrysBlockHeaders>(key, value.clone().into())?;
-    tx.commit()?;
-    Ok(())
+    db.update(|tx| {
+        tx.put::<IrysBlockHeaders>(key, value.clone().into())
+            .expect(ERROR_PUT)
+    })
 }
 
 pub fn block_by_hash(
@@ -60,14 +60,10 @@ pub fn insert_tx(db: &DatabaseEnv, tx: &IrysTransactionHeader) -> Result<(), Dat
     let key: B256 = B256::from(tx.id.0);
     let value = tx;
 
-    // db.update(|tx| {
-    //     tx.put::<IrysTxHeaders>(key, value.clone().into())
-    //         .expect(ERROR_PUT)
-    // })
-    let tx = db.tx_mut().expect("create a mutable tx");
-    tx.put::<IrysTxHeaders>(key, value.clone().into())?;
-    tx.commit()?;
-    Ok(())
+    db.update(|tx| {
+        tx.put::<IrysTxHeaders>(key, value.clone().into())
+            .expect(ERROR_PUT)
+    })
 }
 
 pub fn tx_by_txid(
