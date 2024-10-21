@@ -1,0 +1,141 @@
+diff --git a/crates/storage/db/src/implementation/mdbx/mod.rs b/crates/storage/db/src/implementation/mdbx/mod.rs
+index 1deb86ba6..ac061d047 100644
+--- a/crates/storage/db/src/implementation/mdbx/mod.rs
++++ b/crates/storage/db/src/implementation/mdbx/mod.rs
+@@ -5,7 +5,7 @@ use crate::{
+     metrics::DatabaseEnvMetrics,
+     tables::{self, TableType, Tables},
+     utils::default_page_size,
+-    DatabaseError,
++    DatabaseError, HasName,
+ };
+ use eyre::Context;
+ use metrics::{gauge, Label};
+@@ -417,6 +417,12 @@ impl DatabaseEnv {
+         self
+     }
+ 
++    /// Enables metrics on the database including additional table definitions
++    pub fn with_metrics_and_tables<T: HasName>(mut self, tables: &[T]) -> Self {
++        self.metrics = Some(DatabaseEnvMetrics::new_with_tables(tables).into());
++        self
++    }
++
+     /// Creates all the defined tables, if necessary.
+     pub fn create_tables(&self) -> Result<(), DatabaseError> {
+         let tx = self.inner.begin_rw_txn().map_err(|e| DatabaseError::InitTx(e.into()))?;
+@@ -439,7 +445,7 @@ impl DatabaseEnv {
+     /// Records version that accesses the database with write privileges.
+     pub fn record_client_version(&self, version: ClientVersion) -> Result<(), DatabaseError> {
+         if version.is_empty() {
+-            return Ok(())
++            return Ok(());
+         }
+ 
+         let tx = self.tx_mut()?;
+diff --git a/crates/storage/db/src/lib.rs b/crates/storage/db/src/lib.rs
+index e98961895..790e41b55 100644
+--- a/crates/storage/db/src/lib.rs
++++ b/crates/storage/db/src/lib.rs
+@@ -39,6 +39,12 @@ pub use mdbx::{create_db, init_db, open_db, open_db_read_only, DatabaseEnv, Data
+ pub use models::ClientVersion;
+ pub use reth_db_api::*;
+ 
++/// Used to get custom tables registered with metrics
++pub trait HasName {
++    /// Allows a type to expose its name as a static string
++    fn name(&self) -> &'static str;
++}
++
+ /// Collection of database test utilities
+ #[cfg(any(test, feature = "test-utils"))]
+ pub mod test_utils {
+diff --git a/crates/storage/db/src/metrics.rs b/crates/storage/db/src/metrics.rs
+index fecd691ee..74d6c4505 100644
+--- a/crates/storage/db/src/metrics.rs
++++ b/crates/storage/db/src/metrics.rs
+@@ -1,4 +1,4 @@
+-use crate::Tables;
++use crate::{HasName, Tables};
+ use metrics::{Gauge, Histogram};
+ use reth_metrics::{metrics::Counter, Metrics};
+ use rustc_hash::FxHashMap;
+@@ -36,6 +36,48 @@ impl DatabaseEnvMetrics {
+         }
+     }
+ 
++    pub(crate) fn new_with_tables<T: HasName>(tables: &[T]) -> Self {
++        // Pre-populate metric handle maps with all possible combinations of labels
++        // to avoid runtime locks on the map when recording metrics.
++        Self {
++            operations: Self::generate_operation_handles_with_tables(tables),
++            transactions: Self::generate_transaction_handles(),
++            transaction_outcomes: Self::generate_transaction_outcome_handles(),
++        }
++    }
++
++    fn generate_operation_handles_with_tables<T: HasName>(
++        tables: &[T],
++    ) -> FxHashMap<(&'static str, Operation), OperationMetrics> {
++        let mut operations = FxHashMap::with_capacity_and_hasher(
++            (Tables::COUNT + tables.len()) * Operation::COUNT,
++            Default::default(),
++        );
++        for table in Tables::ALL {
++            for operation in Operation::iter() {
++                operations.insert(
++                    (table.name(), operation),
++                    OperationMetrics::new_with_labels(&[
++                        (Labels::Table.as_str(), table.name()),
++                        (Labels::Operation.as_str(), operation.as_str()),
++                    ]),
++                );
++            }
++        }
++        for table in tables {
++            for operation in Operation::iter() {
++                operations.insert(
++                    (table.name(), operation),
++                    OperationMetrics::new_with_labels(&[
++                        (Labels::Table.as_str(), table.name()),
++                        (Labels::Operation.as_str(), operation.as_str()),
++                    ]),
++                );
++            }
++        }
++        operations
++    }
++
+     /// Generate a map of all possible operation handles for each table and operation tuple.
+     /// Used for tracking all operation metrics.
+     fn generate_operation_handles() -> FxHashMap<(&'static str, Operation), OperationMetrics> {
+diff --git a/crates/storage/db/src/tables/mod.rs b/crates/storage/db/src/tables/mod.rs
+index aa19dffda..caf3a4e71 100644
+--- a/crates/storage/db/src/tables/mod.rs
++++ b/crates/storage/db/src/tables/mod.rs
+@@ -19,6 +19,7 @@ pub use raw::{RawDupSort, RawKey, RawTable, RawValue, TableRawRow};
+ #[cfg(feature = "mdbx")]
+ pub(crate) mod utils;
+ 
++use crate::HasName;
+ use alloy_primitives::{Address, BlockHash, BlockNumber, TxHash, TxNumber, B256};
+ use reth_db_api::{
+     models::{
+@@ -157,6 +158,17 @@ macro_rules! tables {
+             )*
+         }
+ 
++        // Implement the HasName trait for the Tables enum
++        impl HasName for Tables {
++            fn name(&self) -> &'static str {
++                match self {
++                    $(
++                        Tables::$name => table_names::$name,
++                    )*
++                }
++            }
++        }
++
+         impl Tables {
+             /// All the tables in the database.
+             pub const ALL: &'static [Self] = &[$(Self::$name,)*];

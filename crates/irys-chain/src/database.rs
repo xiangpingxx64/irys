@@ -24,7 +24,7 @@ pub fn open_or_create_db(cli_args: &str) -> eyre::Result<DatabaseEnv> {
     let _ = install_prometheus_recorder();
 
     let db_path = get_data_dir();
-    let db = reth_create_db(db_path.clone(), args)?.with_metrics();
+    let db = reth_create_db(db_path.clone(), args)?.with_metrics_and_tables(Tables::ALL);
 
     let tx = db
         .begin_rw_txn()
