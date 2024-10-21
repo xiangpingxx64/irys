@@ -5,6 +5,7 @@ use reth_chainspec::{BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, Ethereu
 use reth_cli::chainspec::{parse_genesis, ChainSpecParser};
 use reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT;
 use std::sync::Arc;
+use tracing::error;
 
 /// Irys chain specification parser.
 #[derive(Debug, Clone, Default)]
@@ -29,7 +30,13 @@ pub fn chain_value_parser(s: &str) -> eyre::Result<Arc<ChainSpec>, eyre::Error> 
         // "sepolia" => SEPOLIA.clone(),
         // "holesky" => HOLESKY.clone(),
         // "dev" => DEV.clone(),
-        _ => Arc::new(parse_genesis(s)?.into()),
+        _ => match parse_genesis(s) {
+            Ok(genesis) => Arc::new(genesis.into()),
+            Err(e) => {
+                error!("error parsing chainspec: {}", e);
+                MAINNET.clone()
+            }
+        },
     })
 }
 
