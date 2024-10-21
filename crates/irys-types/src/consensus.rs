@@ -19,3 +19,5 @@ pub const NUM_CHECKPOINTS_IN_VDF_STEP: usize = 25;
 pub const VDF_SHA_1S: u64 = 100_000;
 
 pub const HASHES_PER_CHECKPOINT: u64 = VDF_SHA_1S / NUM_CHECKPOINTS_IN_VDF_STEP as u64;
+
+pub const EVM_CHAIN_ID: u64 = 69727973; // "irys" in hex
