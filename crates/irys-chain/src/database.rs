@@ -1,8 +1,9 @@
 use crate::{
     config::get_data_dir,
-    tables::{self, CompactIrysBlockHeader, IrysBlockHeaders, TableType, Tables},
+    tables::{IrysBlockHeaders, TableType, Tables},
 };
 use irys_types::{IrysBlockHeader, H256};
+use reth::prometheus_exporter::install_prometheus_recorder;
 use reth_db::transaction::DbTx;
 use reth_db::transaction::DbTxMut;
 use reth_db::{
@@ -18,8 +19,12 @@ pub fn open_or_create_db(cli_args: &str) -> eyre::Result<DatabaseEnv> {
     let args = DatabaseArguments::new(ClientVersion::default())
         .with_max_read_transaction_duration(Some(MaxReadTransactionDuration::Unbounded));
 
+    // Register the prometheus recorder before creating the database,
+    // because database init needs it to register metrics.
+    let _ = install_prometheus_recorder();
+
     let db_path = get_data_dir();
-    let db = reth_create_db(db_path.clone(), args)?.with_metrics();
+    let db = reth_create_db(db_path.clone(), args)?; //.with_metrics();
 
     let tx = db
         .begin_rw_txn()
@@ -40,8 +45,6 @@ pub fn open_or_create_db(cli_args: &str) -> eyre::Result<DatabaseEnv> {
     tx.commit().map_err(|e| DatabaseError::Commit(e.into()))?;
 
     let block_header = IrysBlockHeader::new();
-
-    //record_block_header(&db, block_header);
 
     let value = IrysBlockHeader::new();
     let key: B256 = B256::from(value.block_hash.0);

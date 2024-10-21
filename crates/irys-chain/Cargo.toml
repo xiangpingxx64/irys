@@ -17,6 +17,7 @@ color-eyre = "0.6.2"
 eyre = "0.6.8"
 irys-types = { path = "../irys-types" }
 rand = "0.8.5"
+reth = { path = "../../ext/reth/bin/reth" }
 reth-db-api = { path = "../../ext/reth/crates/storage/db-api" }
 reth-db-models = { path = "../../ext/reth/crates/storage/db-models" }
 reth-node-bridge = { path = "../reth-node-bridge" }
@@ -33,13 +34,3 @@ test-fuzz.workspace = true
 alloy-rlp.workspace = true
 alloy-serde.workspace = true
 bytes.workspace = true
-
-
-[features]
-# test-utils = ["arbitrary"]
-# arbitrary = [
-# 	"reth-primitives/arbitrary",
-# 	"reth-db-models/arbitrary",
-# 	"dep:arbitrary",
-# 	"dep:proptest",
-# ]
