@@ -1,16 +1,16 @@
 use crate::{
     config::get_data_dir,
-    tables::{IrysBlockHeaders, TableType, Tables},
+    tables::{IrysBlockHeaders, Tables},
 };
 use irys_types::{IrysBlockHeader, H256};
 use reth::prometheus_exporter::install_prometheus_recorder;
-use reth_db::transaction::DbTx;
 use reth_db::transaction::DbTxMut;
 use reth_db::{
     create_db as reth_create_db,
     mdbx::{DatabaseArguments, DatabaseFlags, MaxReadTransactionDuration},
     ClientVersion, Database, DatabaseEnv, DatabaseError,
 };
+use reth_db::{transaction::DbTx, TableType};
 use reth_primitives::revm_primitives::B256;
 
 /// Opens up an existing database or creates a new one at the specified path. Creates tables if
@@ -24,7 +24,7 @@ pub fn open_or_create_db(cli_args: &str) -> eyre::Result<DatabaseEnv> {
     let _ = install_prometheus_recorder();
 
     let db_path = get_data_dir();
-    let db = reth_create_db(db_path.clone(), args)?; //.with_metrics();
+    let db = reth_create_db(db_path.clone(), args)?.with_metrics();
 
     let tx = db
         .begin_rw_txn()
