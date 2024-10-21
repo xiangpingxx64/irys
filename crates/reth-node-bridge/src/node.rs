@@ -9,7 +9,7 @@ use std::{
 };
 
 use api_server::run_server;
-use clap::Parser;
+use clap::{command, Args, Parser};
 use irys_types::H256;
 use reth::{
     chainspec::EthereumChainSpecParser,
@@ -22,8 +22,13 @@ use reth_chainspec::{EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{node::NoArgs, NodeCommand};
 use reth_db::{init_db, DatabaseEnv};
+use reth_engine_tree::tree::TreeConfig;
 use reth_node_api::NodeTypesWithDBAdapter;
-use reth_node_builder::{common::WithTree, NodeBuilder, NodeConfig, WithLaunchContext};
+use reth_node_builder::{
+    common::WithTree,
+    engine_tree_config::{DEFAULT_MEMORY_BLOCK_BUFFER_TARGET, DEFAULT_PERSISTENCE_THRESHOLD},
+    NodeBuilder, NodeConfig, WithLaunchContext,
+};
 use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
 use reth_provider::providers::{BlockchainProvider, BlockchainProvider2};
 use tokio::time::sleep;
@@ -113,7 +118,7 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
     // dbg!(&args);
     info!("Running with args: {:#?}", &args);
     // loop is flawed, retains too much global set-once state
-    let cli = Cli::<EthereumChainSpecParser, NoArgs>::parse_from(args.clone());
+    let cli = Cli::<EthereumChainSpecParser, EngineArgs>::parse_from(args.clone());
     let _guard = cli.logs.init_tracing()?;
 
     loop {
@@ -125,15 +130,16 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
 
         let exit_reason = runner.run_command_until_exit(|ctx| {
             run_custom_node(ctx, cli.clone(), |builder, engine_args| async move {
+                // from ext/reth/bin/reth/src/main.rs
+                let engine_tree_config = TreeConfig::default()
+                    .with_persistence_threshold(engine_args.persistence_threshold)
+                    .with_memory_block_buffer_target(engine_args.memory_block_buffer_target);
+
                 let handle =
                         builder
-                            // .node(EthereumNode::default())
-                            // .with_types::<EthereumNode>()
-                            // .with_types_and_provider::<EthereumNode, BlockchainProvider2<_>>()
                             .with_types_and_provider::<EthereumNode, BlockchainProvider2<
                                 NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
                             >>()
-                            // .with_types_and_provider::<EthereumNode, BlockchainProvider<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>>()
                             .with_components(EthereumNode::components())
                             .with_add_ons(EthereumAddOns::default())
                             .extend_rpc_modules(move |ctx| {
@@ -156,7 +162,7 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
                                 let launcher = CustomEngineNodeLauncher::new(
                                     builder.task_executor().clone(),
                                     builder.config().datadir(),
-                                    Default::default(),
+                                    engine_tree_config,
                                 );
                                 builder.launch_with(launcher)
                             })
@@ -275,4 +281,39 @@ where
 
     launcher(builder, ext).await?;
     Ok(NodeExitReason::Normal)
+}
+
+/// Parameters for configuring the engine
+#[derive(Debug, Clone, Args, PartialEq, Eq)]
+#[command(next_help_heading = "Engine")]
+pub struct EngineArgs {
+    /// Enable the experimental engine features on reth binary
+    ///
+    /// DEPRECATED: experimental engine is default now, use --engine.legacy to enable the legacy
+    /// functionality
+    #[arg(long = "engine.experimental", default_value = "false")]
+    pub experimental: bool,
+
+    /// Enable the legacy engine on reth binary
+    #[arg(long = "engine.legacy", default_value = "false")]
+    pub legacy: bool,
+
+    /// Configure persistence threshold for engine experimental.
+    #[arg(long = "engine.persistence-threshold", requires = "experimental", default_value_t = DEFAULT_PERSISTENCE_THRESHOLD)]
+    pub persistence_threshold: u64,
+
+    /// Configure the target number of blocks to keep in memory.
+    #[arg(long = "engine.memory-block-buffer-target", requires = "experimental", default_value_t = DEFAULT_MEMORY_BLOCK_BUFFER_TARGET)]
+    pub memory_block_buffer_target: u64,
+}
+
+impl Default for EngineArgs {
+    fn default() -> Self {
+        Self {
+            experimental: false,
+            legacy: false,
+            persistence_threshold: DEFAULT_PERSISTENCE_THRESHOLD,
+            memory_block_buffer_target: DEFAULT_MEMORY_BLOCK_BUFFER_TARGET,
+        }
+    }
 }
