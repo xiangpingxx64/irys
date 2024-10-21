@@ -3,7 +3,7 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 use crate::{option_u64_stringify, Base64, H256List, IrysSignature, H256};
 use alloy_primitives::{Signature, U256};
@@ -14,6 +14,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Arbitrary, Compact)]
 /// Stores deserialized fields from a JSON formatted Irys block header.
 pub struct IrysBlockHeader {
+    /// The block identifier.
+    pub block_hash: H256,
+
     /// Difficulty threshold used to produce the current block.
     pub diff: U256,
 
@@ -35,9 +38,6 @@ pub struct IrysBlockHeader {
 
     /// The block height.
     pub height: u64,
-
-    /// The block identifier.
-    pub block_hash: H256,
 
     // Previous block identifier.
     pub previous_block_hash: H256,
@@ -148,6 +148,17 @@ pub struct NonceLimiterInfo {
     /// The VDF difficulty scheduled for to be applied after the next VDF reset line.
     #[serde(default, with = "option_u64_stringify")]
     pub next_vdf_difficulty: Option<u64>,
+}
+
+// Implement the Display trait
+impl fmt::Display for IrysBlockHeader {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Convert the struct to a JSON string using serde_json
+        match serde_json::to_string_pretty(self) {
+            Ok(json) => write!(f, "{}", json), // Write the JSON string to the formatter
+            Err(_) => write!(f, "Failed to serialize IrysBlockHeader"), // Handle serialization errors
+        }
+    }
 }
 
 #[cfg(test)]

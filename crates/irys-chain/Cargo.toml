@@ -24,6 +24,8 @@ reth-node-bridge = { path = "../reth-node-bridge" }
 reth-primitives = { path = "../../ext/reth/crates/primitives" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.107"
+tempfile = "3.10"
+assert_matches = "1.5.0"
 
 
 arbitrary = { workspace = true, features = [

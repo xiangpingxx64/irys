@@ -1,3 +1,4 @@
+use arbitrary::Arbitrary;
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
@@ -5,7 +6,7 @@ use alloy_primitives::Signature;
 
 use crate::{IrysSignature, H256};
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Compact)]
+#[derive(Clone, Debug, Eq, Serialize, Deserialize, PartialEq, Arbitrary, Compact)]
 /// Stores deserialized fields from a JSON formatted Irys transaction header.
 /// We include the Irys prefix to differentiate from EVM transactions.
 pub struct IrysTransactionHeader {

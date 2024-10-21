@@ -6,6 +6,7 @@ mod tables;
 mod vdf;
 
 use clap::Parser;
+use config::get_data_dir;
 use database::open_or_create_db;
 use irys_types::H256;
 use partitions::{get_partitions, mine_partition, Partition};
@@ -23,6 +24,8 @@ struct Args {
 
 fn main() -> eyre::Result<()> {
     let args = Args::parse();
+
+    let db_path = get_data_dir();
 
     let db = open_or_create_db(&args.database)?;
 
