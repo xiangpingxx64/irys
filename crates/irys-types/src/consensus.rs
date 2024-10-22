@@ -6,7 +6,10 @@ pub const NUM_OF_CHUNKS_IN_PARTITION: u64 = 10;
 
 pub const PARTITION_SIZE: u64 = CHUNK_SIZE * NUM_OF_CHUNKS_IN_PARTITION;
 
-pub const RECALL_RANGE_CHUNK_COUNTER: u64 = 2;
+pub const NUM_CHUNKS_IN_RECALL_RANGE: u64 = 2;
+
+pub const NUM_RECALL_RANGES_IN_PARTITION: u64 =
+    NUM_OF_CHUNKS_IN_PARTITION / NUM_CHUNKS_IN_RECALL_RANGE;
 
 // Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
 pub const NONCE_LIMITER_RESET_FREQUENCY: usize = 10 * 120;
