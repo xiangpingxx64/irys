@@ -1,10 +1,12 @@
+use alloy_primitives::Signature;
 use arbitrary::Arbitrary;
 use reth_codecs::Compact;
 use serde::{Deserialize, Serialize};
 
-use alloy_primitives::Signature;
-
-use crate::{IrysSignature, H256};
+use crate::{
+    merkle::{Node, Proof},
+    Base64, IrysSignature, H256,
+};
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize, PartialEq, Arbitrary, Compact)]
 /// Stores deserialized fields from a JSON formatted Irys transaction header.
@@ -44,6 +46,16 @@ pub struct IrysTransactionHeader {
 
     /// Transaction signature bytes
     pub signature: IrysSignature,
+}
+
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq)]
+pub struct IrysTransaction {
+    pub header_props: IrysTransactionHeader,
+    pub data: Base64,
+    #[serde(skip)]
+    pub chunks: Vec<Node>,
+    #[serde(skip)]
+    pub proofs: Vec<Proof>,
 }
 
 impl Default for IrysTransactionHeader {

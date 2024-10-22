@@ -4,6 +4,7 @@
 //! making them easy to reference and maintain.
 pub mod block_header;
 pub mod consensus;
+pub mod merkle;
 pub mod serialization_types;
 pub mod transaction_header;
 
