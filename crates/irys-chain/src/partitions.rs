@@ -1,7 +1,11 @@
 use std::{ops::Index, sync::mpsc::Receiver};
 
-use irys_types::{CHUNK_SIZE, H256, NUM_OF_CHUNKS_IN_PARTITION, RECALL_RANGE_CHUNK_COUNTER, U256};
-use rand::{seq::SliceRandom, RngCore};
+use irys_types::{
+    CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION,
+    NUM_RECALL_RANGES_IN_PARTITION, U256,
+};
+use rand::{seq::SliceRandom, RngCore, SeedableRng};
+use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
 pub struct Partition {
@@ -43,25 +47,28 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
             continue;
         }
 
-        // TODO: Use a real rpng
-        let mining_hash_chunk_index = mining_hash.to_low_u64_le();
+        // TODO: add a partition_state that keeps track of efficient sampling
+        let mut rng = ChaCha20Rng::from_seed(mining_hash.into());
+
+        // For now, Pick a random recall range in the partition
+        let recall_range_index = rng.next_u64() % NUM_RECALL_RANGES_IN_PARTITION;
 
         // Starting chunk index within partition
-        let mining_hash_number = NUM_OF_CHUNKS_IN_PARTITION % mining_hash_chunk_index;
+        let start_chunk_index = (recall_range_index * NUM_CHUNKS_IN_RECALL_RANGE) as usize;
 
         // Create a contiguous piece of memory on the heap where chunks can be written into
         let mut chunks_buffer: Vec<[u8; CHUNK_SIZE as usize]> =
-            Vec::with_capacity((RECALL_RANGE_CHUNK_COUNTER * CHUNK_SIZE) as usize);
+            Vec::with_capacity((NUM_CHUNKS_IN_RECALL_RANGE * CHUNK_SIZE) as usize);
 
         // TODO: read chunks. For now creates random
-        for _ in 0..RECALL_RANGE_CHUNK_COUNTER {
+        for _ in 0..NUM_CHUNKS_IN_RECALL_RANGE {
             let mut data = [0u8; CHUNK_SIZE as usize];
             rand::thread_rng().fill_bytes(&mut data);
             chunks_buffer.push(data);
         }
 
         let mut hasher = Sha256::new();
-        for i in 0..RECALL_RANGE_CHUNK_COUNTER {
+        for i in 0..NUM_CHUNKS_IN_RECALL_RANGE {
             let chunk: &[u8] = &chunks_buffer[i as usize];
 
             hasher.update(chunk);
