@@ -69,12 +69,12 @@ macro_rules! impl_compression_for_compact {
 add_wrapper_struct!((IrysBlockHeader, CompactIrysBlockHeader));
 
 add_wrapper_struct!((IrysTransactionHeader, CompactTxHeader));
-impl_compression_for_compact!(CompactIrysBlockHeader);
-impl_compression_for_compact!(CompactTxHeader);
+
+impl_compression_for_compact!(CompactIrysBlockHeader, CompactTxHeader);
 
 tables! {
     /// Stores the header hashes belonging to the canonical chain.
-    table IrysBlockHeaders<Key = B256, Value = CompactIrysBlockHeader>;
+    table IrysBlockHeaders<Key = H256, Value = CompactIrysBlockHeader>;
 
-    table IrysTxHeaders<Key = B256, Value = CompactTxHeader>;
+    table IrysTxHeaders<Key = H256, Value = CompactTxHeader>;
 }

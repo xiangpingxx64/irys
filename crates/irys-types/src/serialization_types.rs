@@ -1,8 +1,10 @@
-use alloy_primitives::{bytes, Parity, Signature, U256 as RethU256};
+use alloy_primitives::{bytes, Bytes, Parity, Signature, U256 as RethU256};
 use arbitrary::{Arbitrary, Unstructured};
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use reth_codecs::Compact;
+use reth_db_api::table::{Decode, Encode};
+use reth_db_api::DatabaseError;
 use serde::{
     de::{self, Error as _},
     Deserialize, Deserializer, Serialize, Serializer,
@@ -38,6 +40,53 @@ impl<'a> Arbitrary<'a> for H256 {
         Ok(H256::random())
     }
 }
+
+// impl Encodable for H256 {
+//     #[inline]
+//     fn length(&self) -> usize {
+//         self.0.length()
+//     }
+
+//     #[inline]
+//     fn encode(&self, out: &mut dyn bytes::BufMut) {
+//         self.0.encode(out);
+//     }
+// }
+
+// impl Decodable for H256 {
+//     #[inline]
+//     fn decode(buf: &mut &[u8]) -> Result<Self, alloy_rlp::Error> {
+//         if buf.len() < 32 {
+//             return Err(RlpError::Custom("unknown hash"));
+//         }
+//         // Copy the first 32 bytes into a fixed-size array
+//         let mut bytes = [0u8; 32];
+//         bytes.copy_from_slice(&buf[..32]);
+
+//         let hash = H256::try_from(bytes).or(Err(RlpError::Custom("unknown hash")))?;
+//         buf.advance(32);
+//         Ok(hash)
+//     }
+// }
+
+impl Encode for H256 {
+    type Encoded = [u8; 32];
+
+    fn encode(self) -> Self::Encoded {
+        self.0
+    }
+}
+
+impl Decode for H256 {
+    fn decode(value: &[u8]) -> Result<Self, DatabaseError> {
+        Ok(Self::from_slice(
+            value.try_into().map_err(|_| DatabaseError::Decode)?,
+        ))
+    }
+}
+//==============================================================================
+// IrysSignature
+//------------------------------------------------------------------------------
 #[derive(Clone, Eq, Debug, Arbitrary)]
 pub struct IrysSignature {
     pub reth_signature: Signature,

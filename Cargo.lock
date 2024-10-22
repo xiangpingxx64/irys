@@ -5034,6 +5034,7 @@ version = "0.1.0"
 dependencies = [
  "alloy-genesis",
  "alloy-primitives",
+ "alloy-rlp",
  "alloy-serde",
  "arbitrary",
  "base58",
@@ -5045,6 +5046,7 @@ dependencies = [
  "modular-bitfield",
  "rand",
  "reth-codecs",
+ "reth-db-api",
  "serde",
  "serde_json",
  "test-fuzz",
