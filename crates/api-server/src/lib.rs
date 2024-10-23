@@ -9,10 +9,13 @@ pub async fn run_server() {
 
         App::new()
             .app_data(web::Data::new(awc_client))
-            .route("/info", web::get().to(index::info_route))
-            .route("/chunk", web::post().to(chunks::post_chunk))
-            .route("/tx", web::post().to(tx::post_tx))
-            .route("/price/{size}", web::get().to(price::get_price))
+            .service(
+                web::scope("v1")
+                    .route("/info", web::get().to(index::info_route))
+                    .route("/chunk", web::post().to(chunks::post_chunk))
+                    .route("/tx", web::post().to(tx::post_tx))
+                    .route("/price/{size}", web::get().to(price::get_price)),
+            )
             .route("/", web::post().to(proxy))
             .route("/", web::get().to(proxy))
     })
