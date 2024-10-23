@@ -228,37 +228,35 @@ pub async fn run_node(
         .with_memory_block_buffer_target(engine_args.memory_block_buffer_target);
 
     let handle =
-                        builder
-                            .with_types_and_provider::<EthereumNode, BlockchainProvider2<
-                                NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
-                            >>()
-                            .with_components(EthereumNode::components())
-                            .with_add_ons(EthereumAddOns::default())
-                            .extend_rpc_modules(move |ctx| {
-                                let provider = ctx.provider().clone();
-                                let irys_ext = ctx.node().components.irys_ext.clone();
-                                let network = ctx.network().clone();
-
-                                let ext = AccountStateExt { provider, irys_ext, network };
-                                let rpc = ext.into_rpc();
-                                ctx.modules.merge_configured(rpc)?;
-
-                                Ok(())
-                            })
-                            .on_node_started(move |node| {
-                                // Start the API server
-                                node.task_executor.spawn(run_server());
-                                Ok(())
-                            })
-                            .launch_with_fn(|builder| {
-                                let launcher = CustomEngineNodeLauncher::new(
-                                    builder.task_executor().clone(),
-                                    builder.config().datadir(),
-                                    engine_tree_config,
-                                );
-                                builder.launch_with(launcher)
-                            })
-                            .await?;
+        builder
+            .with_types_and_provider::<EthereumNode, BlockchainProvider2<
+                NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
+            >>()
+            .with_components(EthereumNode::components())
+            .with_add_ons(EthereumAddOns::default())
+            .extend_rpc_modules(move |ctx| {
+                let provider = ctx.provider().clone();
+                let irys_ext = ctx.node().components.irys_ext.clone();
+                let network = ctx.network().clone();
+                let ext = AccountStateExt { provider, irys_ext, network };
+                let rpc = ext.into_rpc();
+                ctx.modules.merge_configured(rpc)?;
+                Ok(())
+            })
+            .on_node_started(move |node| {
+                // Start the API server
+                node.task_executor.spawn(run_server());
+                Ok(())
+            })
+            .launch_with_fn(|builder| {
+                let launcher = CustomEngineNodeLauncher::new(
+                    builder.task_executor().clone(),
+                    builder.config().datadir(),
+                    engine_tree_config,
+                );
+                builder.launch_with(launcher)
+            })
+            .await?;
 
     Ok(handle)
     // let exit_reason = handle.node_exit_future.await?;
