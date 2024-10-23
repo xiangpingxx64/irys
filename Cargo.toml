@@ -2,10 +2,10 @@
 exclude = ["ext/"]
 members = [
     "crates/c",
-    "crates/irys-chain",
-    "crates/irys-types",
+    "crates/chain",
     "crates/primitives",
     "crates/reth-node-bridge",
+    "crates/types",
 ]
 resolver = "2"
 rust-version = "1.82"
@@ -29,14 +29,83 @@ arbitrary = "1.3"
 bytes = "1.5"
 derive_more = { version = "1", features = ["full"] }
 futures = "0.3"
+irys-api-server = { path = "./crates/api-server" }
+irys-c = { path = "./crates/c" }
 irys-primitives = { path = "./crates/primitives" }
+irys-reth-node-bridge = { path = "./crates/reth-node-bridge" }
 modular-bitfield = "0.11.2"
 openssl = { version = "0.10.57", features = ["vendored"] }
 proptest-derive = "0.5"
+reth = { path = "./ext/reth/bin/reth" }
+reth-auto-seal-consensus = { path = "./ext/reth/crates/consensus/auto-seal" }
+reth-chainspec = { path = "./ext/reth/crates/chainspec" }
+reth-cli = { path = "./ext/reth/crates/cli/cli" }
+reth-cli-commands = { path = "./ext/reth/crates/cli/commands" }
+reth-cli-runner = { path = "./ext/reth/crates/cli/runner" }
+reth-cli-util = { path = "./ext/reth/crates/cli/util" }
+reth-db = { path = "./ext/reth/crates/storage/db" }
+reth-ethereum-cli = { path = "./ext/reth/crates/ethereum/cli" }
+reth-node-builder = { path = "./ext/reth/crates/node/builder" }
+reth-node-core = { path = "./ext/reth/crates/node/core" }
+reth-node-ethereum = { path = "./ext/reth/crates/ethereum/node" }
+reth-node-metrics = { path = "./ext/reth/crates/node/metrics" }
 serde = { version = "1.0", default-features = false }
 serde_json = "1.0.94"
 test-fuzz = "6"
 thiserror = "1.0"
+tracing = "0.1.0"
+# reth-basic-payload-builder = { path = "./ext/reth/crates/payload/basic" }
+reth-beacon-consensus = { path = "./ext/reth/crates/consensus/beacon" }
+reth-codecs = { path = "./ext/reth/crates/storage/codecs" }
+reth-codecs-derive = { path = "./ext/reth/crates/storage/codecs/derive" }
+
+# reth-config = { path = "./ext/reth/crates/config" }
+reth-consensus = { path = "./ext/reth/crates/consensus/consensus" }
+# reth-db-common = { path = "./ext/reth/crates/storage/db-common" }
+reth-db-api = { path = "./ext/reth/crates/storage/db-api" }
+reth-db-models = { path = "./ext/reth/crates/storage/db-models" }
+
+
+reth-e2e-test-utils = { path = "./ext/reth/crates/e2e-test-utils" }
+# reth-evm = { path = "./ext/reth/crates/evm" }
+reth-exex = { path = "./ext/reth/crates/exex/exex" }
+# reth-interfaces = { path = "./ext/reth/crates/interfaces" }
+reth-consensus-debug-client = { path = "./ext/reth/crates/consensus/debug-client" }
+reth-engine-service = { path = "./ext/reth/crates/engine/service" }
+reth-ethereum-engine-primitives = { path = "./ext/reth/crates/ethereum/engine-primitives" }
+
+reth-engine-tree = { path = "./ext/reth/crates/engine/tree" }
+reth-engine-util = { path = "./ext/reth/crates/engine/util" }
+
+reth-blockchain-tree = { path = "./ext/reth/crates/blockchain-tree" }
+reth-network = { path = "./ext/reth/crates/net/network" }
+reth-network-api = { path = "./ext/reth/crates/net/network-api" }
+reth-node-api = { path = "./ext/reth/crates/node/api" }
+reth-payload-primitives = { path = "./ext/reth/crates/payload/primitives" }
+
+reth-rpc-eth-types = { path = "./ext/reth/crates/rpc/rpc-eth-types" }
+reth-tasks = { path = "./ext/reth/crates/tasks" }
+reth-transaction-pool = { path = "./ext/reth/crates/transaction-pool" }
+# reth-node-core = { path = "./ext/reth/crates/node-core" }
+reth-node-events = { path = "./ext/reth/crates/node/events" }
+# reth-payload-builder = { path = "./ext/reth/crates/payload/builder" }
+reth-primitives = { path = "./ext/reth/crates/primitives" }
+reth-provider = { path = "./ext/reth/crates/storage/provider" }
+# reth-revm = { path = "./ext/reth/crates/revm" }
+reth-rpc-engine-api = { path = "./ext/reth/crates/rpc/rpc-engine-api" }
+# reth-rpc-types = { path = "./ext/reth/crates/rpc/rpc-types" }
+# reth-stages = { path = "./ext/reth/crates/stages" }
+# reth-static-file = { path = "./ext/reth/crates/static-file" }
+reth-tracing = { path = "./ext/reth/crates/tracing" }
+# reth-transaction-pool = { path = "./ext/reth/crates/transaction-pool" }
+foldhash = { version = "0.1", default-features = false }
+irys-types = { path = "./crates/types" }
+reth-tokio-util = { path = "./ext/reth/crates/tokio-util" }
+
+
+revm = { path = "./ext/revm/crates/revm" }
+revm-primitives = { path = "./ext/revm/crates/primitives" }
+
 
 [patch.crates-io]
 revm = { path = "./ext/revm/crates/revm" }

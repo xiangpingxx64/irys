@@ -1,8 +1,8 @@
 [package]
-name = "packing"
-version = "0.1.0"
 edition = "2021"
+name = "irys-packing"
+version = "0.1.0"
 
 [dependencies]
 cty = "0.2.2"
-irys-types = { path = "../irys-types" }
+irys-types.workspace = true

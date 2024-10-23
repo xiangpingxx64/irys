@@ -1,12 +1,12 @@
 [package]
-name = "api-server"
-version = "0.1.0"
 edition = "2021"
+name = "irys-api-server"
+version = "0.1.0"
 
 [dependencies]
 actix-proxy = "0.2.0"
 actix-web = "4.9.0"
 awc = "3.5.1"
 base64-url = "2.0.0"
-irys-types = { version = "0.1.0", path = "../irys-types" }
+irys-types.workspace = true
 serde.workspace = true

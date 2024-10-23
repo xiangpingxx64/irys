@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "reth-node-bridge"
+name = "irys-reth-node-bridge"
 version = "0.1.0"
 
 [dependencies]
@@ -16,68 +16,71 @@ alloy-rpc-types.workspace = true
 
 alloy-signer-local.workspace = true
 irys-primitives.workspace = true
-reth = { path = "../../ext/reth/bin/reth" }
-reth-chainspec = { path = "../../ext/reth/crates/chainspec" }
-reth-cli = { path = "../../ext/reth/crates/cli/cli" }
-reth-cli-commands = { path = "../../ext/reth/crates/cli/commands" }
-reth-cli-runner = { path = "../../ext/reth/crates/cli/runner" }
-reth-cli-util = { path = "../../ext/reth/crates/cli/util" }
-reth-db = { path = "../../ext/reth/crates/storage/db" }
-reth-ethereum-cli = { path = "../../ext/reth/crates/ethereum/cli" }
-reth-node-builder = { path = "../../ext/reth/crates/node/builder" }
-reth-node-core = { path = "../../ext/reth/crates/node/core" }
-reth-node-ethereum = { path = "../../ext/reth/crates/ethereum/node" }
-reth-node-metrics = { path = "../../ext/reth/crates/node/metrics" }
+reth-chainspec.workspace = true
+reth-cli-commands.workspace = true
+reth-cli-runner.workspace = true
+reth-cli-util.workspace = true
+reth-cli.workspace = true
+reth-db.workspace = true
+reth-ethereum-cli.workspace = true
+reth-node-builder.workspace = true
+reth-node-core.workspace = true
+reth-node-ethereum.workspace = true
+reth-node-metrics.workspace = true
+reth.workspace = true
 
-reth-auto-seal-consensus = { path = "../../ext/reth/crates/consensus/auto-seal" }
-# reth-basic-payload-builder = { path = "../../ext/reth/crates/payload/basic" }
-reth-beacon-consensus = { path = "../../ext/reth/crates/consensus/beacon" }
-# reth-cli-runner = { path = "../../ext/reth/crates/cli/runner" }
-# reth-codecs = { path = "../../ext/reth/crates/storage/codecs" }
-# reth-config = { path = "../../ext/reth/crates/config" }
-reth-consensus = { path = "../../ext/reth/crates/consensus/consensus" }
-# reth-db = { path = "../../ext/reth/crates/storage/db" }
-# reth-db-common = { path = "../../ext/reth/crates/storage/db-common" }
-reth-e2e-test-utils = { path = "../../ext/reth/crates/e2e-test-utils" }
-# reth-evm = { path = "../../ext/reth/crates/evm" }
-reth-exex = { path = "../../ext/reth/crates/exex/exex" }
-# reth-interfaces = { path = "../../ext/reth/crates/interfaces" }
-reth-consensus-debug-client = { path = "../../ext/reth/crates/consensus/debug-client" }
-reth-engine-service = { path = "../../ext/reth/crates/engine/service" }
-reth-engine-tree = { path = "../../ext/reth/crates/engine/tree" }
-reth-engine-util = { path = "../../ext/reth/crates/engine/util" }
+reth-auto-seal-consensus.workspace = true
+# reth-basic-payload-builder.workspace = true
+reth-beacon-consensus.workspace = true
+# reth-cli-runner.workspace = true
+# reth-codecs.workspace = true
+# reth-config.workspace = true
+reth-consensus.workspace = true
+# reth-db.workspace = true
+# reth-db-common.workspace = true
+reth-e2e-test-utils.workspace = true
+# reth-evm.workspace = true
+reth-exex.workspace = true
+# reth-interfaces.workspace = true
+reth-consensus-debug-client.workspace = true
+reth-engine-service.workspace = true
+reth-ethereum-engine-primitives.workspace = true
+
+reth-engine-tree.workspace = true
+reth-engine-util.workspace = true
+
+reth-blockchain-tree.workspace = true
+reth-network-api.workspace = true
+reth-network.workspace = true
+reth-node-api.workspace = true
+reth-payload-primitives.workspace = true
+
+reth-rpc-eth-types.workspace = true
+reth-tasks.workspace = true
+reth-transaction-pool.workspace = true
+# reth-node-core.workspace = true
+reth-node-events.workspace = true
+# reth-payload-builder.workspace = true
+reth-primitives.workspace = true
+reth-provider.workspace = true
+# reth-revm.workspace = true
+reth-rpc-engine-api.workspace = true
+# reth-rpc-types.workspace = true
+# reth-stages.workspace = true
+# reth-static-file.workspace = true
+reth-tracing.workspace = true
+# reth-transaction-pool.workspace = true
+
+foldhash.workspace = true
+irys-types.workspace = true
+reth-tokio-util.workspace = true
+tracing.workspace = true
 
 alloy-primitives.workspace = true
-reth-blockchain-tree = { path = "../../ext/reth/crates/blockchain-tree" }
-reth-network = { path = "../../ext/reth/crates/net/network" }
-reth-network-api = { path = "../../ext/reth/crates/net/network-api" }
-reth-node-api = { path = "../../ext/reth/crates/node/api" }
-reth-payload-primitives = { path = "../../ext/reth/crates/payload/primitives" }
-
-reth-rpc-eth-types = { path = "../../ext/reth/crates/rpc/rpc-eth-types" }
-reth-tasks = { path = "../../ext/reth/crates/tasks" }
-reth-transaction-pool = { path = "../../ext/reth/crates/transaction-pool" }
-# reth-node-core = { path = "../../ext/reth/crates/node-core" }
-reth-node-events = { path = "../../ext/reth/crates/node/events" }
-# reth-payload-builder = { path = "../../ext/reth/crates/payload/builder" }
-reth-primitives = { path = "../../ext/reth/crates/primitives" }
-reth-provider = { path = "../../ext/reth/crates/storage/provider" }
-# reth-revm = { path = "../../ext/reth/crates/revm" }
-reth-rpc-engine-api = { path = "../../ext/reth/crates/rpc/rpc-engine-api" }
-# reth-rpc-types = { path = "../../ext/reth/crates/rpc/rpc-types" }
-# reth-stages = { path = "../../ext/reth/crates/stages" }
-# reth-static-file = { path = "../../ext/reth/crates/static-file" }
-reth-tracing = { path = "../../ext/reth/crates/tracing" }
-# reth-transaction-pool = { path = "../../ext/reth/crates/transaction-pool" }
-api-server = { path = "../api-server" }
-foldhash = { version = "0.1", default-features = false }
 futures.workspace = true
-irys-types = { path = "../irys-types" }
-reth-tokio-util = { path = "../../ext/reth/crates/tokio-util" }
-
-
-revm = { path = "../../ext/revm/crates/revm" }
-revm-primitives = { path = "../../ext/revm/crates/primitives" }
+irys-api-server.workspace = true
+revm-primitives.workspace = true
+revm.workspace = true
 
 # alloy-rlp = "0.3.5"
 bs58 = "0.5.1"
@@ -100,7 +103,6 @@ thiserror = "1.0.61"
 tikv-jemallocator = "^0.6.0"
 tokio = "1.37.0"
 tokio-stream = "0.1.15"
-tracing = "0.1.40"
 
 [features]
 default = ["jemalloc"]

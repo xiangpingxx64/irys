@@ -988,18 +988,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37bf3594c4c988a53154954629820791dde498571819ae4ca50ca811e060cc95"
 
 [[package]]
-name = "api-server"
-version = "0.1.0"
-dependencies = [
- "actix-proxy",
- "actix-web",
- "awc",
- "base64-url",
- "irys-types",
- "serde",
-]
-
-[[package]]
 name = "aquamarine"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5039,6 +5027,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "irys-api-server"
+version = "0.1.0"
+dependencies = [
+ "actix-proxy",
+ "actix-web",
+ "awc",
+ "base64-url",
+ "irys-types",
+ "serde",
+]
+
+[[package]]
 name = "irys-c"
 version = "0.1.0"
 dependencies = [
@@ -5064,6 +5064,7 @@ dependencies = [
  "color-eyre",
  "eyre",
  "irys-c",
+ "irys-reth-node-bridge",
  "irys-types",
  "modular-bitfield",
  "rand",
@@ -5074,7 +5075,6 @@ dependencies = [
  "reth-db",
  "reth-db-api",
  "reth-db-models",
- "reth-node-bridge",
  "reth-primitives",
  "serde",
  "serde_json",
@@ -5104,6 +5104,79 @@ dependencies = [
  "serde_json",
  "test-fuzz",
  "thiserror",
+]
+
+[[package]]
+name = "irys-reth-node-bridge"
+version = "0.1.0"
+dependencies = [
+ "alloy-eips",
+ "alloy-primitives",
+ "alloy-rpc-types",
+ "alloy-signer-local",
+ "bs58",
+ "clap",
+ "eyre",
+ "foldhash",
+ "futures",
+ "futures-util",
+ "irys-api-server",
+ "irys-primitives",
+ "irys-types",
+ "jsonrpsee",
+ "jsonrpsee-core",
+ "jsonrpsee-http-client",
+ "jsonrpsee-types",
+ "new_type",
+ "once_cell",
+ "patch-crate",
+ "reth",
+ "reth-auto-seal-consensus",
+ "reth-beacon-consensus",
+ "reth-blockchain-tree",
+ "reth-chainspec",
+ "reth-cli",
+ "reth-cli-commands",
+ "reth-cli-runner",
+ "reth-cli-util",
+ "reth-consensus",
+ "reth-consensus-debug-client",
+ "reth-db",
+ "reth-e2e-test-utils",
+ "reth-engine-service",
+ "reth-engine-tree",
+ "reth-engine-util",
+ "reth-ethereum-cli",
+ "reth-ethereum-engine-primitives",
+ "reth-exex",
+ "reth-network",
+ "reth-network-api",
+ "reth-node-api",
+ "reth-node-builder",
+ "reth-node-core",
+ "reth-node-ethereum",
+ "reth-node-events",
+ "reth-node-metrics",
+ "reth-payload-primitives",
+ "reth-primitives",
+ "reth-provider",
+ "reth-rpc-engine-api",
+ "reth-rpc-eth-types",
+ "reth-tasks",
+ "reth-tokio-util",
+ "reth-tracing",
+ "reth-transaction-pool",
+ "revm",
+ "revm-primitives",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "strum",
+ "thiserror",
+ "tikv-jemallocator",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
@@ -8669,78 +8742,6 @@ dependencies = [
  "reth-rpc-eth-api",
  "reth-tasks",
  "reth-transaction-pool",
-]
-
-[[package]]
-name = "reth-node-bridge"
-version = "0.1.0"
-dependencies = [
- "alloy-eips",
- "alloy-primitives",
- "alloy-rpc-types",
- "alloy-signer-local",
- "api-server",
- "bs58",
- "clap",
- "eyre",
- "foldhash",
- "futures",
- "futures-util",
- "irys-primitives",
- "irys-types",
- "jsonrpsee",
- "jsonrpsee-core",
- "jsonrpsee-http-client",
- "jsonrpsee-types",
- "new_type",
- "once_cell",
- "patch-crate",
- "reth",
- "reth-auto-seal-consensus",
- "reth-beacon-consensus",
- "reth-blockchain-tree",
- "reth-chainspec",
- "reth-cli",
- "reth-cli-commands",
- "reth-cli-runner",
- "reth-cli-util",
- "reth-consensus",
- "reth-consensus-debug-client",
- "reth-db",
- "reth-e2e-test-utils",
- "reth-engine-service",
- "reth-engine-tree",
- "reth-engine-util",
- "reth-ethereum-cli",
- "reth-exex",
- "reth-network",
- "reth-network-api",
- "reth-node-api",
- "reth-node-builder",
- "reth-node-core",
- "reth-node-ethereum",
- "reth-node-events",
- "reth-node-metrics",
- "reth-payload-primitives",
- "reth-primitives",
- "reth-provider",
- "reth-rpc-engine-api",
- "reth-rpc-eth-types",
- "reth-tasks",
- "reth-tokio-util",
- "reth-tracing",
- "reth-transaction-pool",
- "revm",
- "revm-primitives",
- "serde",
- "serde_json",
- "serde_path_to_error",
- "strum",
- "thiserror",
- "tikv-jemallocator",
- "tokio",
- "tokio-stream",
- "tracing",
 ]
 
 [[package]]

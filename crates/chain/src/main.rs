@@ -1,9 +1,9 @@
+mod block_producer;
 mod config;
 mod database;
 mod partitions;
 mod tables;
 mod vdf;
-mod block_producer;
 
 use actix::Actor;
 use block_producer::BlockProducerActor;
@@ -12,7 +12,10 @@ use config::get_data_dir;
 use database::open_or_create_db;
 use irys_types::{app_state::AppState, H256};
 use partitions::{get_partitions, mine_partition, PartitionMiningActor};
-use std::{str::FromStr, sync::{mpsc, Arc}};
+use std::{
+    str::FromStr,
+    sync::{mpsc, Arc},
+};
 use vdf::run_vdf;
 
 /// Simple program to greet a person
@@ -50,7 +53,7 @@ fn main() -> eyre::Result<()> {
 
     let global_app_state = Arc::new(app_state);
 
-    reth_node_bridge::run_node(new_seed_tx).unwrap();
+    irys_reth_node_bridge::run_node(new_seed_tx).unwrap();
 
     Ok(())
 }

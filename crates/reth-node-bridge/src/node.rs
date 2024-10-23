@@ -9,8 +9,8 @@ use std::{
     time::Duration,
 };
 
-use api_server::run_server;
 use clap::{command, Args, Parser};
+use irys_api_server::run_server;
 use irys_types::H256;
 use reth::{
     chainspec::EthereumChainSpecParser,
