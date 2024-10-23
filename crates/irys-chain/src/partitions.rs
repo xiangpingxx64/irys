@@ -8,7 +8,7 @@ use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
-use crate::block_producer::BlockProducerActor;
+use crate::block_producer::{self, BlockProducerActor};
 
 pub fn get_partitions() -> Vec<Partition> {
     vec![Partition::default(), Partition::default()]
@@ -85,9 +85,18 @@ fn hash_to_number(hash: &[u8]) -> U256 {
 }
 
 
-struct PartitionMiningActor {
+pub struct PartitionMiningActor {
     partition: Partition,
     block_producer_actor: Addr<BlockProducerActor>
+}
+
+impl PartitionMiningActor {
+    pub fn new(partition: Partition, block_producer_addr: Addr<BlockProducerActor>) -> Self {
+        Self {
+            partition,
+            block_producer_actor: block_producer_addr
+        }
+    }
 }
 
 impl Actor for PartitionMiningActor {
@@ -96,7 +105,7 @@ impl Actor for PartitionMiningActor {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-struct Seed(H256);
+pub struct Seed(pub H256);
 
 impl Seed {
     fn into_inner(self) -> H256 {

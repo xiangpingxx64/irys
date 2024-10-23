@@ -8,6 +8,7 @@ pub mod merkle;
 pub mod serialization_types;
 pub mod transaction_header;
 pub mod block_production;
+pub mod app_state;
 
 pub use block_header::*;
 pub use consensus::*;

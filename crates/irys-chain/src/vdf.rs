@@ -1,3 +1,4 @@
+use actix::Addr;
 use irys_types::{H256, HASHES_PER_CHECKPOINT, NUM_CHECKPOINTS_IN_VDF_STEP, VDF_SHA_1S};
 use sha2::{Digest, Sha256};
 use std::{
@@ -5,10 +6,12 @@ use std::{
     sync::mpsc::{Receiver, Sender},
 };
 
+use crate::partitions::{PartitionMiningActor, Seed};
+
 pub fn run_vdf(
     seed: H256,
     new_seed_listener: Receiver<H256>,
-    partition_channels: Vec<Sender<H256>>,
+    partition_channels: Vec<Addr<PartitionMiningActor>>,
 ) {
     let mut hasher = Sha256::new();
 
@@ -26,8 +29,8 @@ pub fn run_vdf(
             }
         }
 
-        for c in &partition_channels {
-            c.send(hash);
+        for a in &partition_channels {
+            a.send(Seed(hash));
         }
 
         if let Ok(h) = new_seed_listener.try_recv() {

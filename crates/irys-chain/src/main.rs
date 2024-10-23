@@ -1,4 +1,3 @@
-mod app_state;
 mod config;
 mod database;
 mod partitions;
@@ -6,12 +5,14 @@ mod tables;
 mod vdf;
 mod block_producer;
 
+use actix::Actor;
+use block_producer::BlockProducerActor;
 use clap::Parser;
 use config::get_data_dir;
 use database::open_or_create_db;
-use irys_types::H256;
-use partitions::{get_partitions, mine_partition};
-use std::{str::FromStr, sync::mpsc};
+use irys_types::{app_state::AppState, H256};
+use partitions::{get_partitions, mine_partition, PartitionMiningActor};
+use std::{str::FromStr, sync::{mpsc, Arc}};
 use vdf::run_vdf;
 
 /// Simple program to greet a person
@@ -30,17 +31,24 @@ fn main() -> eyre::Result<()> {
 
     let db = open_or_create_db(&args.database)?;
 
-    let mut part_channels = Vec::new();
+    let block_producer_actor = BlockProducerActor {};
+
+    let block_producer_addr = block_producer_actor.start();
+
+    let mut part_actors = Vec::new();
 
     for part in get_partitions() {
-        let (tx, rx) = mpsc::channel();
-        part_channels.push(tx.clone());
-        std::thread::spawn(move || mine_partition(part, rx));
+        let partition_mining_actor = PartitionMiningActor::new(part, block_producer_addr.clone());
+        part_actors.push(partition_mining_actor.start());
     }
 
     let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
 
-    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_channels));
+    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
+
+    let app_state = AppState {};
+
+    let global_app_state = Arc::new(app_state);
 
     reth_node_bridge::run_node(new_seed_tx).unwrap();
 
