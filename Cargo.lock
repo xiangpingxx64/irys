@@ -5070,6 +5070,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "reth",
+ "reth-cli-runner",
  "reth-codecs",
  "reth-codecs-derive",
  "reth-db",
@@ -5082,6 +5083,7 @@ dependencies = [
  "tempfile",
  "test-fuzz",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

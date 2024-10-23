@@ -22,16 +22,25 @@ use reth::{
 use reth_chainspec::{ChainSpec, EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{node::NoArgs, NodeCommand};
+use reth_consensus::Consensus;
 use reth_db::{init_db, DatabaseEnv};
 use reth_engine_tree::tree::TreeConfig;
-use reth_node_api::NodeTypesWithDBAdapter;
+use reth_ethereum_engine_primitives::EthereumEngineValidator;
+use reth_node_api::{FullNodeTypesAdapter, NodeTypesWithDBAdapter};
 use reth_node_builder::{
     common::WithTree,
+    components::Components,
     engine_tree_config::{DEFAULT_MEMORY_BLOCK_BUFFER_TARGET, DEFAULT_PERSISTENCE_THRESHOLD},
     NodeBuilder, NodeConfig, WithLaunchContext,
 };
-use reth_node_ethereum::{node::EthereumAddOns, EthereumNode};
+use reth_node_builder::{NodeAdapter, NodeHandle};
+use reth_node_ethereum::{node::EthereumAddOns, EthEvmConfig, EthExecutorProvider, EthereumNode};
 use reth_provider::providers::{BlockchainProvider, BlockchainProvider2};
+use reth_tasks::TaskExecutor;
+use reth_transaction_pool::{
+    blobstore::DiskFileBlobStore, CoinbaseTipOrdering, EthPooledTransaction,
+    EthTransactionValidator, Pool, TransactionValidationTaskExecutor,
+};
 use tokio::time::sleep;
 use tracing::info;
 
@@ -51,42 +60,50 @@ macro_rules! vec_of_strings {
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
-pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
+pub async fn run_node(
+    new_seed_channel: Sender<H256>,
+    task_executor: TaskExecutor,
+) -> eyre::Result<
+    NodeHandle<
+        NodeAdapter<
+            FullNodeTypesAdapter<
+                NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
+                BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+            >,
+            Components<
+                FullNodeTypesAdapter<
+                    NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
+                    BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+                >,
+                Pool<
+                    TransactionValidationTaskExecutor<
+                        EthTransactionValidator<
+                            BlockchainProvider2<
+                                NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
+                            >,
+                            EthPooledTransaction,
+                        >,
+                    >,
+                    CoinbaseTipOrdering<EthPooledTransaction>,
+                    DiskFileBlobStore,
+                >,
+                EthEvmConfig,
+                EthExecutorProvider,
+                Arc<dyn Consensus>,
+                EthereumEngineValidator,
+            >,
+        >,
+        EthereumAddOns,
+    >,
+> {
     let mut os_args: Vec<String> = std::env::args().collect();
     let bp = os_args.remove(0);
-    // let mut args = vec_of_strings![
-    //     "node",
-    //     "-vvvvvv",
-    //     "--disable-discovery",
-    //     "--http",
-    //     "--http.api",
-    //     "debug,rpc,reth,eth"
-    // ];
-
-    // let mut args = vec_of_strings![
-    //     "node",
-    //     "-vvvvv",
-    //     "--disable-discovery",
-    //     "--http",
-    //     "--http.api",
-    //     "debug,rpc,reth,eth",
-    //     "--datadir",
-    //     "/workspaces/irys/.reth",
-    //     "--log.file.directory",
-    //     "/workspaces/irys/.reth/logs",
-    //     "--log.file.format",
-    //     "json",
-    //     "--log.stdout.format",
-    //     "json",
-    //     "--log.file.filter",
-    //     "trace"
-    // ];
 
     let mut args = match true /* <- true if running manually :) */ {
         true => vec_of_strings![
             "node",
             "-vvvvv",
-            "--instance", 
+            "--instance",
             "1",
             "--disable-discovery",
             "--http",
@@ -120,27 +137,98 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
 
     args.insert(0, bp.to_string());
     args.append(&mut os_args);
-    // dbg!(&args);
+    // // dbg!(&args);
     info!("Running with args: {:#?}", &args);
-    // loop is flawed, retains too much global set-once state
+    // // loop is flawed, retains too much global set-once state
     let cli = Cli::<IrysChainSpecParser, EngineArgs>::parse_from(args.clone());
     let _guard = cli.logs.init_tracing()?;
 
-    loop {
-        let runner = CliRunner::default();
+    // loop {
+    let runner = CliRunner::default();
 
-        // this loop allows us to 'reload' the reth node with a new config very quickly, without having to actually restart the entire process
-        // mainly used to provide and then restart with a new genesis block.
-        // TODO: extract run_command_until_exit to re-use async context to prevent global thread pool error on reload
+    // this loop allows us to 'reload' the reth node with a new config very quickly, without having to actually restart the entire process
+    // mainly used to provide and then restart with a new genesis block.
+    // TODO: extract run_command_until_exit to re-use async context to prevent global thread pool error on reload
 
-        let exit_reason = runner.run_command_until_exit(|ctx| {
-            run_custom_node(ctx, cli.clone(), |builder, engine_args| async move {
-                // from ext/reth/bin/reth/src/main.rs
-                let engine_tree_config = TreeConfig::default()
-                    .with_persistence_threshold(engine_args.persistence_threshold)
-                    .with_memory_block_buffer_target(engine_args.memory_block_buffer_target);
+    // let exit_reason = runner.run_command_until_exit(|ctx| {
+    let ctx = CliContext { task_executor };
 
-                let handle =
+    let matched_cmd = match cli.command {
+        Commands::Node(command) => Some(command),
+        _ => None,
+    };
+
+    let node_command = *matched_cmd.expect("unable to get cmd_cfg");
+
+    tracing::info!(target: "reth::cli", version = ?version::SHORT_VERSION, "Starting reth");
+
+    let NodeCommand {
+        datadir,
+        config,
+        chain,
+        metrics,
+        instance,
+        with_unused_ports,
+        network,
+        rpc,
+        txpool,
+        builder,
+        debug,
+        db,
+        dev,
+        pruning,
+        ext: engine_args,
+    } = node_command;
+
+    // let chain_spec =
+    // get_chain_spec_with_path(vec![], &datadir.datadir.unwrap_or_default().as_ref(), dev.dev);
+
+    // set up node config
+    let mut node_config = NodeConfig {
+        datadir,
+        config,
+        chain,
+        // chain: Arc::new(chain_spec),
+        metrics,
+        instance,
+        network,
+        rpc,
+        txpool,
+        builder,
+        debug,
+        db,
+        dev,
+        pruning,
+    };
+
+    // Register the prometheus recorder before creating the database,
+    // because database init needs it to register metrics.
+    let _ = install_prometheus_recorder();
+
+    let data_dir = node_config.datadir();
+    let db_path = data_dir.db();
+
+    tracing::info!(target: "reth::cli", path = ?db_path, "Opening database");
+    let database = Arc::new(init_db(db_path.clone(), db.database_args())?.with_metrics());
+
+    if with_unused_ports {
+        node_config = node_config.with_unused_ports();
+    }
+
+    let builder = NodeBuilder::new(node_config)
+        .with_database(database)
+        .with_launch_context(ctx.task_executor);
+
+    // launcher(builder, ext).await?;
+
+    // run_custom_node(ctx, cli.clone(), |builder, engine_args| async move {
+    // from ext/reth/bin/reth/src/main.rs
+
+    let engine_tree_config = TreeConfig::default()
+        .with_persistence_threshold(engine_args.persistence_threshold)
+        .with_memory_block_buffer_target(engine_args.memory_block_buffer_target);
+
+    let handle =
                         builder
                             .with_types_and_provider::<EthereumNode, BlockchainProvider2<
                                 NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
@@ -173,35 +261,36 @@ pub fn run_node(new_seed_channel: Sender<H256>) -> eyre::Result<()> {
                             })
                             .await?;
 
-                let exit_reason = handle.node_exit_future.await?;
+    Ok(handle)
+    // let exit_reason = handle.node_exit_future.await?;
 
-                if true
-                /* launched.node.config.dev.dev */
-                {
-                    match exit_reason.clone() {
-                        NodeExitReason::Normal => (),
-                        NodeExitReason::Reload(payload) => match payload {
-                            ReloadPayload::ReloadConfig(chain_spec) => {
-                                // delay here so the genesis submission RPC reponse is able to make it back before the server dies
-                                let ser = serde_json::to_string_pretty(&chain_spec.genesis)?;
-                                let pb = PathBuf::from(
-                                    handle.node.data_dir.data_dir().join("dev_genesis.json"),
-                                );
-                                // remove_file(&pb)?;
-                                let mut f = File::create(&pb)?;
-                                f.write_all(ser.as_bytes())?;
-                                info!("Written dev_genesis.json");
-                                sleep(Duration::from_millis(500)).await;
-                            }
-                        },
-                    }
-                }
+    // if true
+    // /* launched.node.config.dev.dev */
+    // {
+    //     match exit_reason.clone() {
+    //         NodeExitReason::Normal => (),
+    //         NodeExitReason::Reload(payload) => match payload {
+    //             ReloadPayload::ReloadConfig(chain_spec) => {
+    //                 // delay here so the genesis submission RPC reponse is able to make it back before the server dies
+    //                 let ser = serde_json::to_string_pretty(&chain_spec.genesis)?;
+    //                 let pb =
+    //                     PathBuf::from(handle.node.data_dir.data_dir().join("dev_genesis.json"));
+    //                 // remove_file(&pb)?;
+    //                 let mut f = File::create(&pb)?;
+    //                 f.write_all(ser.as_bytes())?;
+    //                 info!("Written dev_genesis.json");
+    //                 sleep(Duration::from_millis(500)).await;
+    //             }
+    //         },
+    //     }
+    // }
 
-                Ok(NodeExitReason::Normal)
-            })
-        })?;
-    }
-    Ok(())
+    // Ok(NodeExitReason::Normal)
+
+    // })
+    //     })?;
+    // }
+    // Ok(())
 }
 
 async fn run_custom_node<Ext, C, L, Fut>(
