@@ -3,8 +3,7 @@
 You need submodules yo.
 
 ```cli
-git submodule init
-git submodule update --recursive --remote
+git submodule update --init --recursive --remote
 ```
 
 minimum rustc version 1.82
@@ -21,7 +20,9 @@ if you're stuck on a previous version of rustc try
 
 other deps:
 ```
-clang
+clang & a C/C++ build toolchain
+gmp
+pkg-config
 ```
 
 Testing Block Serialization

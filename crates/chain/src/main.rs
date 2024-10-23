@@ -33,6 +33,7 @@ struct Args {
 use tracing::{debug, error, trace};
 
 fn main() -> eyre::Result<()> {
+    // TODO @JesseTheRobot - make sure logging is initialized before we get here as this uses logging macros
     // use the existing reth code to handle blocking & graceful shutdown
     let AsyncCliRunner {
         context,
@@ -104,6 +105,7 @@ async fn main2(ctx: CliContext) -> eyre::Result<NodeExitReason> {
     let global_app_state = Arc::new(app_state);
 
     let node_handle = irys_reth_node_bridge::run_node(new_seed_tx, ctx.task_executor).await?;
-
-    Ok(NodeExitReason::Normal)
+    // TODO @JesseTheRobot - make this dump genesis (or keep it internal to reth?)
+    let exit_reason = node_handle.node_exit_future.await?;
+    Ok(exit_reason)
 }
