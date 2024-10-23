@@ -4,12 +4,13 @@ mod database;
 mod partitions;
 mod tables;
 mod vdf;
+mod block_producer;
 
 use clap::Parser;
 use config::get_data_dir;
 use database::open_or_create_db;
 use irys_types::H256;
-use partitions::{get_partitions, mine_partition, Partition};
+use partitions::{get_partitions, mine_partition};
 use std::{str::FromStr, sync::mpsc};
 use vdf::run_vdf;
 

@@ -7,8 +7,10 @@ pub mod consensus;
 pub mod merkle;
 pub mod serialization_types;
 pub mod transaction_header;
+pub mod block_production;
 
 pub use block_header::*;
 pub use consensus::*;
 pub use serialization_types::*;
 pub use transaction_header::*;
+

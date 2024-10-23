@@ -37,3 +37,4 @@ test-fuzz.workspace = true
 alloy-rlp.workspace = true
 alloy-serde.workspace = true
 bytes.workspace = true
+actix.workspace = true
