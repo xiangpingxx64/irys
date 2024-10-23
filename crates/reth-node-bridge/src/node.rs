@@ -144,7 +144,6 @@ pub async fn run_node(
     let _guard = cli.logs.init_tracing()?;
 
     // loop {
-    let runner = CliRunner::default();
 
     // this loop allows us to 'reload' the reth node with a new config very quickly, without having to actually restart the entire process
     // mainly used to provide and then restart with a new genesis block.
