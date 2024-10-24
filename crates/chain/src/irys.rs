@@ -124,6 +124,9 @@ mod tests {
             );
         }
 
+        println!("{:?}", tx.header);
+        print!("{}\n", serde_json::to_string_pretty(&tx.header).unwrap());
+
         // Make sure the size of the last chunk is just whatever is left over
         // after chunking the rest of the data at MAX_CHUNK_SIZE intervals.
         let last_chunk = tx.chunks.last().unwrap();
