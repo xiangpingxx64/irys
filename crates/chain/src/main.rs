@@ -1,5 +1,6 @@
 mod config;
 mod database;
+mod irys;
 mod partitions;
 mod tables;
 mod vdf;

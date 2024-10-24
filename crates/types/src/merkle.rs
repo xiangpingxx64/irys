@@ -284,15 +284,6 @@ pub fn validate_chunk(
 pub fn generate_leaves(data: Vec<u8>) -> Result<Vec<Node>, Error> {
     let mut data_chunks: Vec<&[u8]> = data.chunks(MAX_CHUNK_SIZE).collect();
 
-    #[allow(unused_assignments)]
-    let mut last_two = Vec::new();
-
-    if data_chunks.len() > 1 && data_chunks.last().unwrap().len() < MIN_CHUNK_SIZE {
-        last_two = data_chunks.split_off(data_chunks.len() - 2).concat();
-        let chunk_size = last_two.len() / 2 + (last_two.len() % 2 != 0) as usize;
-        data_chunks.append(&mut last_two.chunks(chunk_size).collect::<Vec<&[u8]>>());
-    }
-
     if data_chunks.last().unwrap().len() == MAX_CHUNK_SIZE {
         data_chunks.push(&[]);
     }

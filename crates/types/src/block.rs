@@ -3,12 +3,12 @@
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
 
+use alloy_primitives::U256;
 use std::{fmt, str::FromStr};
 
-use crate::{option_u64_stringify, Base64, H256List, IrysSignature, H256};
-use alloy_primitives::{Signature, U256};
-use arbitrary::Arbitrary;
-use reth_codecs::Compact;
+use crate::{
+    option_u64_stringify, Arbitrary, Base64, Compact, H256List, IrysSignature, Signature, H256,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Arbitrary, Compact)]

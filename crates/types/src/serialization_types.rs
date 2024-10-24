@@ -1,5 +1,7 @@
-use alloy_primitives::{bytes, Bytes, Parity, Signature, U256 as RethU256};
-use arbitrary::{Arbitrary, Unstructured};
+use crate::{Arbitrary, Signature};
+use alloy_primitives::{bytes, Parity, U256 as RethU256};
+use alloy_rlp::{Decodable, Encodable, Error as RlpError, RlpDecodable, RlpEncodable};
+use arbitrary::Unstructured;
 use base58::{FromBase58, ToBase58};
 use eyre::Error;
 use reth_codecs::Compact;
@@ -9,11 +11,7 @@ use serde::{
     de::{self, Error as _},
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::{
-    ops::{Index, RemAssign},
-    slice::SliceIndex,
-    str::FromStr,
-};
+use std::{ops::Index, slice::SliceIndex, str::FromStr};
 
 use fixed_hash::construct_fixed_hash;
 use uint::construct_uint;
@@ -41,34 +39,6 @@ impl<'a> Arbitrary<'a> for H256 {
     }
 }
 
-// impl Encodable for H256 {
-//     #[inline]
-//     fn length(&self) -> usize {
-//         self.0.length()
-//     }
-
-//     #[inline]
-//     fn encode(&self, out: &mut dyn bytes::BufMut) {
-//         self.0.encode(out);
-//     }
-// }
-
-// impl Decodable for H256 {
-//     #[inline]
-//     fn decode(buf: &mut &[u8]) -> Result<Self, alloy_rlp::Error> {
-//         if buf.len() < 32 {
-//             return Err(RlpError::Custom("unknown hash"));
-//         }
-//         // Copy the first 32 bytes into a fixed-size array
-//         let mut bytes = [0u8; 32];
-//         bytes.copy_from_slice(&buf[..32]);
-
-//         let hash = H256::try_from(bytes).or(Err(RlpError::Custom("unknown hash")))?;
-//         buf.advance(32);
-//         Ok(hash)
-//     }
-// }
-
 impl Encode for H256 {
     type Encoded = [u8; 32];
 
@@ -84,10 +54,28 @@ impl Decode for H256 {
         ))
     }
 }
+
+impl Encodable for H256 {
+    fn encode(&self, out: &mut dyn bytes::BufMut) {
+        self.0.encode(out);
+    }
+    fn length(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl Decodable for H256 {
+    fn decode(buf: &mut &[u8]) -> alloy_rlp::Result<Self> {
+        if buf.len() < 32 {
+            return Err(RlpError::Custom("not enough bytes to decode H256"));
+        }
+        Ok(H256::from_slice(buf))
+    }
+}
 //==============================================================================
 // IrysSignature
 //------------------------------------------------------------------------------
-#[derive(Clone, Eq, Debug, Arbitrary)]
+#[derive(Clone, Eq, Debug, Arbitrary, RlpEncodable, RlpDecodable)]
 pub struct IrysSignature {
     pub reth_signature: Signature,
 }
@@ -169,6 +157,44 @@ impl<'de> Deserialize<'de> for IrysSignature {
         Ok(IrysSignature {
             reth_signature: sig,
         })
+    }
+}
+//==============================================================================
+// Address Base58
+//------------------------------------------------------------------------------
+pub mod address_base58_stringify {
+    use alloy_primitives::Address;
+    use base58::{FromBase58, ToBase58};
+    use serde::{self, de, Deserialize, Deserializer, Serializer};
+
+    #[allow(dead_code)]
+    pub fn serialize<S>(value: &Address, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(value.0.to_base58().as_ref())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Address, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: String = Deserialize::deserialize(deserializer)?;
+
+        // Decode the base58 string into bytes
+        let bytes = FromBase58::from_base58(s.as_str())
+            .map_err(|e| format!("Failed to decode from base58 {:?}", e))
+            .expect("base58 should prase");
+
+        // Ensure the byte array is exactly 65 bytes (r, s, and v values of the signature)
+        if bytes.len() != 20 {
+            return Err(de::Error::invalid_length(
+                bytes.len(),
+                &"expected 65 bytes for signature",
+            ));
+        }
+
+        Ok(Address::from_slice(&bytes))
     }
 }
 

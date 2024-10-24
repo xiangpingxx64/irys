@@ -1,17 +1,20 @@
-//! Contains a common set of types used across all of the `irys-chain` modules.
+//! Contains a common set of types used across all of the `irys` crates.
 //!
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
-pub mod block_header;
+pub mod app_state;
+pub mod block;
+pub mod block_production;
 pub mod consensus;
 pub mod merkle;
 pub mod serialization_types;
-pub mod transaction_header;
-pub mod block_production;
-pub mod app_state;
+pub mod transaction;
 
-pub use block_header::*;
+pub use block::*;
 pub use consensus::*;
 pub use serialization_types::*;
-pub use transaction_header::*;
+pub use transaction::*;
 
+pub use alloy_primitives::{Address, Signature};
+pub use arbitrary::Arbitrary;
+pub use reth_codecs::Compact;
