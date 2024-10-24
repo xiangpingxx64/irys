@@ -16,13 +16,17 @@ edition = "2021"
 rust-version = "1.82"
 
 [workspace.dependencies]
+ruint = { version = "1.12.3", features = ["alloc", "arbitrary"] }
+
 actix = "0.13.5"
 actors = { path = "./crates/actors" }
 alloy-consensus = { path = "./ext/alloy/crates/consensus", default-features = false }
 alloy-core = { path = "./ext/alloy-core/crates/core" }
 alloy-eips = { path = "./ext/alloy/crates/eips", default-features = false }
 alloy-genesis = { path = "./ext/alloy/crates/genesis", default-features = false }
-alloy-primitives = { path = "./ext/alloy-core/crates/primitives", default-features = false }
+alloy-primitives = { path = "./ext/alloy-core/crates/primitives", features = [
+    "arbitrary",
+] }
 alloy-rlp = "0.3.4"
 alloy-rpc-types = { path = "./ext/alloy/crates/rpc-types" }
 alloy-rpc-types-engine = { path = "./ext/alloy/crates/rpc-types-engine" }
