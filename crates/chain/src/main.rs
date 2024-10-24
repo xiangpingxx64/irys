@@ -5,7 +5,7 @@ mod tables;
 mod vdf;
 
 use actix::{Actor, Addr, Arbiter, System};
-use actors::{block_producer::BlockProducerActor, mining::PartitionMiningActor};
+use actors::{block_producer::BlockProducerActor, mining::PartitionMiningActor, packing::PackingActor};
 use clap::Parser;
 use config::get_data_dir;
 use database::open_or_create_db;
@@ -34,7 +34,8 @@ use tracing::{debug, error, trace};
 
 struct ActorAddresses {
     partitions: Vec<Addr<PartitionMiningActor>>,
-    block_producer: Addr<BlockProducerActor>
+    block_producer: Addr<BlockProducerActor>,
+    packing: Addr<PackingActor>
 }
 
 fn main() -> eyre::Result<()> {
@@ -59,9 +60,11 @@ fn main() -> eyre::Result<()> {
             let part_actors_clone = part_actors.clone();
             std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
+            let packing_actor_addr = PackingActor::new(Handle::current()).start();
             actor_addr_channel_sender.send(ActorAddresses {
                 partitions: part_actors_clone,
                 block_producer: block_producer_addr,
+                packing: packing_actor_addr,
             });
         });
     });
