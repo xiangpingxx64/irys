@@ -12,7 +12,7 @@ impl IrysChainSpecBuilder {
     /// Construct a new builder from the mainnet chain spec.
     pub fn mainnet() -> Self {
         Self {
-            reth_builder: ChainSpecBuilder::default(),
+            reth_builder: ChainSpecBuilder::mainnet(),
             genesis: IrysBlockHeader::new(),
         }
     }

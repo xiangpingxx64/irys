@@ -77,7 +77,7 @@ fn main() -> eyre::Result<()> {
 
     let actor_addresses = actor_addr_channel_receiver.blocking_recv().unwrap();
 
-    let builder = IrysChainSpecBuilder::new();
+    let builder = IrysChainSpecBuilder::mainnet();
     let reth_chainspec = builder.reth_builder.build();
 
     // TODO @JesseTheRobot - make sure logging is initialized before we get here as this uses logging macros
