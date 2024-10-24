@@ -62,6 +62,7 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 
 pub async fn run_node(
     new_seed_channel: Sender<H256>,
+    chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
 ) -> eyre::Result<
     NodeHandle<
@@ -164,7 +165,7 @@ pub async fn run_node(
     let NodeCommand {
         datadir,
         config,
-        chain,
+        // chain,
         metrics,
         instance,
         with_unused_ports,
@@ -177,6 +178,7 @@ pub async fn run_node(
         dev,
         pruning,
         ext: engine_args,
+        ..
     } = node_command;
 
     // let chain_spec =
@@ -186,7 +188,8 @@ pub async fn run_node(
     let mut node_config = NodeConfig {
         datadir,
         config,
-        chain,
+        // chain,
+        chain: chainspec,
         // chain: Arc::new(chain_spec),
         metrics,
         instance,

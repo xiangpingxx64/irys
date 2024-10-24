@@ -1,6 +1,7 @@
 // from ext/reth/crates/ethereum/cli/src/chainspec.rs
-
-use once_cell::sync::Lazy;
+// TODO @JesseTheRobot - remove this - we just needed this to satisfy the CLI
+use irys_types::IrysBlockHeader;
+use once_cell::sync::{Lazy, OnceCell};
 use reth_chainspec::{BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, EthereumHardfork};
 use reth_cli::chainspec::{parse_genesis, ChainSpecParser};
 use reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT;
@@ -85,3 +86,18 @@ pub static MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
 //     spec.genesis.config.dao_fork_support = true;
 //     spec.into()
 // });
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IrysChainSpec {
+    irys_genesis: IrysBlockHeader,
+}
+
+impl IrysChainSpec {
+    fn new() -> Self {
+        Self {
+            irys_genesis: IrysBlockHeader::new(),
+        }
+    }
+}

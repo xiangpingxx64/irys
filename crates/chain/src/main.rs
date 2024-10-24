@@ -5,20 +5,24 @@ mod tables;
 mod vdf;
 
 use actix::{Actor, Addr, Arbiter, System};
-use actors::{block_producer::BlockProducerActor, mining::PartitionMiningActor, packing::PackingActor};
+use actors::{
+    block_producer::BlockProducerActor, mining::PartitionMiningActor, packing::PackingActor,
+};
 use clap::Parser;
 use config::get_data_dir;
 use database::open_or_create_db;
+use irys_reth_node_bridge::{chainspec, IrysChainSpecBuilder};
 use irys_types::{app_state::AppState, H256};
 use partitions::{get_partitions, mine_partition};
-use reth::{core::irys_ext::NodeExitReason, CliContext};
+use reth::{chainspec::ChainSpec, core::irys_ext::NodeExitReason, CliContext};
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
-use tokio::{runtime::Handle, sync::oneshot};
 use std::{
     str::FromStr,
     sync::{mpsc, Arc},
     time::Duration,
 };
+use tokio::{runtime::Handle, sync::oneshot};
+
 use vdf::run_vdf;
 
 /// Simple program to greet a person
@@ -35,28 +39,30 @@ use tracing::{debug, error, trace};
 struct ActorAddresses {
     partitions: Vec<Addr<PartitionMiningActor>>,
     block_producer: Addr<BlockProducerActor>,
-    packing: Addr<PackingActor>
+    packing: Addr<PackingActor>,
 }
 
 fn main() -> eyre::Result<()> {
-    let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel::<ActorAddresses>();
+    let (actor_addr_channel_sender, actor_addr_channel_receiver) =
+        oneshot::channel::<ActorAddresses>();
     // Spawn thread and runtime for actors
     std::thread::spawn(move || {
         let rt = actix_rt::Runtime::new().unwrap();
         rt.block_on(async move {
             let block_producer_actor = BlockProducerActor {};
-    
+
             let block_producer_addr = block_producer_actor.start();
-    
+
             let mut part_actors = Vec::new();
-    
+
             for part in get_partitions() {
-                let partition_mining_actor = PartitionMiningActor::new(part, block_producer_addr.clone());
+                let partition_mining_actor =
+                    PartitionMiningActor::new(part, block_producer_addr.clone());
                 part_actors.push(partition_mining_actor.start());
             }
-        
+
             let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
-        
+
             let part_actors_clone = part_actors.clone();
             std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
@@ -71,17 +77,20 @@ fn main() -> eyre::Result<()> {
 
     let actor_addresses = actor_addr_channel_receiver.blocking_recv().unwrap();
 
+    let builder = IrysChainSpecBuilder::new();
+    let reth_chainspec = builder.reth_builder.build();
+
     // TODO @JesseTheRobot - make sure logging is initialized before we get here as this uses logging macros
     // use the existing reth code to handle blocking & graceful shutdown
     let AsyncCliRunner {
         context,
         mut task_manager,
         tokio_runtime,
-    } = AsyncCliRunner::new()?; 
+    } = AsyncCliRunner::new()?;
     // Executes the command until it finished or ctrl-c was fired
     let command_res = tokio_runtime.block_on(run_to_completion_or_panic(
         &mut task_manager,
-        run_until_ctrl_c(main2(context)),
+        run_until_ctrl_c(main2(context, reth_chainspec)),
     ));
 
     if command_res.is_err() {
@@ -115,13 +124,12 @@ fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn main2(ctx: CliContext) -> eyre::Result<NodeExitReason> {
+async fn main2(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
     let args = Args::parse();
 
     let db_path = get_data_dir();
 
     let db = open_or_create_db(&args.database)?;
-
 
     let handle = Handle::current();
 
@@ -131,7 +139,13 @@ async fn main2(ctx: CliContext) -> eyre::Result<NodeExitReason> {
 
     let global_app_state = Arc::new(app_state);
 
-    let node_handle = irys_reth_node_bridge::run_node(std::sync::mpsc::channel().0, ctx.task_executor).await?;
+    let node_handle = irys_reth_node_bridge::run_node(
+        std::sync::mpsc::channel().0,
+        Arc::new(chainspec),
+        ctx.task_executor,
+    )
+    .await?;
+
     // TODO @JesseTheRobot - make this dump genesis (or keep it internal to reth?)
     let exit_reason = node_handle.node_exit_future.await?;
     Ok(exit_reason)
