@@ -1,19 +1,19 @@
-mod block_producer;
 mod config;
 mod database;
 mod partitions;
 mod tables;
 mod vdf;
 
-use actix::Actor;
-use block_producer::BlockProducerActor;
+use actix::{Actor, Addr, Arbiter, System};
+use actors::{block_producer::BlockProducerActor, mining::PartitionMiningActor};
 use clap::Parser;
 use config::get_data_dir;
 use database::open_or_create_db;
 use irys_types::{app_state::AppState, H256};
-use partitions::{get_partitions, mine_partition, PartitionMiningActor};
+use partitions::{get_partitions, mine_partition};
 use reth::{core::irys_ext::NodeExitReason, CliContext};
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
+use tokio::{runtime::Handle, sync::oneshot};
 use std::{
     str::FromStr,
     sync::{mpsc, Arc},
@@ -32,15 +32,49 @@ struct Args {
 
 use tracing::{debug, error, trace};
 
+struct ActorAddresses {
+    partitions: Vec<Addr<PartitionMiningActor>>,
+    block_producer: Addr<BlockProducerActor>
+}
+
 fn main() -> eyre::Result<()> {
+    let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel::<ActorAddresses>();
+    // Spawn thread and runtime for actors
+    std::thread::spawn(move || {
+        let rt = actix_rt::Runtime::new().unwrap();
+        rt.block_on(async move {
+            let block_producer_actor = BlockProducerActor {};
+    
+            let block_producer_addr = block_producer_actor.start();
+    
+            let mut part_actors = Vec::new();
+    
+            for part in get_partitions() {
+                let partition_mining_actor = PartitionMiningActor::new(part, block_producer_addr.clone());
+                part_actors.push(partition_mining_actor.start());
+            }
+        
+            let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
+        
+            let part_actors_clone = part_actors.clone();
+            std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
+
+            actor_addr_channel_sender.send(ActorAddresses {
+                partitions: part_actors_clone,
+                block_producer: block_producer_addr,
+            });
+        });
+    });
+
+    let actor_addresses = actor_addr_channel_receiver.blocking_recv().unwrap();
+
     // TODO @JesseTheRobot - make sure logging is initialized before we get here as this uses logging macros
     // use the existing reth code to handle blocking & graceful shutdown
     let AsyncCliRunner {
         context,
         mut task_manager,
         tokio_runtime,
-    } = AsyncCliRunner::new()?;
-
+    } = AsyncCliRunner::new()?; 
     // Executes the command until it finished or ctrl-c was fired
     let command_res = tokio_runtime.block_on(run_to_completion_or_panic(
         &mut task_manager,
@@ -85,26 +119,16 @@ async fn main2(ctx: CliContext) -> eyre::Result<NodeExitReason> {
 
     let db = open_or_create_db(&args.database)?;
 
-    let block_producer_actor = BlockProducerActor {};
 
-    let block_producer_addr = block_producer_actor.start();
+    let handle = Handle::current();
 
-    let mut part_actors = Vec::new();
-
-    for part in get_partitions() {
-        let partition_mining_actor = PartitionMiningActor::new(part, block_producer_addr.clone());
-        part_actors.push(partition_mining_actor.start());
-    }
-
-    let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
-
-    std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
+    // let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel();
 
     let app_state = AppState {};
 
     let global_app_state = Arc::new(app_state);
 
-    let node_handle = irys_reth_node_bridge::run_node(new_seed_tx, ctx.task_executor).await?;
+    let node_handle = irys_reth_node_bridge::run_node(std::sync::mpsc::channel().0, ctx.task_executor).await?;
     // TODO @JesseTheRobot - make this dump genesis (or keep it internal to reth?)
     let exit_reason = node_handle.node_exit_future.await?;
     Ok(exit_reason)

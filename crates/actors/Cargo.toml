@@ -1,0 +1,17 @@
+[package]
+name = "actors"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+irys-types = { path = "../types" }
+
+actix.workspace = true
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+sha2 = "0.10.8"
+
+
+[lints]
+workspace = true

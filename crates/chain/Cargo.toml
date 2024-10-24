@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "irys-chain"
+name = "chain"
 version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -27,8 +27,10 @@ serde_json = "1.0.107"
 sha2 = "0.10.8"
 tempfile = "3.10"
 tokio = { version = "1.40.0", features = ["rt"] }
-tracing.workspace = true
+actix-rt = "2.10.0"
 
+tracing.workspace = true
+actors.workspace = true
 actix.workspace = true
 alloy-rlp.workspace = true
 alloy-serde.workspace = true

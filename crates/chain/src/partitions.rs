@@ -8,8 +8,6 @@ use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
-use crate::block_producer::{self, BlockProducerActor};
-
 pub fn get_partitions() -> Vec<Partition> {
     vec![Partition::default(), Partition::default()]
 }
@@ -83,100 +81,3 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
 fn hash_to_number(hash: &[u8]) -> U256 {
     U256::from_little_endian(hash)
 }
-
-
-pub struct PartitionMiningActor {
-    partition: Partition,
-    block_producer_actor: Addr<BlockProducerActor>
-}
-
-impl PartitionMiningActor {
-    pub fn new(partition: Partition, block_producer_addr: Addr<BlockProducerActor>) -> Self {
-        Self {
-            partition,
-            block_producer_actor: block_producer_addr
-        }
-    }
-}
-
-impl Actor for PartitionMiningActor {
-    type Context = Context<Self>;
-}
-
-#[derive(Message)]
-#[rtype(result = "()")]
-pub struct Seed(pub H256);
-
-impl Seed {
-    fn into_inner(self) -> H256 {
-        self.0
-    }
-}
-
-impl Handler<Seed> for PartitionMiningActor {
-    type Result = ();
-
-    fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
-        let difficuly = get_latest_difficulty();
-        match mine_partition_with_seed(&self.partition, seed.into_inner(), difficuly) {
-            Some(s) => { self.block_producer_actor.send(s); },
-            None => (),
-        };
-    }
-}
-
-
-fn mine_partition_with_seed(partition: &Partition, seed: H256, difficulty: U256) -> Option<SolutionContext> {
-    // TODO: add a partition_state that keeps track of efficient sampling
-    let mut rng = ChaCha20Rng::from_seed(seed.into());
-
-    // For now, Pick a random recall range in the partition
-    let recall_range_index = rng.next_u64() % NUM_RECALL_RANGES_IN_PARTITION;
-
-    // Starting chunk index within partition
-    let start_chunk_index = (recall_range_index * NUM_CHUNKS_IN_RECALL_RANGE) as usize;
-
-    // Create a contiguous piece of memory on the heap where chunks can be written into
-    let mut chunks_buffer: Vec<[u8; CHUNK_SIZE as usize]> =
-        Vec::with_capacity((NUM_CHUNKS_IN_RECALL_RANGE * CHUNK_SIZE) as usize);
-
-    // TODO: read chunks. For now creates random
-    for _ in 0..NUM_CHUNKS_IN_RECALL_RANGE {
-        let mut data = [0u8; CHUNK_SIZE as usize];
-        rand::thread_rng().fill_bytes(&mut data);
-        chunks_buffer.push(data);
-    }
-
-    let mut hasher = Sha256::new();
-    for i in 0..NUM_CHUNKS_IN_RECALL_RANGE {
-        let chunk: &[u8] = &chunks_buffer[i as usize];
-
-        hasher.update(chunk);
-        let hash = hasher.finalize_reset().to_vec();
-
-        // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
-
-        let solution_number = hash_to_number(&hash);
-        if solution_number >= difficulty {
-            dbg!("SOLUTION FOUND!!!!!!!!!");
-            let solution = SolutionContext {
-                partition_id: partition.id,
-                // TODO: Fix
-                chunk_index: 0,
-                mining_address: partition.mining_addr,
-            };
-            // TODO: Send info to block builder code
-
-            // TODO: Let all partitions know to stop mining
-
-            // Once solution is sent stop mining and let all other partitions know
-            return Some(solution);
-        }
-    }
-
-    None
-}
-
-fn get_latest_difficulty() -> U256 {
-    U256::max_value()
-} 

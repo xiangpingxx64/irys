@@ -3,6 +3,7 @@ exclude = ["ext/"]
 members = [
     "crates/c",
     "crates/chain",
+    "crates/actors",
     "crates/primitives",
     "crates/reth-node-bridge",
     "crates/types",
@@ -37,6 +38,7 @@ irys-c = { path = "./crates/c" }
 irys-primitives = { path = "./crates/primitives" }
 irys-reth-node-bridge = { path = "./crates/reth-node-bridge" }
 irys-types = { path = "./crates/types" }
+actors = { path = "./crates/actors" }
 modular-bitfield = "0.11.2"
 openssl = { version = "0.10.57", features = ["vendored"] }
 proptest-derive = "0.5"
