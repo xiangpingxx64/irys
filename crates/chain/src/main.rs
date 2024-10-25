@@ -68,7 +68,7 @@ fn main() -> eyre::Result<()> {
             std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
             let packing_actor_addr = PackingActor::new(Handle::current()).start();
-            actor_addr_channel_sender.send(ActorAddresses {
+            let _ = actor_addr_channel_sender.send(ActorAddresses {
                 partitions: part_actors_clone,
                 block_producer: block_producer_addr,
                 packing: packing_actor_addr,

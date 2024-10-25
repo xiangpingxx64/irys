@@ -1,11 +1,14 @@
 {
 	"cSpell.words": [
+		"actix",
 		"borsh",
 		"chacha",
+		"chainspec",
 		"Irys",
 		"keccak",
 		"mdbx",
 		"merklize",
+		"oneshot",
 		"prehash",
 		"revm",
 		"rngs",
