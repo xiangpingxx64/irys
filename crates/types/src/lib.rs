@@ -7,12 +7,13 @@ pub mod block;
 pub mod block_production;
 pub mod consensus;
 pub mod merkle;
-pub mod serialization_types;
+pub mod serialization;
 pub mod transaction;
 
 pub use block::*;
 pub use consensus::*;
-pub use serialization_types::*;
+pub use merkle::*;
+pub use serialization::*;
 pub use transaction::*;
 
 pub use alloy_primitives::{Address, Signature};

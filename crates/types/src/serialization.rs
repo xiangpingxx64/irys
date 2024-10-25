@@ -80,6 +80,13 @@ pub struct IrysSignature {
     pub reth_signature: Signature,
 }
 
+impl IrysSignature {
+    /// Passthough to the inner signature.as_bytes()
+    pub fn as_bytes(&self) -> [u8; 65] {
+        self.reth_signature.as_bytes()
+    }
+}
+
 impl PartialEq for IrysSignature {
     fn eq(&self, other: &Self) -> bool {
         self.reth_signature.r() == other.reth_signature.r()
@@ -102,7 +109,7 @@ impl Compact for IrysSignature {
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        self.reth_signature.to_compact(buf)
+        self.reth_signature.with_parity_bool().to_compact(buf)
     }
 
     #[inline]
@@ -110,7 +117,7 @@ impl Compact for IrysSignature {
         let compact = Signature::from_compact(buf, len);
         (
             IrysSignature {
-                reth_signature: compact.0,
+                reth_signature: compact.0.with_parity_bool(),
             },
             compact.1,
         )
@@ -159,6 +166,7 @@ impl<'de> Deserialize<'de> for IrysSignature {
         })
     }
 }
+
 //==============================================================================
 // Address Base58
 //------------------------------------------------------------------------------

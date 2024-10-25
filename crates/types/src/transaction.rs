@@ -1,4 +1,5 @@
 use crate::{address_base58_stringify, Address, Arbitrary, Compact, Signature};
+use alloy_primitives::{keccak256, FixedBytes};
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
@@ -61,11 +62,26 @@ pub struct IrysTransactionHeader {
 }
 
 impl IrysTransactionHeader {
-    /// When signing a transaction it's required to form the prehash from the
-    /// RPL encoded header fields __excluding__ the signature field and optional
-    /// fields if they are Option::None
-    pub fn encode_fields(&self, out: &mut dyn alloy_rlp::BufMut) {
-        self.id.encode(out);
+    /// RLP Encoding of Transactions for Signing
+    ///
+    /// When RLP encoding a transaction for signing, an extra byte is included
+    /// for the transaction type. This serves to simplify future parsing and
+    /// decoding of RLP-encoded headers.
+    ///
+    /// When signing a transaction, the prehash is formed by RLP encoding the
+    /// transaction's header fields. It's important to note that the prehash
+    ///
+    /// **excludes** certain fields:
+    ///
+    /// - **Transaction ID**: This is excluded from the prehash.
+    /// - **Signature fields**: These are not part of the prehash.
+    /// - **Optional fields**: Any optional fields that are `Option::None` are
+    ///                        also excluded from the prehash.
+    ///
+    /// This method ensures that the transaction signature reflects only the
+    /// essential data needed for validation and security purposes.
+    pub fn encode_for_signing(&self, out: &mut dyn alloy_rlp::BufMut) {
+        out.put_u8(self.tx_type as u8);
         self.anchor.encode(out);
         self.signer.encode(out);
         self.data_root.encode(out);
@@ -84,14 +100,11 @@ impl IrysTransactionHeader {
         }
     }
 
-    /// When RLP encoding a transaction for singing we include an extra byte
-    /// for tx type as a way to simplify parsing/decoding of RLP encoded headers
-    /// in the future.
-    /// (EIP-1559 added this to ethereum tx encoding as a proof point of its
-    /// usefulness)
-    pub fn encode_for_signing(&self, out: &mut dyn alloy_rlp::BufMut) {
-        out.put_u8(self.tx_type as u8);
-        self.encode_fields(out)
+    pub fn signature_hash(&self) -> FixedBytes<32> {
+        let mut bytes = Vec::new();
+        self.encode_for_signing(&mut bytes);
+        let prehash = keccak256(&bytes);
+        prehash
     }
 }
 
@@ -106,6 +119,12 @@ pub struct IrysTransaction {
     pub chunks: Vec<Node>,
     #[serde(skip)]
     pub proofs: Vec<Proof>,
+}
+
+impl IrysTransaction {
+    pub fn signature_hash(&self) -> [u8; 32] {
+        self.header.signature_hash().0
+    }
 }
 
 impl Default for IrysTransactionHeader {

@@ -1,22 +1,24 @@
+use alloy_core::primitives::keccak256;
 use irys_types::{
     merkle::{generate_data_root, generate_leaves, resolve_proofs},
-    Address, Base64, IrysTransaction, IrysTransactionHeader, H256,
+    Address, Base64, IrysSignature, IrysTransaction, IrysTransactionHeader, Signature, H256,
+    IRYS_CHAIN_ID,
 };
 
 use eyre::Result;
-use rand::rngs::OsRng;
-
 use k256::ecdsa::SigningKey;
-use reth_primitives::revm_primitives::keccak256;
+use rand::rngs::OsRng;
 
 pub struct Irys {
     pub signer: SigningKey,
+    pub chain_id: u64,
 }
 
 impl Irys {
     pub fn random_signer() -> Self {
         Irys {
             signer: k256::ecdsa::SigningKey::random(&mut OsRng),
+            chain_id: IRYS_CHAIN_ID,
         }
     }
 
@@ -29,7 +31,6 @@ impl Irys {
         anchor: Option<H256>, //TODO!: more parameters as they are implemented
     ) -> Result<IrysTransaction> {
         let mut transaction = self.merklize(data)?;
-        transaction.header.signer = Address::from_public_key(self.signer.verifying_key());
 
         // TODO: These should be calculated from some pricing params passed in
         // as a parameter
@@ -50,15 +51,17 @@ impl Irys {
 
     /// signs and sets signature and id.
     pub fn sign_transaction(&self, mut transaction: IrysTransaction) -> Result<IrysTransaction> {
-        // Encode the header data
-        let mut encoded_rlp = Vec::new();
-        transaction.header.encode_for_signing(&mut encoded_rlp);
+        // Store the signer address
+        transaction.header.signer = Address::from_public_key(self.signer.verifying_key());
 
-        let prehash = keccak256(&encoded_rlp);
-        let signature = self.signer.sign_prehash_recoverable(prehash.as_slice())?;
+        // Create the signature hash and sign it
+        let prehash = transaction.signature_hash();
+        let mut signature: Signature = self.signer.sign_prehash_recoverable(&prehash)?.into();
 
-        transaction.header.signature.reth_signature = signature.into();
-        let id: [u8; 32] = keccak256(signature.0.to_bytes()).into();
+        transaction.header.signature.reth_signature = signature.with_chain_id(self.chain_id);
+
+        // Drives the the txid by hashing the signature
+        let id: [u8; 32] = keccak256(signature.as_bytes()).into();
         transaction.header.id = H256::from(id);
         Ok(transaction)
     }
@@ -94,8 +97,15 @@ impl Irys {
 
 #[cfg(test)]
 mod tests {
-    use irys_types::merkle::MAX_CHUNK_SIZE;
+    use alloy_core::primitives::keccak256;
+    use assert_matches::assert_matches;
+    use irys_types::{
+        hash_sha256,
+        merkle::{validate_chunk, MAX_CHUNK_SIZE},
+        Compact,
+    };
     use rand::Rng;
+    use reth_primitives::recover_signer_unchecked;
 
     use super::Irys;
 
@@ -110,7 +120,10 @@ mod tests {
         let irys = Irys::random_signer();
 
         // Create a transaction from the random bytes
-        let mut tx = irys.create_transaction(data_bytes, None).await.unwrap();
+        let mut tx = irys
+            .create_transaction(data_bytes.clone(), None)
+            .await
+            .unwrap();
 
         // Sign the transaction
         tx = irys.sign_transaction(tx).unwrap();
@@ -124,7 +137,6 @@ mod tests {
             );
         }
 
-        println!("{:?}", tx.header);
         print!("{}\n", serde_json::to_string_pretty(&tx.header).unwrap());
 
         // Make sure the size of the last chunk is just whatever is left over
@@ -134,5 +146,38 @@ mod tests {
             data_size % MAX_CHUNK_SIZE,
             last_chunk.max_byte_range - last_chunk.min_byte_range
         );
+
+        // Validate the chunk proofs
+        for (index, chunk) in tx.chunks.iter().enumerate() {
+            let min = chunk.min_byte_range;
+            let max = chunk.max_byte_range;
+
+            // Ensure max is within bounds of data_bytes
+            if max > data_bytes.len() {
+                panic!("Max byte range exceeds the data_bytes length!");
+            }
+
+            // Ensure every chunk proof (data_path) is valid
+            let proof_result = validate_chunk(
+                tx.header.data_root.0,
+                chunk.clone(),
+                tx.proofs[index].clone(),
+            );
+            assert_matches!(proof_result, Ok(_));
+
+            // Ensure the data_hash is valid by hashing the chunk data
+            let chunk_bytes: &[u8] = &data_bytes[min..max];
+            let computed_hash = hash_sha256(&chunk_bytes).unwrap();
+            let data_hash = chunk.data_hash.unwrap();
+
+            assert_eq!(data_hash, computed_hash);
+        }
+
+        // Recover the signer as a way to verify the signature
+        let prehash = tx.header.signature_hash();
+        let sig = tx.header.signature.as_bytes();
+        let signer = recover_signer_unchecked(&sig, &prehash).ok();
+
+        assert_eq!(signer.unwrap(), tx.header.signer);
     }
 }
