@@ -1,23 +1,15 @@
 use std::path::Path;
 
-use crate::{
-    config::get_data_dir,
-    tables::{self, CompactIrysBlockHeader, IrysBlockHeaders, IrysTxHeaders, Tables},
-};
-use irys_types::{IrysBlockHeader, IrysTransactionHeader, IrysTransactionHeaderFlags, H256};
-use reth::{
-    prometheus_exporter::install_prometheus_recorder,
-    providers::errors::db::DatabaseErrorInfo,
-    rpc::api::eth::helpers::{block, transaction},
-};
+use crate::tables::{IrysBlockHeaders, IrysTxHeaders, Tables};
+use irys_types::{IrysBlockHeader, IrysTransactionHeader, H256};
+use reth::prometheus_exporter::install_prometheus_recorder;
+use reth_db::transaction::DbTx;
 use reth_db::transaction::DbTxMut;
 use reth_db::{
     create_db as reth_create_db,
-    mdbx::{DatabaseArguments, DatabaseFlags, MaxReadTransactionDuration},
+    mdbx::{DatabaseArguments, MaxReadTransactionDuration},
     ClientVersion, Database, DatabaseEnv, DatabaseError,
 };
-use reth_db::{transaction::DbTx, TableType};
-use reth_primitives::revm_primitives::B256;
 
 const ERROR_GET: &str = "Not able to get value from table.";
 const ERROR_PUT: &str = "Not able to insert value into table.";
