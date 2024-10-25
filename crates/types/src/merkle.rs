@@ -223,10 +223,10 @@ pub fn print_debug(proof: &Vec<u8>, target_offset: u128) -> Result<([u8; 32], u1
 /// Validates chunk of data against provided [`Proof`].
 pub fn validate_chunk(
     mut root_id: [u8; HASH_SIZE],
-    chunk: Node,
-    proof: Proof,
+    chunk_node: &Node,
+    proof: &Proof,
 ) -> Result<(), Error> {
-    match chunk {
+    match chunk_node {
         Node {
             data_hash: Some(data_hash),
             max_byte_range,
@@ -261,15 +261,15 @@ pub fn validate_chunk(
 
                 // If the offset from the proof is greater than the offset in the data chunk,
                 // then the next id to validate against is from the left.
-                root_id = match max_byte_range > branch_proof.offset() {
+                root_id = match max_byte_range > &branch_proof.offset() {
                     true => branch_proof.right_id,
                     false => branch_proof.left_id,
                 }
             }
 
             // Validate leaf: both id and data_hash are correct.
-            let id = hash_all_sha256(vec![&data_hash, &max_byte_range.to_note_vec()])?;
-            if (id != root_id) && (data_hash != leaf_proof.data_hash) {
+            let id = hash_all_sha256(vec![data_hash, &max_byte_range.to_note_vec()])?;
+            if (id != root_id) && (data_hash != &leaf_proof.data_hash) {
                 return Err(eyre!("Invalid Leaf Proof"));
             }
         }
@@ -324,7 +324,7 @@ pub fn hash_branch(left: Node, right: Node) -> Result<Node, Error> {
 }
 
 /// Builds one layer of branch nodes from a layer of child nodes.
-pub fn build_layer<'a>(nodes: Vec<Node>) -> Result<Vec<Node>, Error> {
+pub fn build_layer(nodes: Vec<Node>) -> Result<Vec<Node>, Error> {
     let mut layer = Vec::<Node>::with_capacity(nodes.len() / 2 + (nodes.len() % 2 != 0) as usize);
     let mut nodes_iter = nodes.into_iter();
     while let Some(left) = nodes_iter.next() {

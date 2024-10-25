@@ -14,6 +14,8 @@ pub struct Irys {
     pub chain_id: u64,
 }
 
+/// Encapsulates an Irys API for doing client type things, making transactions,
+/// signing them, posting them etc.
 impl Irys {
     pub fn random_signer() -> Self {
         Irys {
@@ -148,9 +150,9 @@ mod tests {
         );
 
         // Validate the chunk proofs
-        for (index, chunk) in tx.chunks.iter().enumerate() {
-            let min = chunk.min_byte_range;
-            let max = chunk.max_byte_range;
+        for (index, chunk_node) in tx.chunks.iter().enumerate() {
+            let min = chunk_node.min_byte_range;
+            let max = chunk_node.max_byte_range;
 
             // Ensure max is within bounds of data_bytes
             if max > data_bytes.len() {
@@ -158,17 +160,15 @@ mod tests {
             }
 
             // Ensure every chunk proof (data_path) is valid
-            let proof_result = validate_chunk(
-                tx.header.data_root.0,
-                chunk.clone(),
-                tx.proofs[index].clone(),
-            );
+            let root_id = tx.header.data_root.0;
+            let proof = tx.proofs[index].clone();
+            let proof_result = validate_chunk(root_id, &chunk_node, &proof);
             assert_matches!(proof_result, Ok(_));
 
             // Ensure the data_hash is valid by hashing the chunk data
             let chunk_bytes: &[u8] = &data_bytes[min..max];
             let computed_hash = hash_sha256(&chunk_bytes).unwrap();
-            let data_hash = chunk.data_hash.unwrap();
+            let data_hash = chunk_node.data_hash.unwrap();
 
             assert_eq!(data_hash, computed_hash);
         }
