@@ -1,8 +1,7 @@
 use alloy_core::primitives::keccak256;
 use irys_types::{
-    merkle::{generate_data_root, generate_leaves, resolve_proofs},
-    Address, Base64, IrysSignature, IrysTransaction, IrysTransactionHeader, Signature, H256,
-    IRYS_CHAIN_ID,
+    generate_data_root, generate_leaves, resolve_proofs, Address, Base64, IrysSignature,
+    IrysTransaction, IrysTransactionHeader, Signature, H256, IRYS_CHAIN_ID,
 };
 
 use eyre::Result;
@@ -99,13 +98,8 @@ impl Irys {
 
 #[cfg(test)]
 mod tests {
-    use alloy_core::primitives::keccak256;
     use assert_matches::assert_matches;
-    use irys_types::{
-        hash_sha256,
-        merkle::{validate_chunk, MAX_CHUNK_SIZE},
-        Compact,
-    };
+    use irys_types::{hash_sha256, validate_chunk, MAX_CHUNK_SIZE};
     use rand::Rng;
     use reth_primitives::recover_signer_unchecked;
 

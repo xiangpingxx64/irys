@@ -1,7 +1,8 @@
 use std::path::Path;
 
-use crate::tables::{IrysBlockHeaders, IrysTxHeaders, Tables};
-use irys_types::{IrysBlockHeader, IrysTransactionHeader, H256};
+use crate::db_cache::{CachedChunk, CachedDataRoot};
+use crate::tables::{CachedChunks, CachedDataRoots, IrysBlockHeaders, IrysTxHeaders, Tables};
+use irys_types::{hash_sha256, Chunk, IrysBlockHeader, IrysTransactionHeader, H256};
 use reth::prometheus_exporter::install_prometheus_recorder;
 use reth_db::transaction::DbTx;
 use reth_db::transaction::DbTxMut;
@@ -10,6 +11,7 @@ use reth_db::{
     mdbx::{DatabaseArguments, MaxReadTransactionDuration},
     ClientVersion, Database, DatabaseEnv, DatabaseError,
 };
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const ERROR_GET: &str = "Not able to get value from table.";
 const ERROR_PUT: &str = "Not able to insert value into table.";
@@ -67,16 +69,76 @@ pub fn tx_by_txid(
     Ok(Some(IrysTransactionHeader::from(result.unwrap())))
 }
 
+/// Takes an IrysTransactionHeader and caches its data_root and tx.id in a
+/// cache database table. Tracks all the tx.ids' that share the same data_root.
+pub fn cache_data_root(
+    db: &DatabaseEnv,
+    tx: &IrysTransactionHeader,
+) -> Result<Option<CachedDataRoot>, DatabaseError> {
+    let key = tx.data_root;
+
+    // Calculate the duration since UNIX_EPOCH
+    let now = SystemTime::now();
+    let duration_since_epoch = now
+        .duration_since(UNIX_EPOCH)
+        .expect("should be able to compute duration since UNIX_EPOCH");
+    let timestamp = duration_since_epoch.as_millis();
+
+    // Access the current cached entry from the database
+    let result = db.view(|tx| tx.get::<CachedDataRoots>(key).expect(ERROR_GET))?;
+
+    // Create or update the CachedDataRoot
+    let mut cached_data_root = result.unwrap_or_else(|| CachedDataRoot {
+        timestamp,
+        txid_set: vec![tx.id.clone()],
+    });
+
+    // If the entry exists, update the timestamp and add the txid if necessary
+    if !cached_data_root.txid_set.contains(&tx.id) {
+        cached_data_root.txid_set.push(tx.id.clone());
+    }
+    cached_data_root.timestamp = timestamp;
+
+    // Update the database with the modified or new entry
+    db.update(|tx| {
+        tx.put::<CachedDataRoots>(key, cached_data_root.clone().into())
+            .expect(ERROR_PUT)
+    })?;
+
+    Ok(Some(cached_data_root))
+}
+
+/// Retrieves a CashedDataRoot struct using a data_root as key.
+pub fn cached_data_root_by_data_root(
+    db: &DatabaseEnv,
+    data_root: H256,
+) -> Result<Option<CachedDataRoot>, DatabaseError> {
+    let key = data_root;
+    let result = db.view(|tx| tx.get::<CachedDataRoots>(key).expect(ERROR_GET))?;
+    Ok(result)
+}
+
+/// Caches a chunk and returns the key it was cached under. The key is sha256
+/// hash of the data_path.
+pub fn cache_chunk(db: &DatabaseEnv, chunk: Chunk) -> Result<Option<H256>, DatabaseError> {
+    let key: H256 = hash_sha256(&chunk.data_path.0).unwrap().into();
+    let value = CachedChunk {
+        chunk: Some(chunk.bytes),
+        data_path: chunk.data_path,
+    };
+
+    let result = db.update(|tx| tx.put::<CachedChunks>(key, value).expect(ERROR_PUT))?;
+    Ok(Some(key))
+}
+
 #[cfg(test)]
 mod tests {
+
     use assert_matches::assert_matches;
     use irys_types::{IrysBlockHeader, IrysTransactionHeader};
-    use tempfile::tempdir;
+    //use tempfile::tempdir;
 
-    use crate::{
-        config::get_data_dir,
-        database::{block_by_hash, insert_tx, tx_by_txid},
-    };
+    use crate::{config::get_data_dir, database::block_by_hash};
 
     use super::{insert_block, open_or_create_db};
 

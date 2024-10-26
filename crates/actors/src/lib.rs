@@ -1,4 +1,5 @@
-pub mod mining;
-pub mod vdf;
 pub mod block_producer;
+pub mod mempool;
+pub mod mining;
 pub mod packing;
+pub mod vdf;

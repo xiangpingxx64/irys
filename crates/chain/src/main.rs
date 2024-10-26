@@ -1,8 +1,5 @@
-mod config;
-mod database;
 mod irys;
 mod partitions;
-mod tables;
 mod vdf;
 
 use actix::{Actor, Addr, Arbiter, System};
@@ -10,13 +7,12 @@ use actors::{
     block_producer::BlockProducerActor, mining::PartitionMiningActor, packing::PackingActor,
 };
 use clap::Parser;
-use config::get_data_dir;
-use database::open_or_create_db;
 use irys_reth_node_bridge::{chainspec, IrysChainSpecBuilder};
 use irys_types::{app_state::AppState, H256};
 use partitions::{get_partitions, mine_partition};
 use reth::{chainspec::ChainSpec, core::irys_ext::NodeExitReason, CliContext};
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
+use reth_db::database;
 use std::{
     str::FromStr,
     sync::{mpsc, Arc},
@@ -128,15 +124,15 @@ fn main() -> eyre::Result<()> {
 async fn main2(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
     let args = Args::parse();
 
-    let db_path = get_data_dir();
+    // let db_path = get_data_dir();
 
-    let db = open_or_create_db(&args.database)?;
+    // let db = open_or_create_db(&args.database)?;
 
     let handle = Handle::current();
 
     // let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel();
 
-    let app_state = AppState {};
+    let app_state: AppState = AppState {};
 
     let global_app_state = Arc::new(app_state);
 

@@ -27,6 +27,7 @@ alloy-genesis.workspace = true
 alloy-primitives.workspace = true
 alloy-serde.workspace = true
 arbitrary.workspace = true
+reth-primitives.workspace = true
 test-fuzz.workspace = true
 
 bytes.workspace = true

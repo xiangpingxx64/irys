@@ -5,7 +5,7 @@ use color_eyre::eyre::eyre;
 use eyre::Error;
 use openssl::sha;
 
-use crate::Base64;
+use crate::{chunk::Chunk, Base64};
 
 /// Single struct used for original data chunks (Leaves) and branch nodes (hashes of pairs of child nodes).
 #[derive(Debug, PartialEq, Clone)]
@@ -24,7 +24,6 @@ pub struct Proof {
     pub offset: usize,
     pub proof: Vec<u8>,
 }
-
 /// Populated with data from deserialized [`Proof`] for original data chunk (Leaf [`Node`]).
 #[repr(C)]
 #[derive(BorshDeserialize, Debug, PartialEq, Clone)]

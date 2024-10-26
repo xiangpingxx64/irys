@@ -6,9 +6,10 @@ use reth_db::{
 };
 use reth_db::{HasName, HasTableType, TableType, TableViewer};
 use reth_db_api::table::{Compress, Decompress};
-use reth_primitives::revm_primitives::B256;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+
+use crate::db_cache::{CachedChunk, CachedDataRoot};
 
 /// Adds wrapper structs for some primitive types so they can use `StructFlags` from Compact, when
 /// used as pure table values.
@@ -67,14 +68,22 @@ macro_rules! impl_compression_for_compact {
 }
 
 add_wrapper_struct!((IrysBlockHeader, CompactIrysBlockHeader));
-
 add_wrapper_struct!((IrysTransactionHeader, CompactTxHeader));
 
-impl_compression_for_compact!(CompactIrysBlockHeader, CompactTxHeader);
+impl_compression_for_compact!(
+    CompactIrysBlockHeader,
+    CompactTxHeader,
+    CachedDataRoot,
+    CachedChunk
+);
 
 tables! {
     /// Stores the header hashes belonging to the canonical chain.
     table IrysBlockHeaders<Key = H256, Value = CompactIrysBlockHeader>;
 
     table IrysTxHeaders<Key = H256, Value = CompactTxHeader>;
+
+    table CachedDataRoots<Key = H256, Value = CachedDataRoot>;
+
+        table CachedChunks<Key = H256, Value = CachedChunk>;
 }

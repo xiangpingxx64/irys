@@ -12,6 +12,7 @@
 		"prehash",
 		"revm",
 		"rngs",
+		"rtype",
 		"rustc",
 		"secp",
 		"Seedable",

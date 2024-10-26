@@ -1,12 +1,10 @@
-use crate::{address_base58_stringify, Address, Arbitrary, Compact, Signature};
+use crate::{address_base58_stringify, Address, Arbitrary, Compact, Node, Proof, Signature};
 use alloy_primitives::{keccak256, FixedBytes};
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
+use reth_primitives::recover_signer_unchecked;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    merkle::{Node, Proof},
-    Base64, IrysSignature, H256,
-};
+use crate::{Base64, IrysSignature, H256};
 
 #[derive(
     Clone,
@@ -106,6 +104,17 @@ impl IrysTransactionHeader {
         let prehash = keccak256(&bytes);
         prehash
     }
+
+    /// Validate the transaction signature, comparing it to the signer and
+    /// recovers the address from the signature.
+    pub fn is_signature_valid(&self) -> bool {
+        let prehash = self.signature_hash();
+        let sig = self.signature.as_bytes();
+
+        // We don't need to compare the recovered signer with the singer in the
+        // tx because it is included in the signature_hash
+        recover_signer_unchecked(&sig, &prehash).is_ok()
+    }
 }
 
 /// Wrapper for the underlying IrysTransactionHeader fields, this wrapper
@@ -147,6 +156,9 @@ impl Default for IrysTransactionHeader {
     }
 }
 
+//==============================================================================
+// Tests
+//------------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
     use super::*;
