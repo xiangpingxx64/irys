@@ -1,16 +1,13 @@
 use actix::{Actor, Context, Handler, Message};
-use database::db_cache::CachedDataRoot;
-use irys_types::{
-    chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, Node, Proof, CHUNK_SIZE, H256,
-};
+use irys_types::{chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, H256};
 use reth_db::DatabaseEnv;
-use std::{path, sync::Arc};
+use std::sync::Arc;
 
 /// The Mempool oversees pending transactions and validation of incoming tx.
 #[derive(Debug)]
 pub struct MempoolActor {
     db: Arc<DatabaseEnv>,
-    confirmed_tx: Vec<IrysTransactionHeader>,
+    valid_tx: Vec<IrysTransactionHeader>,
     invalid_tx: Vec<H256>,
 }
 
@@ -24,7 +21,7 @@ impl MempoolActor {
     pub fn new(db: Arc<DatabaseEnv>) -> Self {
         Self {
             db,
-            confirmed_tx: Vec::new(),
+            valid_tx: Vec::new(),
             invalid_tx: Vec::new(),
         }
     }
@@ -61,13 +58,13 @@ impl Handler<TxIngressMessage> for MempoolActor {
         let tx = &tx_msg.0;
 
         // Early out if we already know about this transaction
-        if self.invalid_tx.contains(&tx.id) || self.confirmed_tx.contains(&tx) {
+        if self.invalid_tx.contains(&tx.id) || self.valid_tx.contains(&tx) {
             return;
         }
 
         // Validate the transaction signature
         if tx.is_signature_valid() {
-            self.confirmed_tx.push(tx.clone());
+            self.valid_tx.push(tx.clone());
         } else {
             self.invalid_tx.push(tx.id);
         }
