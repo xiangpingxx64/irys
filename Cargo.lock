@@ -259,6 +259,7 @@ name = "actors"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "assert_matches",
  "database",
  "irys-types",
  "rand",
@@ -5243,11 +5244,13 @@ name = "irys-types"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "alloy-core",
  "alloy-genesis",
  "alloy-primitives",
  "alloy-rlp",
  "alloy-serde",
  "arbitrary",
+ "assert_matches",
  "base58",
  "base64-url",
  "borsh",
@@ -5256,6 +5259,7 @@ dependencies = [
  "color-eyre",
  "eyre",
  "fixed-hash",
+ "k256",
  "modular-bitfield",
  "openssl",
  "rand",
@@ -5266,6 +5270,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "test-fuzz",
+ "tokio",
  "uint",
 ]
 

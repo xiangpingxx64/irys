@@ -1,8 +1,8 @@
-use alloy_core::primitives::keccak256;
-use irys_types::{
+use crate::{
     generate_data_root, generate_leaves, resolve_proofs, Address, Base64, IrysSignature,
     IrysTransaction, IrysTransactionHeader, Signature, H256, IRYS_CHAIN_ID,
 };
+use alloy_core::primitives::keccak256;
 
 use eyre::Result;
 use k256::ecdsa::SigningKey;
@@ -98,8 +98,8 @@ impl Irys {
 
 #[cfg(test)]
 mod tests {
+    use crate::{hash_sha256, validate_chunk, MAX_CHUNK_SIZE};
     use assert_matches::assert_matches;
-    use irys_types::{hash_sha256, validate_chunk, MAX_CHUNK_SIZE};
     use rand::Rng;
     use reth_primitives::recover_signer_unchecked;
 

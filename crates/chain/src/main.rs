@@ -1,4 +1,3 @@
-mod irys;
 mod partitions;
 mod vdf;
 

@@ -131,6 +131,16 @@ pub fn cache_chunk(db: &DatabaseEnv, chunk: Chunk) -> Result<Option<H256>, Datab
     Ok(Some(key))
 }
 
+/// Retrieves a cached chunk from the cache using its chunk_key (the sha256
+/// hash of the data_path bytes)
+pub fn cached_chunk_by_chunk_key(
+    db: &DatabaseEnv,
+    key: H256,
+) -> Result<Option<CachedChunk>, DatabaseError> {
+    let result = db.view(|tx| tx.get::<CachedChunks>(key).expect(ERROR_GET))?;
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
 

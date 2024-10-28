@@ -1,13 +1,13 @@
 use actix::{Actor, Context, Handler, Message};
 use irys_types::{chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, H256};
 use reth_db::DatabaseEnv;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 /// The Mempool oversees pending transactions and validation of incoming tx.
 #[derive(Debug)]
 pub struct MempoolActor {
     db: Arc<DatabaseEnv>,
-    valid_tx: Vec<IrysTransactionHeader>,
+    valid_tx: HashMap<H256, IrysTransactionHeader>,
     invalid_tx: Vec<H256>,
 }
 
@@ -21,7 +21,7 @@ impl MempoolActor {
     pub fn new(db: Arc<DatabaseEnv>) -> Self {
         Self {
             db,
-            valid_tx: Vec::new(),
+            valid_tx: HashMap::new(),
             invalid_tx: Vec::new(),
         }
     }
@@ -30,7 +30,7 @@ impl MempoolActor {
 /// Message for when a new TX is discovered by the node, either though
 /// synchronization with peers, or by a user posting the tx.
 #[derive(Message, Debug)]
-#[rtype(result = "()")]
+#[rtype(result = "Result<(),TxIngressError>")]
 pub struct TxIngressMessage(pub IrysTransactionHeader);
 
 impl TxIngressMessage {
@@ -39,10 +39,21 @@ impl TxIngressMessage {
     }
 }
 
+/// Reasons why Transaction Ingress might fail
+#[derive(Debug)]
+pub enum TxIngressError {
+    /// The transaction's signature is invalid
+    InvalidSignature,
+    /// The account does not have enough tokens to fund this transaction
+    Unfunded,
+    /// This transaction id is already in the cache and marked invalid
+    CachedInvalid,
+}
+
 /// Message for when a new chunk is discovered by the node, either though
 /// synchronization with peers, or by a user posting the chunk.
 #[derive(Message, Debug)]
-#[rtype(result = "()")]
+#[rtype(result = "Result<(),ChunkIngressError>")]
 pub struct ChunkIngressMessage(pub Chunk);
 
 impl ChunkIngressMessage {
@@ -51,33 +62,46 @@ impl ChunkIngressMessage {
     }
 }
 
+/// Reasons why Transaction Ingress might fail
+#[derive(Debug)]
+pub enum ChunkIngressError {
+    /// The data_path/proof provided with the chunk data is invalid
+    InvalidProof,
+    /// The data hash does not match the chunk data
+    InvalidDataHash,
+}
+
 impl Handler<TxIngressMessage> for MempoolActor {
-    type Result = ();
+    type Result = Result<(), TxIngressError>;
 
     fn handle(&mut self, tx_msg: TxIngressMessage, _ctx: &mut Context<Self>) -> Self::Result {
         let tx = &tx_msg.0;
 
         // Early out if we already know about this transaction
-        if self.invalid_tx.contains(&tx.id) || self.valid_tx.contains(&tx) {
-            return;
+        if self.invalid_tx.contains(&tx.id) || self.valid_tx.contains_key(&tx.id) {
+            return Err(TxIngressError::CachedInvalid);
         }
 
         // Validate the transaction signature
         if tx.is_signature_valid() {
-            self.valid_tx.push(tx.clone());
+            self.valid_tx.insert(tx.id, tx.clone());
         } else {
             self.invalid_tx.push(tx.id);
+            return Err(TxIngressError::InvalidSignature);
         }
 
         // TODO: Check if the signer has funds to post the tx
+        //return Err(TxIngressError::Unfunded);
 
         // Cache the data_root in the database
         let _ = database::cache_data_root(&self.db, &tx);
+
+        Ok(())
     }
 }
 
 impl Handler<ChunkIngressMessage> for MempoolActor {
-    type Result = ();
+    type Result = Result<(), ChunkIngressError>;
 
     fn handle(&mut self, chunk_msg: ChunkIngressMessage, _ctx: &mut Context<Self>) -> Self::Result {
         let chunk = chunk_msg.0;
@@ -87,7 +111,7 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         // Early out if the data_root wasn't already added to the cache by a
         // confirmed transaction.
         if let Err(_) = result {
-            return ();
+            return Ok(());
         }
 
         // Next validate the data_path/proof for the chunk, linking
@@ -99,8 +123,7 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         let path_result = match validate_path(root_hash, path_buff, target_offset) {
             Ok(result) => result,
             Err(_) => {
-                // TODO: Log about invalid chunk proof
-                return;
+                return Err(ChunkIngressError::InvalidProof);
             }
         };
 
@@ -108,6 +131,101 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         if path_result.leaf_hash == hash_sha256(&chunk.bytes.0).unwrap() {
             // Finally write the chunk to CachedChunks
             let _ = database::cache_chunk(&self.db, chunk);
+            Ok(())
+        } else {
+            Err(ChunkIngressError::InvalidDataHash)
         }
+    }
+}
+
+//==============================================================================
+// Tests
+//------------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use assert_matches::assert_matches;
+    use database::{config::get_data_dir, open_or_create_db};
+    use irys_types::{irys::Irys, Base64, MAX_CHUNK_SIZE};
+    use rand::Rng;
+
+    use super::*;
+
+    use actix::prelude::*;
+
+    #[actix::test]
+    async fn main() {
+        // Connect to the db
+        let path = get_data_dir();
+        let db = open_or_create_db(path).unwrap();
+        let arc_db1 = Arc::new(db);
+        let arc_db2 = Arc::clone(&arc_db1);
+
+        // Create an instance of the mempool actor
+        let mempool = MempoolActor::new(arc_db1);
+        let addr: Addr<MempoolActor> = mempool.start();
+
+        // Create 2.5 chunks worth of data *  fill the data with random bytes
+        let data_size = (MAX_CHUNK_SIZE as f64 * 2.5).round() as usize;
+        let mut data_bytes = vec![0u8; data_size];
+        rand::thread_rng().fill(&mut data_bytes[..]);
+
+        // Create a new Irys API instance & a signed transaction
+        let irys = Irys::random_signer();
+        let tx = irys
+            .create_transaction(data_bytes.clone(), None)
+            .await
+            .unwrap();
+        let tx = irys.sign_transaction(tx).unwrap();
+
+        // Wrap the transaction in a TxIngressMessage
+        let data_root = tx.header.data_root;
+        let tx_ingress_msg = TxIngressMessage { 0: tx.header };
+
+        // Post the TxIngressMessage to the handle method on the mempool actor
+        let result = addr.send(tx_ingress_msg).await.unwrap();
+
+        // Verify the transaction was added
+        assert_matches!(result, Ok(()));
+
+        // Verify the data_root was added to the cache
+        let result = database::cached_data_root_by_data_root(&arc_db2, data_root).unwrap();
+        assert_matches!(result, Some(_));
+
+        // Loop though each of the transaction chunks
+        for (index, chunk_node) in tx.chunks.iter().enumerate() {
+            let min = chunk_node.min_byte_range;
+            let max = chunk_node.max_byte_range;
+            let data_size = (max - min) as u64;
+            let offset = tx.proofs[index].offset;
+            let data_path = Base64(tx.proofs[index].proof.to_vec());
+            let key: H256 = hash_sha256(&data_path.0).unwrap().into();
+
+            // Create a ChunkIngressMessage for each chunk
+            let chunk_ingress_msg = ChunkIngressMessage {
+                0: Chunk {
+                    data_root,
+                    data_size,
+                    data_path,
+                    bytes: Base64(data_bytes[min..max].to_vec()),
+                    offset,
+                },
+            };
+
+            // Post the ChunkIngressMessage to the handle method on the mempool
+            let result = addr.send(chunk_ingress_msg).await.unwrap();
+
+            // Verify the chunk was added
+            assert_matches!(result, Ok(()));
+
+            // Verify the chunk is added to the ChunksCache
+            let result = database::cached_chunk_by_chunk_key(&arc_db2, key).unwrap();
+            assert_matches!(result, Some(_));
+        }
+
+        // Modify one of the chunks
+
+        // Attempt to post the chunk
+
+        // Verify there chunk is not accepted
     }
 }
