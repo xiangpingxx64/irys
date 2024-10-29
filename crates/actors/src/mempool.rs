@@ -1,5 +1,7 @@
 use actix::{Actor, Context, Handler, Message};
-use irys_types::{chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, H256};
+use irys_types::{
+    chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, CHUNK_SIZE, H256,
+};
 use reth_db::DatabaseEnv;
 use std::{collections::HashMap, sync::Arc};
 
@@ -69,6 +71,10 @@ pub enum ChunkIngressError {
     InvalidProof,
     /// The data hash does not match the chunk data
     InvalidDataHash,
+    /// Only the last chunk in a data_root tree can be less than CHUNK_SIZE
+    InvalidChunkSize,
+    /// Some database error occurred when reading or writing the chunk
+    DatabaseError,
 }
 
 impl Handler<TxIngressMessage> for MempoolActor {
@@ -108,11 +114,9 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         // Check to see if we have a cached data_root for this chunk
         let result = database::cached_data_root_by_data_root(&self.db, chunk.data_root);
 
-        // Early out if the data_root wasn't already added to the cache by a
-        // confirmed transaction.
-        if let Err(_) = result {
-            return Ok(());
-        }
+        let cached_data_root = result
+            .map_err(|_| ChunkIngressError::DatabaseError)? // Convert DatabaseError to ChunkIngressError
+            .ok_or(ChunkIngressError::InvalidDataHash)?; // Handle None case by converting it to an error
 
         // Next validate the data_path/proof for the chunk, linking
         // data_root->chunk_hash
@@ -126,6 +130,29 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
                 return Err(ChunkIngressError::InvalidProof);
             }
         };
+
+        // Validate that the data_size for this chunk matches the data_size
+        // recorded in the transaction header.
+        if cached_data_root.data_size != chunk.data_size {
+            return Err(ChunkIngressError::InvalidDataHash);
+        }
+
+        // Use that data_Size to identify  and validate that only the last chunk
+        // can be less than 256KB
+        let chunk_len = chunk.bytes.len() as u64;
+        if (chunk.offset as u64) < chunk.data_size - 1 {
+            // Ensure prefix chunks are all exactly CHUNK_SIZE
+            if chunk_len != CHUNK_SIZE {
+                return Err(ChunkIngressError::InvalidChunkSize);
+            }
+        } else {
+            // Ensure the last chunk is no larger than CHUNK_SIZE
+            if chunk_len > CHUNK_SIZE {
+                return Err(ChunkIngressError::InvalidChunkSize);
+            }
+        }
+
+        // TODO: Mark the data_root as invalid if the chunk is an incorrect size
 
         // Check that the leaf hash on the data_path matches the chunk_hash
         if path_result.leaf_hash == hash_sha256(&chunk.bytes.0).unwrap() {
@@ -153,7 +180,7 @@ mod tests {
     use actix::prelude::*;
 
     #[actix::test]
-    async fn main() {
+    async fn post_transaction_and_chunks() {
         // Connect to the db
         let path = get_data_dir();
         let db = open_or_create_db(path).unwrap();
@@ -179,6 +206,7 @@ mod tests {
 
         // Wrap the transaction in a TxIngressMessage
         let data_root = tx.header.data_root;
+        let data_size = tx.header.data_size;
         let tx_ingress_msg = TxIngressMessage { 0: tx.header };
 
         // Post the TxIngressMessage to the handle method on the mempool actor
@@ -195,7 +223,6 @@ mod tests {
         for (index, chunk_node) in tx.chunks.iter().enumerate() {
             let min = chunk_node.min_byte_range;
             let max = chunk_node.max_byte_range;
-            let data_size = (max - min) as u64;
             let offset = tx.proofs[index].offset;
             let data_path = Base64(tx.proofs[index].proof.to_vec());
             let key: H256 = hash_sha256(&data_path.0).unwrap().into();
