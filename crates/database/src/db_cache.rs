@@ -9,6 +9,9 @@ pub struct CachedDataRoot {
     /// to javascript timestamps.
     pub timestamp: u128,
 
+    /// Total size (in bytes) of the data represented by the data_root
+    pub data_size: u64,
+
     /// The set of all tx.ids' that contain this data_root
     pub txid_set: Vec<H256>,
 }

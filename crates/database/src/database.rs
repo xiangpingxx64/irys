@@ -90,6 +90,7 @@ pub fn cache_data_root(
     // Create or update the CachedDataRoot
     let mut cached_data_root = result.unwrap_or_else(|| CachedDataRoot {
         timestamp,
+        data_size: tx.data_size,
         txid_set: vec![tx.id.clone()],
     });
 
