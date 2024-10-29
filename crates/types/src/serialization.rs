@@ -1,4 +1,4 @@
-use crate::{Arbitrary, Signature};
+use crate::{Arbitrary, Signature, IRYS_CHAIN_ID};
 use alloy_primitives::{bytes, Parity, U256 as RethU256};
 use alloy_rlp::{Decodable, Encodable, Error as RlpError, RlpDecodable, RlpEncodable};
 use arbitrary::Unstructured;
@@ -158,7 +158,9 @@ impl<'de> Deserialize<'de> for IrysSignature {
         }
 
         // Convert the byte array into a Signature struct using TryFrom
-        let sig = Signature::try_from(bytes.as_slice()).map_err(de::Error::custom)?;
+        let sig = Signature::try_from(bytes.as_slice())
+            .map_err(de::Error::custom)?
+            .with_chain_id(IRYS_CHAIN_ID);
 
         // Return the IrysSignature by wrapping the Signature
         Ok(IrysSignature {
