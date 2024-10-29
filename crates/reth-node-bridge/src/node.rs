@@ -246,11 +246,6 @@ pub async fn run_node(
                 ctx.modules.merge_configured(rpc)?;
                 Ok(())
             })
-            .on_node_started(move |node| {
-                // Start the API server
-                node.task_executor.spawn(run_server());
-                Ok(())
-            })
             .launch_with_fn(|builder| {
                 let launcher = CustomEngineNodeLauncher::new(
                     builder.task_executor().clone(),

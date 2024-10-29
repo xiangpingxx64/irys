@@ -3,9 +3,11 @@ mod vdf;
 
 use actix::{Actor, Addr, Arbiter, System};
 use actors::{
-    block_producer::BlockProducerActor, mining::PartitionMiningActor, packing::PackingActor,
+    block_producer::BlockProducerActor, mempool::MempoolActor, mining::PartitionMiningActor,
+    packing::PackingActor, ActorAddresses,
 };
 use clap::Parser;
+use irys_api_server::run_server;
 use irys_reth_node_bridge::{chainspec, IrysChainSpecBuilder};
 use irys_types::{app_state::AppState, H256};
 use partitions::{get_partitions, mine_partition};
@@ -32,12 +34,6 @@ struct Args {
 
 use tracing::{debug, error, trace};
 
-struct ActorAddresses {
-    partitions: Vec<Addr<PartitionMiningActor>>,
-    block_producer: Addr<BlockProducerActor>,
-    packing: Addr<PackingActor>,
-}
-
 fn main() -> eyre::Result<()> {
     let (actor_addr_channel_sender, actor_addr_channel_receiver) =
         oneshot::channel::<ActorAddresses>();
@@ -48,6 +44,8 @@ fn main() -> eyre::Result<()> {
             let block_producer_actor = BlockProducerActor {};
 
             let block_producer_addr = block_producer_actor.start();
+
+            // let mempool_actor = MempoolActor::new(db);
 
             let mut part_actors = Vec::new();
 
@@ -63,11 +61,17 @@ fn main() -> eyre::Result<()> {
             std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
             let packing_actor_addr = PackingActor::new(Handle::current()).start();
-            let _ = actor_addr_channel_sender.send(ActorAddresses {
+
+            let actor_addresses = ActorAddresses {
                 partitions: part_actors_clone,
                 block_producer: block_producer_addr,
                 packing: packing_actor_addr,
-            });
+                // mempool: mempool_actor,
+            };
+
+            let _ = actor_addr_channel_sender.send(actor_addresses.clone());
+
+            run_server(actor_addresses).await;
         });
     });
 

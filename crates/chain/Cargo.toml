@@ -41,6 +41,7 @@ arbitrary = { workspace = true, features = [
 	"derive",
 ] } # arbitrary.workspace = truebytes.workspace = true
 bytes.workspace = true
+irys-api-server.workspace = true
 modular-bitfield.workspace = true
 reth-cli-runner.workspace = true
 test-fuzz.workspace = true

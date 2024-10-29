@@ -10,3 +10,4 @@ awc = "3.5.1"
 base64-url = "2.0.0"
 irys-types.workspace = true
 serde.workspace = true
+actors.workspace = true

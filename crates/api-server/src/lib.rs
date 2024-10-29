@@ -1,13 +1,15 @@
 mod routes;
 
 use actix_web::{web, App, HttpServer};
+use actors::ActorAddresses;
 use routes::{chunks, index, price, proxy::proxy, tx};
 
-pub async fn run_server() {
-    HttpServer::new(|| {
+pub async fn run_server(app_state: ActorAddresses) {
+    HttpServer::new(move || {
         let awc_client = awc::Client::new();
 
         App::new()
+            .app_data(web::Data::new(app_state.clone()))
             .app_data(web::Data::new(awc_client))
             .service(
                 web::scope("v1")

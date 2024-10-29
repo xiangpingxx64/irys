@@ -2092,6 +2092,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "eyre",
+ "irys-api-server",
  "irys-c",
  "irys-reth-node-bridge",
  "irys-types",
@@ -5122,6 +5123,7 @@ version = "0.1.0"
 dependencies = [
  "actix-proxy",
  "actix-web",
+ "actors",
  "awc",
  "base64-url",
  "irys-types",
