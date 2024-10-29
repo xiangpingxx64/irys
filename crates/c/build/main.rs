@@ -4,7 +4,6 @@ mod capacity;
 mod vdf;
 
 fn main() {
-
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let c_src = manifest_dir.join("c_src");
 

@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, sync::{Arc, RwLock}};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, RwLock},
+};
 
 use actix::{Actor, Context, Handler, Message};
 use irys_types::U256;
@@ -11,7 +14,7 @@ struct PackingRequestRange((U256, U256));
 type WrappedChunkRange = Arc<RwLock<VecDeque<PackingRequestRange>>>;
 
 pub struct PackingActor {
-    runtime_handle: Handle, 
+    runtime_handle: Handle,
     chunks: WrappedChunkRange,
 }
 
@@ -21,7 +24,7 @@ impl PackingActor {
     pub fn new(handle: Handle) -> Self {
         Self {
             runtime_handle: handle,
-            chunks: Arc::new(RwLock::new(VecDeque::with_capacity(1000)))
+            chunks: Arc::new(RwLock::new(VecDeque::with_capacity(1000))),
         }
     }
 
@@ -38,7 +41,7 @@ impl PackingActor {
         // Loop which runs all jobs every 1 second (defined in CHUNK_POLL_TIME_MS)
         loop {
             if let Some(next_range) = chunks.read().unwrap().front() {
-                // TODO: Pack range 
+                // TODO: Pack range
 
                 // Remove from queue once complete
                 let _ = chunks.write().unwrap().pop_front();
@@ -54,15 +57,16 @@ impl Actor for PackingActor {
 
     fn start(self) -> actix::Addr<Self> {
         // Create packing worker that runs every
-        self.runtime_handle.spawn(Self::poll_chunks(self.chunks.clone()));
-        
+        self.runtime_handle
+            .spawn(Self::poll_chunks(self.chunks.clone()));
+
         Context::new().run(self)
     }
 
     fn started(&mut self, ctx: &mut Self::Context) {
         ctx.set_mailbox_capacity(1000000);
     }
-} 
+}
 
 impl Handler<PackingRequestRange> for PackingActor {
     type Result = ();

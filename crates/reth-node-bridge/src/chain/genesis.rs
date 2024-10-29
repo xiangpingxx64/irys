@@ -48,7 +48,7 @@ impl<DB: Database> TableViewer<()> for ClearViewer<'_, DB> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GenesisInfo {
     pub accounts: Vec<(Address, GenesisAccount)>,
     pub shadows: Option<Shadows>,
@@ -65,6 +65,7 @@ pub fn add_genesis_block(
         shadows,
         timestamp,
     } = info;
+
     // clean database & static files
     // TODO: gate this fn so that it only works/shows up in dev mode
     let static_file_provider = provider.static_file_provider();
@@ -78,17 +79,6 @@ pub fn add_genesis_block(
         })?;
 
         if let Some(segment_static_files) = static_files.get(&segment) {
-            // for (block_range, _) in segment_static_files {
-            //     static_file_provider
-            //         .delete_jar(segment, find_fixed_range(block_range.start()))
-            //         .map_err(|e| {
-            //             ErrorObjectOwned::owned::<String>(
-            //                 -32073,
-            //                 "error getting database provider",
-            //                 Some(e.to_string()),
-            //             )
-            //         })?;
-            // }
             for (block_range, _) in segment_static_files {
                 static_file_provider
                     .delete_jar(segment, block_range.start())

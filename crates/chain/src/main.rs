@@ -23,6 +23,7 @@ use std::{
     sync::{mpsc, Arc},
     time::Duration,
 };
+
 use tokio::{runtime::Handle, sync::oneshot};
 
 use vdf::run_vdf;
@@ -100,7 +101,7 @@ fn main() -> eyre::Result<()> {
     // Executes the command until it finished or ctrl-c was fired
     let command_res = tokio_runtime.block_on(run_to_completion_or_panic(
         &mut task_manager,
-        run_until_ctrl_c(main2(context, reth_chainspec)),
+        run_until_ctrl_c(start_reth_node(context, reth_chainspec)),
     ));
 
     if command_res.is_err() {
@@ -134,33 +135,13 @@ fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn main2(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
-    let args = Args::parse();
+async fn start_reth_node(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
+    // let _ = tokio::signal::ctrl_c().await;
+    // Ok(NodeExitReason::Normal)
 
-    let _ = tokio::signal::ctrl_c().await;
+    let node_handle =
+        irys_reth_node_bridge::run_node(Arc::new(chainspec), ctx.task_executor).await?;
 
-    Ok(NodeExitReason::Normal)
-
-    // // let db_path = get_data_dir();
-
-    // // let db = open_or_create_db(&args.database)?;
-
-    // let handle = Handle::current();
-
-    // // let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel();
-
-    // let app_state: AppState = AppState {};
-
-    // let global_app_state = Arc::new(app_state);
-
-    // let node_handle = irys_reth_node_bridge::run_node(
-    //     std::sync::mpsc::channel().0,
-    //     Arc::new(chainspec),
-    //     ctx.task_executor,
-    // )
-    // .await?;
-
-    // // TODO @JesseTheRobot - make this dump genesis (or keep it internal to reth?)
-    // let exit_reason = node_handle.node_exit_future.await?;
-    // Ok(exit_reason)
+    let exit_reason = node_handle.node_exit_future.await?;
+    Ok(exit_reason)
 }

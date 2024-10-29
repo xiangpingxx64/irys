@@ -1,6 +1,6 @@
 use core::fmt;
 use std::{
-    fs::File,
+    fs::{canonicalize, File},
     future::Future,
     io::Write,
     ops::Deref,
@@ -61,7 +61,6 @@ macro_rules! vec_of_strings {
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
 pub async fn run_node(
-    new_seed_channel: Sender<H256>,
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
 ) -> eyre::Result<
@@ -111,20 +110,20 @@ pub async fn run_node(
             "--http.api",
             "debug,rpc,reth,eth",
             "--datadir",
-            "./.reth",
+            "../../.reth",
             "--log.file.directory",
-            "./.reth/logs",
+            "../../.reth/logs",
             "--log.file.format",
             "json",
             "--log.stdout.format",
             "json",
             "--log.stdout.filter",
-            "trace",
+            "info",
             "--log.file.filter",
-            "trace",
+            "trace"
             // TODO @JesseTheRobot - make sure this lines up with the path dev_genesis.json is written to
-            "--chain",
-            ".reth/dev_genesis.json"
+            // "--chain",
+            // ".reth/dev_genesis.json"
         ],
         false => vec_of_strings![
             "node",
@@ -137,11 +136,13 @@ pub async fn run_node(
     };
 
     args.insert(0, bp.to_string());
-    args.append(&mut os_args);
+    dbg!(format!("discarding os args: {:?}", os_args));
+    // args.append(&mut os_args);
     // // dbg!(&args);
     info!("Running with args: {:#?}", &args);
+
     // // loop is flawed, retains too much global set-once state
-    let cli = Cli::<IrysChainSpecParser, EngineArgs>::parse_from(args.clone());
+    let cli = Cli::<EthereumChainSpecParser, EngineArgs>::parse_from(args.clone());
     let _guard = cli.logs.init_tracing()?;
 
     // loop {
@@ -208,6 +209,8 @@ pub async fn run_node(
     let _ = install_prometheus_recorder();
 
     let data_dir = node_config.datadir();
+    let abs_data_dir = canonicalize(data_dir.data_dir())?;
+    tracing::info!(target: "reth::cli", path = ?abs_data_dir, "Absolute data dir:");
     let db_path = data_dir.db();
 
     tracing::info!(target: "reth::cli", path = ?db_path, "Opening database");

@@ -153,6 +153,9 @@ alloy-sol-type-parser = { path = "./ext/alloy-core/crates/sol-type-parser" }
 alloy-sol-types = { path = "./ext/alloy-core/crates/sol-types" }
 syn-solidity = { path = "./ext/alloy-core/crates/syn-solidity" }
 
+[profile.dev]
+panic = "unwind"
+
 [workspace.lints]
 rust.missing_debug_implementations = "warn"
 rust.missing_docs = "warn"

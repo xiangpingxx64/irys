@@ -117,6 +117,13 @@ where
             ..
         } = hooks;
 
+        let (reload_tx, reload_rx) = unbounded_channel();
+
+        // TODO: fix this.
+        let irys_ext = IrysExtWrapped(Arc::new(RwLock::new(IrysExt {
+            reload: Some(reload_tx),
+        })));
+
         // TODO: move tree_config and canon_state_notification_sender
         // initialization to with_blockchain_db once the engine revamp is done
         // https://github.com/paradigmxyz/reth/issues/8742
@@ -156,7 +163,7 @@ where
             .with_blockchain_db::<T, _>(move |provider_factory| {
                 Ok(BlockchainProvider2::new(provider_factory)?)
             }, tree_config, canon_state_notification_sender)?
-            .with_components(components_builder, on_component_initialized).await?;
+            .with_components(components_builder, on_component_initialized, Some(irys_ext.clone())).await?;
 
         // spawn exexs
         let exex_manager_handle = ExExLauncher::new(
@@ -414,13 +421,6 @@ where
 
             let _ = exit.send(res);
         });
-
-        let (reload_tx, reload_rx) = unbounded_channel();
-
-        // TODO: fix this.
-        let irys_ext = IrysExtWrapped(Arc::new(RwLock::new(IrysExt {
-            reload: Some(reload_tx),
-        })));
 
         let full_node = FullNode {
             evm_config: ctx.components().evm_config().clone(),

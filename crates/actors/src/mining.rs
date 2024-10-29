@@ -1,6 +1,8 @@
 use actix::{Actor, Addr, Context, Handler, Message};
 use irys_types::{
-    block_production::{Partition, SolutionContext}, CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION, NUM_RECALL_RANGES_IN_PARTITION, U256
+    block_production::{Partition, SolutionContext},
+    CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION,
+    NUM_RECALL_RANGES_IN_PARTITION, U256,
 };
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -10,14 +12,14 @@ use crate::block_producer::BlockProducerActor;
 
 pub struct PartitionMiningActor {
     partition: Partition,
-    block_producer_actor: Addr<BlockProducerActor>
+    block_producer_actor: Addr<BlockProducerActor>,
 }
 
 impl PartitionMiningActor {
     pub fn new(partition: Partition, block_producer_addr: Addr<BlockProducerActor>) -> Self {
         Self {
             partition,
-            block_producer_actor: block_producer_addr
+            block_producer_actor: block_producer_addr,
         }
     }
 }
@@ -42,14 +44,19 @@ impl Handler<Seed> for PartitionMiningActor {
     fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
         let difficuly = get_latest_difficulty();
         match mine_partition_with_seed(&self.partition, seed.into_inner(), difficuly) {
-            Some(s) => { let _ = self.block_producer_actor.send(s); },
+            Some(s) => {
+                let _ = self.block_producer_actor.send(s);
+            }
             None => (),
         };
     }
 }
 
-
-fn mine_partition_with_seed(partition: &Partition, seed: H256, difficulty: U256) -> Option<SolutionContext> {
+fn mine_partition_with_seed(
+    partition: &Partition,
+    seed: H256,
+    difficulty: U256,
+) -> Option<SolutionContext> {
     // TODO: add a partition_state that keeps track of efficient sampling
     let mut rng = ChaCha20Rng::from_seed(seed.into());
 
@@ -102,10 +109,8 @@ fn mine_partition_with_seed(partition: &Partition, seed: H256, difficulty: U256)
 
 fn get_latest_difficulty() -> U256 {
     U256::max_value()
-} 
+}
 
 fn hash_to_number(hash: &[u8]) -> U256 {
     U256::from_little_endian(hash)
 }
-
-

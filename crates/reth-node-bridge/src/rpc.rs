@@ -47,8 +47,9 @@ use crate::genesis::GenesisInfo;
 // static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 // #[rpc(server, client, namespace = "irys")]
-#[cfg_attr(not(test), rpc(server, namespace = "irys"))]
-#[cfg_attr(test, rpc(server, client, namespace = "irys"))]
+// #[cfg_attr(not(test), rpc(server, namespace = "irys"))]
+// #[cfg_attr(test, rpc(server, client, namespace = "irys"))]
+#[rpc(server, client, namespace = "irys")]
 pub trait AccountStateExtApi {
     // #[method(name = "updateBasicAccount")]
     // fn update_basic_account(&self, address: Address, new_balance: U256) -> RpcResult<bool>;

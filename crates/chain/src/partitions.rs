@@ -2,7 +2,9 @@ use std::{ops::Index, sync::mpsc::Receiver};
 
 use actix::{Actor, Addr, Context, Handler, Message};
 use irys_types::{
-    block_production::{Partition, SolutionContext}, CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION, NUM_RECALL_RANGES_IN_PARTITION, U256
+    block_production::{Partition, SolutionContext},
+    CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION,
+    NUM_RECALL_RANGES_IN_PARTITION, U256,
 };
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -11,8 +13,6 @@ use sha2::{Digest, Sha256};
 pub fn get_partitions() -> Vec<Partition> {
     vec![Partition::default(), Partition::default()]
 }
-
-
 
 pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256>) {
     // Random difficulty
