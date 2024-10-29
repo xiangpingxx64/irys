@@ -48,8 +48,8 @@ pub enum TxIngressError {
     InvalidSignature,
     /// The account does not have enough tokens to fund this transaction
     Unfunded,
-    /// This transaction id is already in the cache and marked invalid
-    CachedInvalid,
+    /// This transaction id is already in the cache
+    Skipped,
 }
 
 /// Message for when a new chunk is discovered by the node, either though
@@ -85,14 +85,18 @@ impl Handler<TxIngressMessage> for MempoolActor {
 
         // Early out if we already know about this transaction
         if self.invalid_tx.contains(&tx.id) || self.valid_tx.contains_key(&tx.id) {
-            return Err(TxIngressError::CachedInvalid);
+            // Skip tx reprocessing if already verified (valid or invalid) to prevent
+            // CPU-intensive signature verification spam attacks
+            return Err(TxIngressError::Skipped);
         }
 
         // Validate the transaction signature
         if tx.is_signature_valid() {
+            println!("Signature is valid");
             self.valid_tx.insert(tx.id, tx.clone());
         } else {
             self.invalid_tx.push(tx.id);
+            println!("Signature is NOT valid");
             return Err(TxIngressError::InvalidSignature);
         }
 
@@ -203,6 +207,9 @@ mod tests {
             .await
             .unwrap();
         let tx = irys.sign_transaction(tx).unwrap();
+
+        println!("{:?}", tx.header);
+        println!("{}", serde_json::to_string_pretty(&tx.header).unwrap());
 
         // Wrap the transaction in a TxIngressMessage
         let data_root = tx.header.data_root;

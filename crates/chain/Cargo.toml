@@ -31,6 +31,7 @@ actix-rt = "2.10.0"
 tokio.workspace = true
 tracing.workspace = true
 actors.workspace = true
+database = { path = "../database" }
 alloy-network = { path = "../../ext/alloy/crates/network" }
 alloy-signer-local.workspace = true
 alloy-core.workspace = true

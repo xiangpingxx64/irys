@@ -265,6 +265,7 @@ dependencies = [
  "rand",
  "rand_chacha",
  "reth-db",
+ "serde_json",
  "sha2 0.10.8",
  "tokio",
 ]
@@ -2091,6 +2092,7 @@ dependencies = [
  "bytes",
  "clap",
  "color-eyre",
+ "database",
  "eyre",
  "irys-api-server",
  "irys-c",
@@ -5128,6 +5130,7 @@ dependencies = [
  "base64-url",
  "irys-types",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,10 +1,14 @@
 mod partitions;
 mod vdf;
 
+use ::database::{config::get_data_dir, open_or_create_db};
 use actix::{Actor, Addr, Arbiter, System};
 use actors::{
-    block_producer::BlockProducerActor, mempool::MempoolActor, mining::PartitionMiningActor,
-    packing::PackingActor, ActorAddresses,
+    block_producer::BlockProducerActor,
+    mempool::{self, MempoolActor},
+    mining::PartitionMiningActor,
+    packing::PackingActor,
+    ActorAddresses,
 };
 use clap::Parser;
 use irys_api_server::run_server;
@@ -37,15 +41,21 @@ use tracing::{debug, error, trace};
 fn main() -> eyre::Result<()> {
     let (actor_addr_channel_sender, actor_addr_channel_receiver) =
         oneshot::channel::<ActorAddresses>();
+
+    let path = get_data_dir();
+    let db = open_or_create_db(path).unwrap();
+
+    let arc_db = Arc::new(db);
+
     // Spawn thread and runtime for actors
     std::thread::spawn(move || {
         let rt = actix_rt::Runtime::new().unwrap();
         rt.block_on(async move {
             let block_producer_actor = BlockProducerActor {};
-
             let block_producer_addr = block_producer_actor.start();
 
-            // let mempool_actor = MempoolActor::new(db);
+            let mempool_actor = MempoolActor::new(arc_db);
+            let mempool_actor_addr = mempool_actor.start();
 
             let mut part_actors = Vec::new();
 
@@ -66,7 +76,7 @@ fn main() -> eyre::Result<()> {
                 partitions: part_actors_clone,
                 block_producer: block_producer_addr,
                 packing: packing_actor_addr,
-                // mempool: mempool_actor,
+                mempool: mempool_actor_addr,
             };
 
             let _ = actor_addr_channel_sender.send(actor_addresses.clone());
@@ -127,26 +137,30 @@ fn main() -> eyre::Result<()> {
 async fn main2(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
     let args = Args::parse();
 
-    // let db_path = get_data_dir();
+    let _ = tokio::signal::ctrl_c().await;
 
-    // let db = open_or_create_db(&args.database)?;
+    Ok(NodeExitReason::Normal)
 
-    let handle = Handle::current();
+    // // let db_path = get_data_dir();
 
-    // let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel();
+    // // let db = open_or_create_db(&args.database)?;
 
-    let app_state: AppState = AppState {};
+    // let handle = Handle::current();
 
-    let global_app_state = Arc::new(app_state);
+    // // let (actor_addr_channel_sender, actor_addr_channel_receiver) = oneshot::channel();
 
-    let node_handle = irys_reth_node_bridge::run_node(
-        std::sync::mpsc::channel().0,
-        Arc::new(chainspec),
-        ctx.task_executor,
-    )
-    .await?;
+    // let app_state: AppState = AppState {};
 
-    // TODO @JesseTheRobot - make this dump genesis (or keep it internal to reth?)
-    let exit_reason = node_handle.node_exit_future.await?;
-    Ok(exit_reason)
+    // let global_app_state = Arc::new(app_state);
+
+    // let node_handle = irys_reth_node_bridge::run_node(
+    //     std::sync::mpsc::channel().0,
+    //     Arc::new(chainspec),
+    //     ctx.task_executor,
+    // )
+    // .await?;
+
+    // // TODO @JesseTheRobot - make this dump genesis (or keep it internal to reth?)
+    // let exit_reason = node_handle.node_exit_future.await?;
+    // Ok(exit_reason)
 }
