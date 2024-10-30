@@ -1,7 +1,8 @@
 use std::{
-    fs::{remove_dir_all, File},
+    fs::{canonicalize, remove_dir_all, File},
     io::Write as _,
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::Duration,
 };
@@ -16,6 +17,7 @@ use reth::{
 };
 use reth_db::mdbx::ffi;
 use reth_primitives::{Genesis, GenesisAccount};
+use tempfile::TempDir;
 use tokio::{runtime::Handle, time::sleep};
 use tracing::{error, info};
 
@@ -23,7 +25,10 @@ use tracing::{error, info};
 pub async fn basic_genesis_test() -> eyre::Result<()> {
     // TODO: eventually we'll want to produce a nice testing API like ext/reth/crates/e2e-test-utils/src/lib.rs
     // but for now due to runtime weirdness we just yoink the parts of the reth API we need out
-    remove_dir_all("../../.reth")?;
+    let temp_dir = TempDir::with_prefix("reth-genesis-test").unwrap();
+    let temp_dir_path = temp_dir.path().to_path_buf();
+    // dbg!(format!("temp dir path: {:?}", &temp_dir_path));
+    // remove_dir_all("../../.reth")?;
     let builder = IrysChainSpecBuilder::mainnet();
     let mut chainspec = builder.reth_builder.build();
 
@@ -51,7 +56,12 @@ pub async fn basic_genesis_test() -> eyre::Result<()> {
         timestamp: 0,
     };
 
-    let new_genesis = genesis(genesis_info.clone(), chainspec.clone()).await?;
+    let new_genesis = genesis(
+        genesis_info.clone(),
+        chainspec.clone(),
+        temp_dir_path.clone(),
+    )
+    .await?;
 
     sleep(Duration::from_millis(500)).await;
 
@@ -59,12 +69,15 @@ pub async fn basic_genesis_test() -> eyre::Result<()> {
     let task_manager = TaskManager::new(handle);
     let task_executor = task_manager.executor();
     chainspec.genesis = new_genesis;
-    // re-create the node
-    // drop(node_handle.node);
 
-    dbg!("new node");
-    let node_handle =
-        irys_reth_node_bridge::run_node(Arc::new(chainspec.clone()), task_executor).await?;
+    // re-create the node, with the new chainspec
+    // as the genesis RPC method wiped the relevant tables, this should work
+    let node_handle = irys_reth_node_bridge::run_node(
+        Arc::new(chainspec.clone()),
+        task_executor,
+        temp_dir_path.clone(),
+    )
+    .await?;
 
     let http_rpc_client = node_handle.node.rpc_server_handle().http_client().unwrap();
     let res2 = http_rpc_client.get_account(addr1, None).await?;
@@ -73,13 +86,21 @@ pub async fn basic_genesis_test() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn genesis(genesis_info: GenesisInfo, chainspec: ChainSpec) -> eyre::Result<Genesis> {
+async fn genesis(
+    genesis_info: GenesisInfo,
+    chainspec: ChainSpec,
+    data_dir: PathBuf,
+) -> eyre::Result<Genesis> {
     let handle = Handle::current();
     let task_manager = TaskManager::new(handle);
     let task_executor = task_manager.executor();
 
-    let node_handle =
-        irys_reth_node_bridge::run_node(Arc::new(chainspec.clone()), task_executor.clone()).await?;
+    let node_handle = irys_reth_node_bridge::run_node(
+        Arc::new(chainspec.clone()),
+        task_executor.clone(),
+        data_dir,
+    )
+    .await?;
 
     // let http_rpc_client = node_handle.node.rpc_server_handle().http_client().unwrap();
     // http_rpc_client.build_new_payload_irys(parent, payload_attributes);

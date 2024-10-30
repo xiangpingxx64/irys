@@ -63,6 +63,7 @@ static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::ne
 pub async fn run_node(
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
+    data_dir: PathBuf,
 ) -> eyre::Result<
     NodeHandle<
         NodeAdapter<
@@ -110,9 +111,9 @@ pub async fn run_node(
             "--http.api",
             "debug,rpc,reth,eth",
             "--datadir",
-            "../../.reth",
+            format!("{}", data_dir.to_str().unwrap()),
             "--log.file.directory",
-            "../../.reth/logs",
+            format!("{}", data_dir.join("logs").to_str().unwrap()),
             "--log.file.format",
             "json",
             "--log.stdout.format",

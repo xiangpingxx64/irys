@@ -19,6 +19,8 @@ use reth::{chainspec::ChainSpec, core::irys_ext::NodeExitReason, CliContext};
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
 use reth_db::database;
 use std::{
+    fs::canonicalize,
+    path::PathBuf,
     str::FromStr,
     sync::{mpsc, Arc},
     time::Duration,
@@ -138,9 +140,9 @@ fn main() -> eyre::Result<()> {
 async fn start_reth_node(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
     // let _ = tokio::signal::ctrl_c().await;
     // Ok(NodeExitReason::Normal)
-
+    let pb = canonicalize(PathBuf::from_str("../../.reth").unwrap()).unwrap();
     let node_handle =
-        irys_reth_node_bridge::run_node(Arc::new(chainspec), ctx.task_executor).await?;
+        irys_reth_node_bridge::run_node(Arc::new(chainspec), ctx.task_executor, pb).await?;
 
     let exit_reason = node_handle.node_exit_future.await?;
     Ok(exit_reason)
