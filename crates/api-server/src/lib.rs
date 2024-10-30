@@ -27,3 +27,104 @@ pub async fn run_server(app_state: ActorAddresses) {
     .await
     .unwrap();
 }
+
+//==============================================================================
+// Tests
+//------------------------------------------------------------------------------
+#[cfg(test)]
+#[actix_web::test]
+async fn post_tx_and_chunks_golden_path() {
+    use std::sync::Arc;
+
+    use ::database::{config::get_data_dir, open_or_create_db};
+    use actix::{Actor, Addr};
+    use actix_web::test;
+    use actors::{
+        block_producer::BlockProducerActor, mempool::MempoolActor, packing::PackingActor,
+    };
+    use awc::http::StatusCode;
+    use irys_types::{chunk, hash_sha256, irys::Irys, Base64, Chunk, H256, MAX_CHUNK_SIZE};
+    use tokio::runtime::Handle;
+
+    use rand::Rng;
+
+    let path = get_data_dir();
+    let db = open_or_create_db(path).unwrap();
+    let arc_db = Arc::new(db);
+
+    let mempool_actor = MempoolActor::new(arc_db);
+    let mempool_actor_addr = mempool_actor.start();
+
+    let block_producer_actor = BlockProducerActor {};
+    let block_producer_addr = block_producer_actor.start();
+
+    let mut part_actors = Vec::new();
+    let packing_actor_addr = PackingActor::new(Handle::current()).start();
+
+    let app_state = ActorAddresses {
+        partitions: part_actors,
+        block_producer: block_producer_addr,
+        packing: packing_actor_addr,
+        mempool: mempool_actor_addr,
+    };
+
+    // Initialize the app
+    let app = test::init_service(
+        App::new().app_data(web::Data::new(app_state)).service(
+            web::scope("v1")
+                .route("/tx", web::post().to(tx::post_tx))
+                .route("/chunk", web::post().to(chunks::post_chunk)),
+        ),
+    )
+    .await;
+
+    // Create 2.5 chunks worth of data *  fill the data with random bytes
+    let data_size = (MAX_CHUNK_SIZE as f64 * 2.5).round() as usize;
+    let mut data_bytes = vec![0u8; data_size];
+    rand::thread_rng().fill(&mut data_bytes[..]);
+
+    // Create a new Irys API instance & a signed transaction
+    let irys = Irys::random_signer();
+    let tx = irys
+        .create_transaction(data_bytes.clone(), None)
+        .await
+        .unwrap();
+    let tx = irys.sign_transaction(tx).unwrap();
+
+    // Make a POST request with JSON payload
+    let req = test::TestRequest::post()
+        .uri("/v1/tx")
+        .set_json(&tx.header)
+        .to_request();
+
+    // Call the service
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // Loop though each of the transaction chunks
+    for (index, chunk_node) in tx.chunks.iter().enumerate() {
+        let data_root = tx.header.data_root;
+        let data_size = tx.header.data_size;
+        let min = chunk_node.min_byte_range;
+        let max = chunk_node.max_byte_range;
+        let offset = tx.proofs[index].offset;
+        let data_path = Base64(tx.proofs[index].proof.to_vec());
+
+        let chunk = Chunk {
+            data_root,
+            data_size,
+            data_path,
+            bytes: Base64(data_bytes[min..max].to_vec()),
+            offset,
+        };
+
+        // Make a POST request with JSON payload
+        let req = test::TestRequest::post()
+            .uri("/v1/chunk")
+            .set_json(&chunk)
+            .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}

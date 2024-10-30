@@ -5123,14 +5123,18 @@ dependencies = [
 name = "irys-api-server"
 version = "0.1.0"
 dependencies = [
+ "actix",
  "actix-proxy",
  "actix-web",
  "actors",
  "awc",
  "base64-url",
+ "database",
  "irys-types",
+ "rand",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
