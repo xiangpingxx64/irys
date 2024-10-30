@@ -1,9 +1,51 @@
-use actix_web::{web::Json, HttpResponse};
-use irys_types::{Base64, Chunk};
-use serde::Deserialize;
+use actix_web::{
+    web::{self, Json},
+    HttpResponse,
+};
+use actors::{
+    mempool::{ChunkIngressError, ChunkIngressMessage},
+    ActorAddresses,
+};
+use awc::http::StatusCode;
+use irys_types::Chunk;
 
-pub async fn post_chunk(chunk: Json<Chunk>) -> actix_web::Result<HttpResponse> {
-    // TODO: Implement logic
+/// Handles the HTTP POST request for adding a chunk to the mempool.
+/// This function takes in a JSON payload of a `Chunk` type, encapsulates it
+/// into a `ChunkIngressMessage` for further processing by the mempool actor,
+/// and manages error handling based on the results of message delivery and validation.
+pub async fn post_chunk(
+    state: web::Data<ActorAddresses>,
+    body: Json<Chunk>,
+) -> actix_web::Result<HttpResponse> {
+    let chunk = body.into_inner();
 
+    // Create an actor message and send it
+    let chunk_ingress_message = ChunkIngressMessage { 0: chunk };
+    let msg_result = state.mempool.send(chunk_ingress_message).await;
+
+    // Handle failure to deliver the message (e.g., actor unresponsive or unavailable)
+    if let Err(err) = msg_result {
+        return Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(format!("Failed to deliver chunk: {:?}", err)));
+    }
+
+    // If message delivery succeeded, check for validation errors within the response
+    let inner_result = msg_result.unwrap();
+    if let Err(err) = inner_result {
+        return match err {
+            ChunkIngressError::InvalidProof => Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
+                .body(format!("Invalid proof: {:?}", err))),
+            ChunkIngressError::InvalidDataHash => Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
+                .body(format!("Invalid data_hash: {:?}", err))),
+            ChunkIngressError::InvalidChunkSize => Ok(HttpResponse::build(StatusCode::BAD_REQUEST)
+                .body(format!("Invalid chunk size: {:?}", err))),
+            ChunkIngressError::DatabaseError => {
+                Ok(HttpResponse::build(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(format!("Failed to store chunk: {:?}", err)))
+            }
+        };
+    }
+
+    // If everything succeeded, return an HTTP 200 OK response
     Ok(HttpResponse::Ok().finish())
 }
