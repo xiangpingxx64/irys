@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(Debug)]
 pub struct MempoolActor {
     db: Arc<DatabaseEnv>,
+    /// Temporary mempool stubs - will replace with proper data models - dmac
     valid_tx: HashMap<H256, IrysTransactionHeader>,
     invalid_tx: Vec<H256>,
 }

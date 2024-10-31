@@ -17,6 +17,7 @@
 		"secp",
 		"Seedable",
 		"txid",
-		"txids"
+		"txids",
+		"webserver"
 	]
 }
