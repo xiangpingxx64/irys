@@ -1,5 +1,6 @@
 use irys_primitives::IrysTxId;
 use irys_types::{Address, CHUNK_SIZE};
+use irys_c::capacity::compute_entropy_chunk;
 
 pub const PACKING_SHA_1_5_S: u32 = 22_500_000;
 
