@@ -1,6 +1,8 @@
 use irys_types::IrysBlockHeader;
 use reth_chainspec::ChainSpecBuilder;
 
+use super::IRYS_MAINNET;
+
 /// A helper to build custom chain specs
 #[derive(Debug, Default, Clone)]
 pub struct IrysChainSpecBuilder {
@@ -12,7 +14,11 @@ impl IrysChainSpecBuilder {
     /// Construct a new builder from the mainnet chain spec.
     pub fn mainnet() -> Self {
         Self {
-            reth_builder: ChainSpecBuilder::mainnet(),
+            reth_builder: ChainSpecBuilder {
+                chain: Some(IRYS_MAINNET.chain),
+                genesis: Some(IRYS_MAINNET.genesis.clone()),
+                hardforks: IRYS_MAINNET.hardforks.clone(),
+            },
             genesis: IrysBlockHeader::new(),
         }
     }

@@ -7,8 +7,9 @@ members = [
     "crates/primitives",
     "crates/reth-node-bridge",
     "crates/types",
-    "crates/database",
     "crates/packing",
+    "crates/database",
+    "crates/storage",
 ]
 resolver = "2"
 rust-version = "1.82"
@@ -33,6 +34,7 @@ alloy-primitives = { path = "./ext/alloy-core/crates/primitives", features = [
 alloy-rlp = "0.3.4"
 alloy-rpc-types = { path = "./ext/alloy/crates/rpc-types" }
 alloy-rpc-types-engine = { path = "./ext/alloy/crates/rpc-types-engine" }
+reth-e2e-test-utils = { path = "./ext/reth/crates/e2e-test-utils" }
 alloy-serde = { path = "./ext/alloy/crates/serde", default-features = false }
 alloy-signer-local = { path = "./ext/alloy/crates/signer-local" }
 arbitrary = { version = "1.3", features = ["derive"] }
@@ -67,7 +69,6 @@ reth-consensus-debug-client = { path = "./ext/reth/crates/consensus/debug-client
 reth-db = { path = "./ext/reth/crates/storage/db" }
 reth-db-api = { path = "./ext/reth/crates/storage/db-api" }
 reth-db-models = { path = "./ext/reth/crates/storage/db-models" }
-reth-e2e-test-utils = { path = "./ext/reth/crates/e2e-test-utils" }
 reth-engine-service = { path = "./ext/reth/crates/engine/service" }
 reth-engine-tree = { path = "./ext/reth/crates/engine/tree" }
 reth-engine-util = { path = "./ext/reth/crates/engine/util" }
@@ -100,6 +101,10 @@ thiserror = "1.0"
 tokio = { version = "1.40.0", features = ["rt"] }
 tracing = "0.1.0"
 tempfile = "3.10"
+jsonrpsee = "0.24"
+jsonrpsee-core = "0.24"
+jsonrpsee-http-client = "0.24"
+jsonrpsee-types = "0.24"
 
 
 [patch.crates-io]

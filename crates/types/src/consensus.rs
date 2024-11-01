@@ -24,3 +24,7 @@ pub const VDF_SHA_1S: u64 = 100_000;
 pub const HASHES_PER_CHECKPOINT: u64 = VDF_SHA_1S / NUM_CHECKPOINTS_IN_VDF_STEP as u64;
 
 pub const IRYS_CHAIN_ID: u64 = 69727973; // "irys" in ascii
+
+// Epoch and capacity projection parameters
+pub const NUM_REPLICAS_PER_LEDGER_INDEX: u64 = 1;
+pub const CAPACITY_SCALAR: u64 = 100; // Scaling factor for the capacity projection curve

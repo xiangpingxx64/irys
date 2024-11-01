@@ -5,6 +5,8 @@ use crate::{
     packing::PackingActor,
 };
 
+/// Serves as a kind of app state that can be passed into actix web to allow
+/// the webserver to interact with actors in the node context.
 #[derive(Clone)]
 pub struct ActorAddresses {
     pub partitions: Vec<Addr<PartitionMiningActor>>,

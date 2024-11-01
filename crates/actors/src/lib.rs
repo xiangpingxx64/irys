@@ -1,4 +1,5 @@
 pub mod block_producer;
+pub mod epoch_service;
 pub mod mempool;
 pub mod mining;
 pub mod packing;
