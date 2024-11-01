@@ -1,8 +1,8 @@
 [package]
 edition = "2021"
-name = "irys-packing"
+name = "packing"
 version = "0.1.0"
 
 [dependencies]
-cty = "0.2.2"
-irys-types.workspace = true
+irys-c = { path = "../c" }
+irys-primitives.workspace = true

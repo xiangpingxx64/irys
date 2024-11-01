@@ -47,7 +47,7 @@ fn capacity_single_test() {
 
 /// Performs the entropy packing for the specified chunk offset, partition, and mining address
 /// defaults to [`PACKING_SHA_1_5_S`]`
-pub fn capacity_pack(
+pub fn capacity_pack_range(
     mining_address: Address,
     chunk_offset: c_ulong,
     partition_hash: IrysTxId,
@@ -79,4 +79,35 @@ pub fn capacity_pack(
         entropy_chunk.set_len(entropy_chunk.capacity());
     }
     Ok(entropy_chunk)
+}
+
+enum PackingType {
+    CPU,
+    CUDA,
+    AMD
+}
+
+const PACKING_TYPE: PackingType = PackingType::CPU;
+
+pub fn capacity_pack_range_with_data(
+    mut data: Vec<u8>,
+    mining_address: Address,
+    chunk_offset: c_ulong,
+    partition_hash: IrysTxId,
+    iterations: Option<u32>,
+)-> eyre::Result<Vec<u8>> {
+    match PACKING_TYPE {
+        PackingType::CPU => {
+            capacity_pack_range(mining_address, chunk_offset, partition_hash, iterations)
+                .map(|r| {
+                    data.iter_mut()
+                        .zip(r.iter())
+                        .for_each(|(x1, x2)| *x1 ^= *x2);
+
+            data
+        })
+        },
+        _ => unimplemented!()
+    }
+    
 }

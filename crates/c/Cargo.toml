@@ -10,6 +10,7 @@ version = "0.1.0"
 alloy-core.workspace = true
 eyre.workspace = true
 irys-primitives.workspace = true
+irys-types.workspace = true
 libc = "0.2.0"
 
 [build-dependencies]

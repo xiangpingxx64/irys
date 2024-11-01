@@ -8,6 +8,7 @@ members = [
     "crates/reth-node-bridge",
     "crates/types",
     "crates/database",
+    "crates/packing",
 ]
 resolver = "2"
 rust-version = "1.82"
