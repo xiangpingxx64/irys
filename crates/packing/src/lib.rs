@@ -52,7 +52,7 @@ const PACKING_TYPE: PackingType = PackingType::CPU;
 pub fn capacity_pack_range_with_data(
     mut data: Vec<u8>,
     mining_address: Address,
-    chunk_offset: c_ulong,
+    chunk_offset: std::ffi::c_ulong,
     partition_hash: IrysTxId,
     iterations: Option<u32>,
 )-> eyre::Result<Vec<u8>> {
