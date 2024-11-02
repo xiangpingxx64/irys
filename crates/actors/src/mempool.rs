@@ -3,14 +3,14 @@ use irys_types::{
     chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, CHUNK_SIZE, H256,
 };
 use reth_db::DatabaseEnv;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{BTreeMap, HashMap}, sync::Arc};
 
 /// The Mempool oversees pending transactions and validation of incoming tx.
 #[derive(Debug)]
 pub struct MempoolActor {
     db: Arc<DatabaseEnv>,
     /// Temporary mempool stubs - will replace with proper data models - dmac
-    valid_tx: HashMap<H256, IrysTransactionHeader>,
+    valid_tx: BTreeMap<H256, IrysTransactionHeader>,
     invalid_tx: Vec<H256>,
 }
 
@@ -24,7 +24,7 @@ impl MempoolActor {
     pub fn new(db: Arc<DatabaseEnv>) -> Self {
         Self {
             db,
-            valid_tx: HashMap::new(),
+            valid_tx: BTreeMap::new(),
             invalid_tx: Vec::new(),
         }
     }
@@ -167,6 +167,19 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         } else {
             Err(ChunkIngressError::InvalidDataHash)
         }
+    }
+}
+
+// Message for getting txs for block building
+#[derive(Message, Debug)]
+#[rtype(result = "Vec<IrysTransactionHeader>")]
+pub struct GetBestMempoolTxs;
+
+impl Handler<GetBestMempoolTxs> for MempoolActor {
+    type Result = Vec<IrysTransactionHeader>;
+
+    fn handle(&mut self, msg: GetBestMempoolTxs, ctx: &mut Self::Context) -> Self::Result {
+        vec![]
     }
 }
 
