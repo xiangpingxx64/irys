@@ -54,7 +54,7 @@ fn main() -> eyre::Result<()> {
     std::thread::spawn(move || {
         let rt = actix_rt::Runtime::new().unwrap();
         rt.block_on(async move {
-            let mempool_actor = MempoolActor::new(arc_db);
+            let mempool_actor = MempoolActor::new(arc_db.clone());
             let mempool_actor_addr = mempool_actor.start();
 
             let block_producer_actor = BlockProducerActor { db: arc_db.clone(), mempool_addr: mempool_actor_addr.clone() };
