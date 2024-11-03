@@ -33,6 +33,7 @@ tokio.workspace = true
 tracing.workspace = true
 actors.workspace = true
 database = { path = "../database" }
+irys-storage = { path = "../storage" }
 alloy-network = { path = "../../ext/alloy/crates/network" }
 alloy-signer-local.workspace = true
 alloy-core.workspace = true

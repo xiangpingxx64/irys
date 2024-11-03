@@ -49,6 +49,7 @@ fn main() -> eyre::Result<()> {
     let db = open_or_create_db(path).unwrap();
 
     let arc_db = Arc::new(db);
+    
 
     // Spawn thread and runtime for actors
     std::thread::spawn(move || {
@@ -57,7 +58,7 @@ fn main() -> eyre::Result<()> {
             let mempool_actor = MempoolActor::new(arc_db.clone());
             let mempool_actor_addr = mempool_actor.start();
 
-            let block_producer_actor = BlockProducerActor { db: arc_db.clone(), mempool_addr: mempool_actor_addr.clone() };
+            let block_producer_actor = BlockProducerActor::new(arc_db.clone(), mempool_actor_addr.clone());
             let block_producer_addr = block_producer_actor.start();
 
        

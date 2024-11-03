@@ -9,6 +9,7 @@ assert_matches = "1.5.0"
 irys-types = { path = "../types" }
 database = { path = "../database" }
 packing = { path = "../packing" }
+irys-storage = { path = "../storage" }
 actix.workspace = true
 rand = "0.8.5"
 rand_chacha = "0.3.1"
