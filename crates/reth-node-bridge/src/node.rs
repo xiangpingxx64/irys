@@ -60,43 +60,40 @@ macro_rules! vec_of_strings {
 #[global_allocator]
 static ALLOC: reth_cli_util::allocator::Allocator = reth_cli_util::allocator::new_allocator();
 
+pub type RethNode = NodeAdapter<
+    FullNodeTypesAdapter<
+        NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
+        BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+    >,
+    Components<
+        FullNodeTypesAdapter<
+            NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
+            BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+        >,
+        Pool<
+            TransactionValidationTaskExecutor<
+                EthTransactionValidator<
+                    BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
+                    EthPooledTransaction,
+                >,
+            >,
+            CoinbaseTipOrdering<EthPooledTransaction>,
+            DiskFileBlobStore,
+        >,
+        EthEvmConfig,
+        EthExecutorProvider,
+        Arc<dyn Consensus>,
+        EthereumEngineValidator,
+    >,
+>;
+pub type RethNodeAddOns = EthereumAddOns;
+pub type RethNodeHandle = NodeHandle<RethNode, RethNodeAddOns>;
+
 pub async fn run_node(
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
     data_dir: PathBuf,
-) -> eyre::Result<
-    NodeHandle<
-        NodeAdapter<
-            FullNodeTypesAdapter<
-                NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
-                BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
-            >,
-            Components<
-                FullNodeTypesAdapter<
-                    NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
-                    BlockchainProvider2<NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>>,
-                >,
-                Pool<
-                    TransactionValidationTaskExecutor<
-                        EthTransactionValidator<
-                            BlockchainProvider2<
-                                NodeTypesWithDBAdapter<EthereumNode, Arc<DatabaseEnv>>,
-                            >,
-                            EthPooledTransaction,
-                        >,
-                    >,
-                    CoinbaseTipOrdering<EthPooledTransaction>,
-                    DiskFileBlobStore,
-                >,
-                EthEvmConfig,
-                EthExecutorProvider,
-                Arc<dyn Consensus>,
-                EthereumEngineValidator,
-            >,
-        >,
-        EthereumAddOns,
-    >,
-> {
+) -> eyre::Result<RethNodeHandle> {
     let mut os_args: Vec<String> = std::env::args().collect();
     let bp = os_args.remove(0);
 

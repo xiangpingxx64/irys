@@ -12,15 +12,24 @@ use actors::{
 };
 use clap::Parser;
 use irys_api_server::run_server;
-use irys_reth_node_bridge::{chainspec, IrysChainSpecBuilder};
+use irys_reth_node_bridge::{
+    chainspec,
+    node::{RethNode, RethNodeAddOns, RethNodeHandle},
+    IrysChainSpecBuilder,
+};
 use irys_types::{app_state::AppState, H256};
 use partitions::{get_partitions, mine_partition};
-use reth::{chainspec::ChainSpec, core::irys_ext::NodeExitReason, CliContext};
+use reth::{
+    builder::{FullNode, NodeHandle},
+    chainspec::ChainSpec,
+    core::irys_ext::NodeExitReason,
+    CliContext,
+};
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
 use reth_db::database;
 use std::{
     fs::canonicalize,
-    path::PathBuf,
+    path::{absolute, PathBuf},
     str::FromStr,
     sync::{mpsc, Arc},
     time::Duration,
@@ -45,23 +54,24 @@ fn main() -> eyre::Result<()> {
     let (actor_addr_channel_sender, actor_addr_channel_receiver) =
         oneshot::channel::<ActorAddresses>();
 
-    let path = get_data_dir();
-    let db = open_or_create_db(path).unwrap();
-
-    let arc_db = Arc::new(db);
-    
+    let (reth_handle_sender, reth_handle_receiver) =
+        oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
 
     // Spawn thread and runtime for actors
     std::thread::spawn(move || {
         let rt = actix_rt::Runtime::new().unwrap();
         rt.block_on(async move {
+            // thanks I hate it
+            let reth_handle = reth_handle_receiver.await.unwrap();
+            let arc_db = reth_handle.provider.database.db;
+
             let mempool_actor = MempoolActor::new(arc_db.clone());
             let mempool_actor_addr = mempool_actor.start();
 
-            let block_producer_actor = BlockProducerActor::new(arc_db.clone(), mempool_actor_addr.clone());
+            let block_producer_actor =
+                BlockProducerActor::new(arc_db.clone(), mempool_actor_addr.clone());
             let block_producer_addr = block_producer_actor.start();
 
-       
             let mut part_actors = Vec::new();
 
             for part in get_partitions() {
@@ -90,7 +100,7 @@ fn main() -> eyre::Result<()> {
         });
     });
 
-    let actor_addresses = actor_addr_channel_receiver.blocking_recv().unwrap();
+    // let actor_addresses = actor_addr_channel_receiver.blocking_recv().unwrap();
 
     let builder = IrysChainSpecBuilder::mainnet();
     let reth_chainspec = builder.reth_builder.build();
@@ -105,7 +115,7 @@ fn main() -> eyre::Result<()> {
     // Executes the command until it finished or ctrl-c was fired
     let command_res = tokio_runtime.block_on(run_to_completion_or_panic(
         &mut task_manager,
-        run_until_ctrl_c(start_reth_node(context, reth_chainspec)),
+        run_until_ctrl_c(start_reth_node(context, reth_chainspec, reth_handle_sender)),
     ));
 
     if command_res.is_err() {
@@ -139,13 +149,20 @@ fn main() -> eyre::Result<()> {
     Ok(())
 }
 
-async fn start_reth_node(ctx: CliContext, chainspec: ChainSpec) -> eyre::Result<NodeExitReason> {
+async fn start_reth_node(
+    ctx: CliContext,
+    chainspec: ChainSpec,
+    sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
+) -> eyre::Result<NodeExitReason> {
     // let _ = tokio::signal::ctrl_c().await;
     // Ok(NodeExitReason::Normal)
-    let pb = canonicalize(PathBuf::from_str("../../.reth").unwrap()).unwrap();
+    let pb = absolute(PathBuf::from_str("./.reth").unwrap()).unwrap();
     let node_handle =
         irys_reth_node_bridge::run_node(Arc::new(chainspec), ctx.task_executor, pb).await?;
-
+    let r = sender
+        .send(node_handle.node.clone())
+        .expect("unable to send reth node handle");
+    dbg!(r);
     let exit_reason = node_handle.node_exit_future.await?;
     Ok(exit_reason)
 }
