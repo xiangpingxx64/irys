@@ -28,3 +28,4 @@ pub const IRYS_CHAIN_ID: u64 = 69727973; // "irys" in ascii
 // Epoch and capacity projection parameters
 pub const NUM_REPLICAS_PER_LEDGER_INDEX: u64 = 1;
 pub const CAPACITY_SCALAR: u64 = 100; // Scaling factor for the capacity projection curve
+pub const NUM_BLOCKS_IN_EPOCH: u64 = 100;
