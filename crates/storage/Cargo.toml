@@ -1,10 +1,15 @@
 [package]
-name = "storage"
+name = "irys-storage"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-
+nodit = "0.9.2"
+eyre.workspace = true
+serde.workspace = true
+irys-types.workspace = true
+rand.workspace = true
+tracing.workspace = true
 [lints]
 workspace = true

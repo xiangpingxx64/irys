@@ -31,6 +31,8 @@ alloy-genesis = { path = "./ext/alloy/crates/genesis", default-features = false 
 alloy-primitives = { path = "./ext/alloy-core/crates/primitives", features = [
     "arbitrary",
 ] }
+rand = "0.8.5"
+
 alloy-rlp = "0.3.4"
 alloy-rpc-types = { path = "./ext/alloy/crates/rpc-types" }
 alloy-rpc-types-engine = { path = "./ext/alloy/crates/rpc-types-engine" }
