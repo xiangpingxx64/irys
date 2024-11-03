@@ -13,7 +13,7 @@ use nodit::{
 
 use tracing::warn;
 
-use crate::interval::WriteLock;
+use crate::{interval::WriteLock, provider::generate_chunk_test_data};
 
 use super::interval::{
     get_duration_since_epoch, get_now, IntervalState, IntervalStateWrapped, PackingState,
