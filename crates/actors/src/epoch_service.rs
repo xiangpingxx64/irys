@@ -14,8 +14,6 @@ use std::collections::HashMap;
 pub struct EpochServiceActor {
     /// The previous epoch hash is used in the current epochs tasks as a reliable source of random
     pub previous_epoch_hash: H256,
-    /// Hash of most recently activated partition
-    pub latest_partition_hash: H256,
     /// Encapsulates a list of data ledgers currently managed by the protocol
     pub ledgers: Ledgers,
     /// Data partition assignments mapped by partition hash
@@ -54,7 +52,6 @@ impl EpochServiceActor {
             data_partitions: HashMap::new(),
             capacity_partitions: HashMap::new(),
             all_active_partitions: Vec::new(),
-            latest_partition_hash: H256::zero(),
             miner_address,
         }
     }
@@ -217,7 +214,10 @@ impl EpochServiceActor {
     /// follows the process of sequentially hashing the previous partitions
     /// hash to compute the next partitions hash.
     fn add_capacity_partitions(&mut self, parts_to_add: u64) {
-        let mut prev_partition_hash = self.latest_partition_hash;
+        let mut prev_partition_hash = *match self.all_active_partitions.last() {
+            Some(last_hash) => last_hash,
+            None => &self.previous_epoch_hash,
+        };
 
         // Compute the partition hashes for all of the added partitions
         for _i in 0..parts_to_add {
@@ -225,10 +225,6 @@ impl EpochServiceActor {
             self.all_active_partitions.push(next_part_hash);
             prev_partition_hash = next_part_hash;
         }
-
-        // Making sure to remember the most recent hash to more can be added in
-        // the future.
-        self.latest_partition_hash = prev_partition_hash;
 
         // Create partition assignments for all the partitions to the local miners address
         // TODO: Change this ^^ when pledging and staking exist
