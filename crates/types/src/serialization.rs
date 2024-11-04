@@ -326,6 +326,12 @@ impl H256 {
     pub fn to_vec(self) -> Vec<u8> {
         self.0.to_vec()
     }
+
+    /// Gets u32 from first 4 bytes
+    pub fn to_u32(&self) -> u32 {
+        let bytes = self.as_bytes();
+        u32::from_be_bytes(bytes[0..4].try_into().unwrap())
+    }
 }
 
 // Implement Serialize for H256
