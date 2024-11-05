@@ -212,11 +212,15 @@ impl StorageModule {
                 chunks_written = chunks_written + 1;
             }
         }
+        // let _ = self
+        //     .interval_map
+        //     .insert_overwrite(interval, IntervalStateWrapped::new(new_state));
+
+        let _cut = self.interval_map.cut(interval);
         let _ = self
             .interval_map
-            .insert_overwrite(interval, IntervalStateWrapped::new(new_state));
-
-        // self.interval_map.insert_merge_touching_or_overlapping(interval, value)
+            .insert_merge_touching_if_values_equal(interval, IntervalStateWrapped::new(new_state))
+            .unwrap();
 
         self.save_to_disk()?;
         Ok(())

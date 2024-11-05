@@ -67,4 +67,5 @@ pub enum ChunkState {
     Unpacked,
     Packed,
     Data,
+    Writing,
 }
