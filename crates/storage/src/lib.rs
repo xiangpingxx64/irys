@@ -1,3 +1,6 @@
 pub mod storage_module;
+pub use nodit::interval::*;
+pub use nodit::Interval;
 pub use storage_module::*;
-pub mod provider;
+mod interval_test;
+pub mod partition_provider;

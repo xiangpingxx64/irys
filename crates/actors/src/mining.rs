@@ -1,25 +1,30 @@
 use actix::{Actor, Addr, Context, Handler, Message};
 use irys_types::{
     block_production::{Partition, SolutionContext},
-    CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION,
-    NUM_RECALL_RANGES_IN_PARTITION, U256,
+    CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_RECALL_RANGES_IN_PARTITION, U256,
 };
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
-use crate::block_producer::BlockProducerActor;
+use crate::{block_producer::BlockProducerActor, chunk_storage::ChunkStorageActor};
 
 pub struct PartitionMiningActor {
     partition: Partition,
     block_producer_actor: Addr<BlockProducerActor>,
+    chunk_storage_addr: Addr<ChunkStorageActor>,
 }
 
 impl PartitionMiningActor {
-    pub fn new(partition: Partition, block_producer_addr: Addr<BlockProducerActor>) -> Self {
+    pub fn new(
+        partition: Partition,
+        block_producer_addr: Addr<BlockProducerActor>,
+        chunk_storage_addr: Addr<ChunkStorageActor>,
+    ) -> Self {
         Self {
             partition,
             block_producer_actor: block_producer_addr,
+            chunk_storage_addr,
         }
     }
 }

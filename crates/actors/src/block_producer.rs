@@ -1,7 +1,9 @@
-use std::{sync::{atomic::AtomicU64, Arc, Mutex, RwLock}, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    sync::{atomic::AtomicU64, Arc, Mutex, RwLock},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use actix::{Actor, Addr, Context, Handler, ResponseFuture};
-use irys_storage::provider::StorageProvider;
 use irys_types::{block_production::SolutionContext, IrysBlockHeader};
 use reth_db::DatabaseEnv;
 
@@ -10,7 +12,7 @@ use crate::mempool::{GetBestMempoolTxs, MempoolActor};
 pub struct BlockProducerActor {
     pub db: Arc<DatabaseEnv>,
     pub mempool_addr: Addr<MempoolActor>,
-    pub last_height: Arc<RwLock<u64>>
+    pub last_height: Arc<RwLock<u64>>,
 }
 
 impl BlockProducerActor {
@@ -18,7 +20,7 @@ impl BlockProducerActor {
         Self {
             last_height: Arc::new(RwLock::new(get_latest_height_from_db(&db))),
             db,
-            mempool_addr
+            mempool_addr,
         }
     }
 }
@@ -43,9 +45,8 @@ impl Handler<SolutionContext> for BlockProducerActor {
             // Acquire lock and check that the height hasn't changed identifying a race condition
             let mut write_current_height = arc_rwlock.write().unwrap();
             if current_height != *write_current_height {
-                return ()
+                return ();
             };
-
 
             let r = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
@@ -71,8 +72,6 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             // TODO: Commit block to DB and send to networking layer
 
-
-
             *write_current_height += 1;
             ()
         })
@@ -81,10 +80,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
 fn get_current_timestamp() -> u64 {
     let start = SystemTime::now();
-    start
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+    start.duration_since(UNIX_EPOCH).unwrap().as_millis() as u64
 }
 
 fn get_current_block_height() -> u64 {
