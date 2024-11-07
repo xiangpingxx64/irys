@@ -4,3 +4,4 @@ pub mod node;
 pub mod rpc;
 pub use chain::*;
 pub use node::run_node;
+pub mod adapter;

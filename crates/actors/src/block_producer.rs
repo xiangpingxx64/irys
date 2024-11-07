@@ -57,7 +57,10 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             let r = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
-            let base_block = IrysBlockHeader::new();
+            let mut base_block = IrysBlockHeader::new();
+
+            // TODO: Irys block header building logic
+
             // let final_block = IrysBlockHeader {
             //     block_hash: todo!(),
             //     diff: todo!(),
