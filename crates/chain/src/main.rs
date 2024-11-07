@@ -90,7 +90,7 @@ pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeC
 #[derive(Debug, Clone)]
 pub struct IrysNodeCtx {
     pub reth_handle: FullNode<RethNode, RethNodeAddOns>,
-    pub storage_provider: Arc<StorageProvider>,
+    pub storage_provider: StorageProvider,
     pub actor_addresses: ActorAddresses,
     pub db: Arc<DatabaseEnv>,
 }
