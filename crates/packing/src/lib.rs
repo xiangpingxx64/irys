@@ -1,6 +1,8 @@
+use std::ops::BitXor;
+
 use irys_c::capacity::compute_entropy_chunk;
 use irys_primitives::IrysTxId;
-use irys_types::{Address, CHUNK_SIZE};
+use irys_types::{Address, ChunkBin, CHUNK_SIZE};
 
 pub const PACKING_SHA_1_5_S: u32 = 22_500_000;
 
@@ -11,7 +13,7 @@ pub fn capacity_pack_range(
     chunk_offset: std::ffi::c_ulong,
     partition_hash: IrysTxId,
     iterations: Option<u32>,
-) -> eyre::Result<Vec<[u8; CHUNK_SIZE as usize]>> {
+) -> eyre::Result<Vec<ChunkBin>> {
     let mining_address: [u8; 20] = mining_address.0.into();
     // TODO @JesseTheRobot - allow a vec to get passed back for writing to so we don't de/reallocate memory
     let mut entropy_chunk = Vec::<[u8; CHUNK_SIZE as usize]>::with_capacity(CHUNK_SIZE.try_into().unwrap());
@@ -49,7 +51,7 @@ enum PackingType {
 const PACKING_TYPE: PackingType = PackingType::CPU;
 
 pub fn capacity_pack_range_with_data(
-    mut data: Vec<u8>,
+    mut data: Vec<ChunkBin>,
     mining_address: Address,
     chunk_offset: std::ffi::c_ulong,
     partition_hash: IrysTxId,
@@ -57,15 +59,21 @@ pub fn capacity_pack_range_with_data(
 ) -> eyre::Result<Vec<[u8; CHUNK_SIZE as usize]>> {
     match PACKING_TYPE {
         PackingType::CPU => {
-            // capacity_pack_range(mining_address, chunk_offset, partition_hash, iterations).map(|r| {
-            //     data.iter_mut()
-            //         .zip(r.iter())
-            //         .for_each(|(x1, x2)| *x1 ^= *x2);
+            let res = capacity_pack_range(mining_address, chunk_offset, partition_hash, iterations).unwrap();
 
-            //     data
-            // })
-            return Ok(Vec::new())
+            xor_vec_u8_arrays_in_place(&mut data, &res);
+            
+            Ok(data)
         }
         _ => unimplemented!(),
+    }
+}
+
+
+fn xor_vec_u8_arrays_in_place<const N: usize>(a: &mut Vec<[u8; N]>, b: &Vec<[u8; N]>) {
+    for i in 0..a.len() {
+        for j in 0..10 {
+            a[i][j] = a[i][j].bitxor(b[i][j]);
+        }
     }
 }
