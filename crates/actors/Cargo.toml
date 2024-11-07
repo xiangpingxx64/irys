@@ -21,6 +21,7 @@ irys-primitives.workspace = true
 eyre.workspace = true
 color-eyre = "0.6.2"
 openssl.workspace = true
+irys-reth-node-bridge.workspace = true
 
 [lints]
 workspace = true

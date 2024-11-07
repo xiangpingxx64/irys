@@ -1,6 +1,5 @@
 mod partitions;
 mod vdf;
-
 use ::database::{config::get_data_dir, open_or_create_db};
 use actix::{Actor, Addr, Arbiter, System};
 use actors::{
@@ -13,14 +12,14 @@ use actors::{
 };
 use clap::Parser;
 use irys_api_server::run_server;
-use irys_reth_node_bridge::{
+pub use irys_reth_node_bridge::{
     chainspec,
-    node::{RethNode, RethNodeAddOns, RethNodeHandle},
+    node::{RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider},
     IrysChainSpecBuilder,
 };
 use irys_storage::{partition_provider::PartitionStorageProvider, StorageProvider};
 use irys_types::{
-    app_state::AppState,
+    app_state::{AppState, DatabaseProvider},
     block_production::{Partition, PartitionId},
     H256,
 };
@@ -89,10 +88,10 @@ pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeC
 
 #[derive(Debug, Clone)]
 pub struct IrysNodeCtx {
-    pub reth_handle: FullNode<RethNode, RethNodeAddOns>,
+    pub reth_handle: RethNodeProvider,
     pub storage_provider: StorageProvider,
     pub actor_addresses: ActorAddresses,
-    pub db: Arc<DatabaseEnv>,
+    pub db: DatabaseProvider,
 }
 
 async fn start_irys_node(
@@ -108,17 +107,17 @@ async fn start_irys_node(
     std::thread::spawn(move || {
         let rt = actix_rt::Runtime::new().unwrap();
         rt.block_on(async move {
-            // thanks I hate it
-            let reth_handle = reth_handle_receiver.await.unwrap();
-            let arc_db = reth_handle.clone().provider.database.db;
+            // the RethNodeHandle doesn't *need* to be Arc, but it will reduce the copy cost
+            let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await.unwrap()));
+            let db = DatabaseProvider(reth_node.provider.database.db.clone());
 
-            let mempool_actor = MempoolActor::new(arc_db.clone());
+            let mempool_actor = MempoolActor::new(db.clone());
             let mempool_actor_addr = mempool_actor.start();
 
             let mut part_actors = Vec::new();
 
             let block_producer_actor =
-                BlockProducerActor::new(arc_db.clone(), mempool_actor_addr.clone());
+                BlockProducerActor::new(db.clone(), mempool_actor_addr.clone(), reth_node.clone());
             let block_producer_addr = block_producer_actor.start();
 
             let mut partition_storage_providers =
@@ -139,7 +138,8 @@ async fn start_irys_node(
             let part_actors_clone = part_actors.clone();
             std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
-            let packing_actor_addr = PackingActor::new(Handle::current(), storage_provider.clone()).start();
+            let packing_actor_addr =
+                PackingActor::new(Handle::current(), storage_provider.clone()).start();
 
             let actor_addresses = ActorAddresses {
                 partitions: part_actors_clone,
@@ -153,8 +153,8 @@ async fn start_irys_node(
             let _ = irys_node_handle_sender.send(IrysNodeCtx {
                 storage_provider,
                 actor_addresses: actor_addresses.clone(),
-                reth_handle,
-                db: arc_db.clone(),
+                reth_handle: reth_node,
+                db: db.clone(),
             });
 
             run_server(actor_addresses).await;

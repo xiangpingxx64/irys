@@ -1,6 +1,7 @@
 use actix::{Actor, Context, Handler, Message};
 use irys_types::{
-    chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader, CHUNK_SIZE, H256,
+    app_state::DatabaseProvider, chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader,
+    CHUNK_SIZE, H256,
 };
 use reth_db::DatabaseEnv;
 use std::{
@@ -11,7 +12,7 @@ use std::{
 /// The Mempool oversees pending transactions and validation of incoming tx.
 #[derive(Debug)]
 pub struct MempoolActor {
-    db: Arc<DatabaseEnv>,
+    db: DatabaseProvider,
     /// Temporary mempool stubs - will replace with proper data models - dmac
     valid_tx: BTreeMap<H256, IrysTransactionHeader>,
     invalid_tx: Vec<H256>,
@@ -24,7 +25,7 @@ impl Actor for MempoolActor {
 impl MempoolActor {
     /// Create a new instance of the mempool actor passing in a reference
     /// counted reference to a DatabaseEnv
-    pub fn new(db: Arc<DatabaseEnv>) -> Self {
+    pub fn new(db: DatabaseProvider) -> Self {
         Self {
             db,
             valid_tx: BTreeMap::new(),
@@ -205,8 +206,8 @@ mod tests {
         // Connect to the db
         let path = get_data_dir();
         let db = open_or_create_db(path).unwrap();
-        let arc_db1 = Arc::new(db);
-        let arc_db2 = Arc::clone(&arc_db1);
+        let arc_db1 = DatabaseProvider(Arc::new(db));
+        let arc_db2 = DatabaseProvider(Arc::clone(&arc_db1));
 
         // Create an instance of the mempool actor
         let mempool = MempoolActor::new(arc_db1);

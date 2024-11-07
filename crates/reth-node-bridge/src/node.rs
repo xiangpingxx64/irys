@@ -10,7 +10,6 @@ use std::{
 };
 
 use clap::{command, Args, Parser};
-use irys_api_server::run_server;
 use irys_types::H256;
 use reth::{
     chainspec::EthereumChainSpecParser,
@@ -31,7 +30,7 @@ use reth_node_builder::{
     common::WithTree,
     components::Components,
     engine_tree_config::{DEFAULT_MEMORY_BLOCK_BUFFER_TARGET, DEFAULT_PERSISTENCE_THRESHOLD},
-    NodeBuilder, NodeConfig, WithLaunchContext,
+    FullNode, NodeBuilder, NodeConfig, WithLaunchContext,
 };
 use reth_node_builder::{NodeAdapter, NodeHandle};
 use reth_node_ethereum::{node::EthereumAddOns, EthEvmConfig, EthExecutorProvider, EthereumNode};
@@ -87,13 +86,26 @@ pub type RethNode = NodeAdapter<
     >,
 >;
 pub type RethNodeAddOns = EthereumAddOns;
-pub type RethNodeHandle = NodeHandle<RethNode, RethNodeAddOns>;
+pub type RethNodeExitHandle = NodeHandle<RethNode, RethNodeAddOns>;
+
+pub type RethNodeHandle = FullNode<RethNode, RethNodeAddOns>;
+
+#[derive(Debug, Clone)]
+pub struct RethNodeProvider(pub Arc<RethNodeHandle>);
+
+impl Deref for RethNodeProvider {
+    type Target = Arc<RethNodeHandle>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 pub async fn run_node(
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
     data_dir: PathBuf,
-) -> eyre::Result<RethNodeHandle> {
+) -> eyre::Result<RethNodeExitHandle> {
     let mut os_args: Vec<String> = std::env::args().collect();
     let bp = os_args.remove(0);
 

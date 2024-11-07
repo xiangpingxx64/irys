@@ -78,7 +78,6 @@ tracing.workspace = true
 
 alloy-primitives.workspace = true
 futures.workspace = true
-irys-api-server.workspace = true
 revm-primitives.workspace = true
 revm.workspace = true
 

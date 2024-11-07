@@ -4,23 +4,30 @@ use std::{
 };
 
 use actix::{Actor, Addr, Context, Handler, ResponseFuture};
-use irys_types::{block_production::SolutionContext, IrysBlockHeader};
+use irys_reth_node_bridge::node::RethNodeProvider;
+use irys_types::{app_state::DatabaseProvider, block_production::SolutionContext, IrysBlockHeader};
 use reth_db::DatabaseEnv;
 
 use crate::mempool::{GetBestMempoolTxs, MempoolActor};
 
 pub struct BlockProducerActor {
-    pub db: Arc<DatabaseEnv>,
+    pub db: DatabaseProvider,
     pub mempool_addr: Addr<MempoolActor>,
     pub last_height: Arc<RwLock<u64>>,
+    pub reth_provider: RethNodeProvider,
 }
 
 impl BlockProducerActor {
-    pub fn new(db: Arc<DatabaseEnv>, mempool_addr: Addr<MempoolActor>) -> Self {
+    pub fn new(
+        db: DatabaseProvider,
+        mempool_addr: Addr<MempoolActor>,
+        reth_provider: RethNodeProvider,
+    ) -> Self {
         Self {
             last_height: Arc::new(RwLock::new(get_latest_height_from_db(&db))),
             db,
             mempool_addr,
+            reth_provider,
         }
     }
 }
@@ -50,7 +57,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             let r = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
-            let final_block = IrysBlockHeader::new();
+            let base_block = IrysBlockHeader::new();
             // let final_block = IrysBlockHeader {
             //     block_hash: todo!(),
             //     diff: todo!(),
