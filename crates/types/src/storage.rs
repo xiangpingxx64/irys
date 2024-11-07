@@ -39,6 +39,16 @@ pub struct IntervalState {
     pub chunk_state: ChunkState,
 }
 
+impl IntervalState {
+    pub fn new(chunk_state: ChunkState) -> Self {
+        Self { chunk_state }
+    }
+
+    pub fn packed() -> Self {
+        Self { chunk_state: ChunkState::Packed }
+    }
+}
+
 // wrapper struct so we can "contain" the custom Eq impl that works off the state enum
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IntervalStateWrapped {
