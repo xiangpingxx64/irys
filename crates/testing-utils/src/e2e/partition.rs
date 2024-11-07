@@ -61,7 +61,7 @@ pub fn generate_partition_and_storage_provider(
                 sm.write_chunks(
                     vec![[o as u8; CHUNK_SIZE as usize]],
                     ii(o, o),
-                    ChunkState::Unpacked,
+                    Some(ChunkState::Unpacked),
                     IntervalState {
                         chunk_state: ChunkState::Data,
                     },

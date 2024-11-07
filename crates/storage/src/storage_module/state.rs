@@ -183,7 +183,7 @@ impl StorageModule {
         &self,
         chunks: Vec<[u8; CHUNK_SIZE as usize]>,
         interval: Interval<u32>,
-        expected_state: ChunkState,
+        expected_state: Option<ChunkState>,
         new_state: IntervalState,
     ) -> eyre::Result<()> {
         if interval.end() > self.capacity {
@@ -217,7 +217,7 @@ impl StorageModule {
 
         for (segment_interval, segment_state) in overlap_iter {
             if std::mem::discriminant(&segment_state.chunk_state)
-                != std::mem::discriminant(&expected_state)
+                != std::mem::discriminant(&expected_state.unwrap_or(segment_state.chunk_state))
             {
                 return Err(eyre::Report::msg(format!(
                     "Segment {:?} is of unexpected state {:?}",

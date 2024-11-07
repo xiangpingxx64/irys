@@ -75,7 +75,7 @@ impl PartitionStorageProvider {
         &self,
         chunks: Vec<[u8; CHUNK_SIZE as usize]>,
         write_interval: Interval<u32>,
-        expected_state: ChunkState,
+        expected_state: Option<ChunkState>,
         new_state: IntervalState,
     ) -> eyre::Result<()> {
         let sm_iter = self.sm_map.overlapping(write_interval);
@@ -146,7 +146,7 @@ fn basic_storage_provider_test() -> eyre::Result<()> {
     storage_provider.write_chunks(
         chunks_to_write.clone(),
         ii(3, 5),
-        ChunkState::Unpacked,
+        Some(ChunkState::Unpacked),
         IntervalState {
             chunk_state: ChunkState::Packed,
         },

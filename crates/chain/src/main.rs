@@ -132,15 +132,14 @@ async fn start_irys_node(
                 part_actors.push(partition_mining_actor.start());
             }
 
-            let storage_provider =
-                Arc::new(StorageProvider::new(Some(partition_storage_providers)));
+            let storage_provider = StorageProvider::new(Some(partition_storage_providers));
 
             let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
 
             let part_actors_clone = part_actors.clone();
             std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
-            let packing_actor_addr = PackingActor::new(Handle::current()).start();
+            let packing_actor_addr = PackingActor::new(Handle::current(), storage_provider.clone()).start();
 
             let actor_addresses = ActorAddresses {
                 partitions: part_actors_clone,

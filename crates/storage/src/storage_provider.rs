@@ -1,13 +1,13 @@
 use crate::partition_provider::PartitionStorageProvider;
 use eyre::eyre;
 use irys_types::{block_production::PartitionId, ChunkBin, ChunkState, Interval, IntervalState};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 #[derive(Debug, Clone)]
 /// Storage provider struct - top level structure, used to interact with other storage components
 pub struct StorageProvider {
     /// Map of partition IDs to storage actors
-    partition_providers: HashMap<PartitionId, PartitionStorageProvider>,
+    partition_providers: Arc<HashMap<PartitionId, PartitionStorageProvider>>,
 }
 
 impl StorageProvider {
@@ -15,20 +15,15 @@ impl StorageProvider {
     pub fn new(
         partition_providers: Option<HashMap<PartitionId, PartitionStorageProvider>>,
     ) -> Self {
-        if let Some(partition_providers) = partition_providers {
-            return Self {
-                partition_providers,
-            };
-        }
-        Self {
-            partition_providers: HashMap::new(),
-        }
+        return Self {
+            partition_providers: Arc::new(partition_providers.unwrap_or(HashMap::new())),
+        } 
     }
 
-    /// add a storage provider
-    pub fn add_provider(&mut self, partition_id: PartitionId, storage: PartitionStorageProvider) {
-        self.partition_providers.insert(partition_id, storage);
-    }
+    // /// add a storage provider
+    // pub fn add_provider(&mut self, partition_id: PartitionId, storage: PartitionStorageProvider) {
+    //     self.partition_providers.insert(partition_id, storage);
+    // }
 
     /// read an interval of chunks from a partition
     pub fn read_chunks(
@@ -57,12 +52,12 @@ impl StorageProvider {
     }
 
     /// write a vec of chunks to an interval in a partition
-    pub async fn write_chunks(
+    pub fn write_chunks(
         &self,
         partition_id: PartitionId,
         write_interval: Interval<u32>,
         chunks: Vec<ChunkBin>,
-        expected_state: ChunkState,
+        expected_state: Option<ChunkState>,
         new_state: IntervalState,
     ) -> eyre::Result<()> {
         let part_provider = self.get_part_storage_provider(partition_id)?;

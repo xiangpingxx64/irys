@@ -19,6 +19,7 @@ pub struct PartitionMiningActor {
     partition: Partition,
     block_producer_actor: Addr<BlockProducerActor>,
     part_storage_provider: PartitionStorageProvider,
+    
 }
 
 impl PartitionMiningActor {

@@ -8,7 +8,8 @@ use std::{
 
 use actix::{Actor, Context, Handler, Message};
 use irys_primitives::IrysTxId;
-use irys_types::{Address, U256};
+use irys_storage::StorageProvider;
+use irys_types::{Address, ChunkState, Interval, U256};
 use packing::capacity_pack_range_with_data;
 use tokio::runtime::Handle;
 
@@ -16,13 +17,13 @@ use tokio::runtime::Handle;
 #[rtype("()")]
 struct PackingRequestRange {
     pub partition_id: IrysTxId,
-    pub start_index: U256,
-    pub end_index: U256,
+    pub chunk_interval: Interval<u32>
 }
 
 type AtomicChunkRange = Arc<RwLock<VecDeque<PackingRequestRange>>>;
 
 pub struct PackingActor {
+    storage_provider: StorageProvider,
     runtime_handle: Handle,
     chunks: AtomicChunkRange,
 }
@@ -30,14 +31,15 @@ pub struct PackingActor {
 const CHUNK_POLL_TIME_MS: u64 = 1_000;
 
 impl PackingActor {
-    pub fn new(handle: Handle) -> Self {
+    pub fn new(handle: Handle, storage_provider: StorageProvider) -> Self {
         Self {
             runtime_handle: handle,
+            storage_provider,
             chunks: Arc::new(RwLock::new(VecDeque::with_capacity(1000))),
         }
     }
 
-    async fn poll_chunks(chunks: AtomicChunkRange) {
+    async fn poll_chunks(chunks: AtomicChunkRange, storage_provider: &StorageProvider) {
         // Loop which runs all jobs every 1 second (defined in CHUNK_POLL_TIME_MS)
         loop {
             if let Some(next_range) = chunks.read().unwrap().front() {
@@ -57,7 +59,7 @@ impl PackingActor {
                 let range = match capacity_pack_range_with_data(
                     data_in_range,
                     mining_addr,
-                    next_range.start_index.as_u64(),
+                    next_range.chunk_interval.start() as u64,
                     next_range.partition_id,
                     None,
                 ) {
@@ -66,7 +68,7 @@ impl PackingActor {
                 };
 
                 // TODO: Write to disk correctly
-                f.write_at(&range, next_range.start_index.as_u64()).unwrap();
+                let _ = storage_provider.write_chunks(next_range.partition_id, next_range.chunk_interval, range, None, ChunkState::Packed).unwrap();
 
                 // Remove from queue once complete
                 let _ = chunks.write().unwrap().pop_front();
@@ -95,7 +97,7 @@ impl Actor for PackingActor {
     fn start(self) -> actix::Addr<Self> {
         // Create packing worker that runs every
         self.runtime_handle
-            .spawn(Self::poll_chunks(self.chunks.clone()));
+            .spawn(Self::poll_chunks(self.chunks.clone(), &self.storage_provider));
 
         Context::new().run(self)
     }
