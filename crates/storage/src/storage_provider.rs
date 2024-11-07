@@ -1,11 +1,9 @@
 // this is here due to dependency cycle issues if it were kept in the storage crate
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap};
 
-use crate::chunk_storage::{ChunkStorageActor, ReadChunks, WriteChunks};
-use actix::Addr;
 use eyre::eyre;
-use irys_storage::partition_provider::PartitionStorageProvider;
+use crate::partition_provider::PartitionStorageProvider;
 use irys_types::{block_production::PartitionId, ChunkBin, ChunkState, Interval, IntervalState};
 
 #[derive(Debug, Clone)]

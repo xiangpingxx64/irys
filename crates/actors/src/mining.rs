@@ -9,10 +9,10 @@ use irys_types::{
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
-
+use irys_storage::StorageProvider;
 use crate::{
     block_producer::BlockProducerActor, chunk_storage::ChunkStorageActor,
-    storage_provider::StorageProvider,
+    
 };
 
 pub struct PartitionMiningActor {
