@@ -251,15 +251,6 @@ impl StorageModule {
     }
 }
 
-// #[test]
-// fn a() -> eyre::Result<()> {
-//     let lckmap: RwLock<NoditMap<u32, Interval<u32>, RwLock<()>>> = RwLock::new(NoditMap::new());
-
-//     let m = lckmap.read()?.insert
-
-//     Ok(())
-// }
-
 // /// Resets an interval to `PackingState::Unpacked`
 // pub fn reset_range(
 //     mut map: RwLockWriteGuard<'_, NoditMap<u32, Interval<u32>, IntervalStateWrapped>>,
