@@ -11,10 +11,10 @@ pub fn capacity_pack_range(
     chunk_offset: std::ffi::c_ulong,
     partition_hash: IrysTxId,
     iterations: Option<u32>,
-) -> eyre::Result<Vec<u8>> {
+) -> eyre::Result<Vec<[u8; CHUNK_SIZE as usize]>> {
     let mining_address: [u8; 20] = mining_address.0.into();
     // TODO @JesseTheRobot - allow a vec to get passed back for writing to so we don't de/reallocate memory
-    let mut entropy_chunk = Vec::<u8>::with_capacity(CHUNK_SIZE.try_into().unwrap());
+    let mut entropy_chunk = Vec::<[u8; CHUNK_SIZE as usize]>::with_capacity(CHUNK_SIZE.try_into().unwrap());
     let partition_hash: [u8; 32] = partition_hash.0.into();
 
     let mining_addr_len = mining_address.len(); // note: might not line up with capacity? that should be fine...
@@ -54,16 +54,17 @@ pub fn capacity_pack_range_with_data(
     chunk_offset: std::ffi::c_ulong,
     partition_hash: IrysTxId,
     iterations: Option<u32>,
-) -> eyre::Result<Vec<u8>> {
+) -> eyre::Result<Vec<[u8; CHUNK_SIZE as usize]>> {
     match PACKING_TYPE {
         PackingType::CPU => {
-            capacity_pack_range(mining_address, chunk_offset, partition_hash, iterations).map(|r| {
-                data.iter_mut()
-                    .zip(r.iter())
-                    .for_each(|(x1, x2)| *x1 ^= *x2);
+            // capacity_pack_range(mining_address, chunk_offset, partition_hash, iterations).map(|r| {
+            //     data.iter_mut()
+            //         .zip(r.iter())
+            //         .for_each(|(x1, x2)| *x1 ^= *x2);
 
-                data
-            })
+            //     data
+            // })
+            return Ok(Vec::new())
         }
         _ => unimplemented!(),
     }

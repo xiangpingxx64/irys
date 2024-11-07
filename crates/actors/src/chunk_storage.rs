@@ -60,6 +60,6 @@ impl Handler<WriteChunks> for ChunkStorageActor {
         } = write_req;
 
         self.storage_provider
-            .write_chunks(chunks, interval, expected_state, new_state)
+            .write_chunks(chunks, interval, Some(expected_state), new_state)
     }
 }

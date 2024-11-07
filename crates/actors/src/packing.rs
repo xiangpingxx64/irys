@@ -9,14 +9,14 @@ use std::{
 use actix::{Actor, Context, Handler, Message};
 use irys_primitives::IrysTxId;
 use irys_storage::StorageProvider;
-use irys_types::{Address, ChunkState, Interval, U256};
+use irys_types::{irys::Irys, Address, ChunkState, Interval, IntervalState, U256};
 use packing::capacity_pack_range_with_data;
 use tokio::runtime::Handle;
 
 #[derive(Message, Clone)]
 #[rtype("()")]
 struct PackingRequestRange {
-    pub partition_id: IrysTxId,
+    pub partition_id: u64,
     pub chunk_interval: Interval<u32>
 }
 
@@ -39,7 +39,7 @@ impl PackingActor {
         }
     }
 
-    async fn poll_chunks(chunks: AtomicChunkRange, storage_provider: &StorageProvider) {
+    async fn poll_chunks(chunks: AtomicChunkRange, storage_provider: StorageProvider) {
         // Loop which runs all jobs every 1 second (defined in CHUNK_POLL_TIME_MS)
         loop {
             if let Some(next_range) = chunks.read().unwrap().front() {
@@ -60,7 +60,7 @@ impl PackingActor {
                     data_in_range,
                     mining_addr,
                     next_range.chunk_interval.start() as u64,
-                    next_range.partition_id,
+                    IrysTxId::random(),
                     None,
                 ) {
                     Ok(r) => r,
@@ -68,7 +68,7 @@ impl PackingActor {
                 };
 
                 // TODO: Write to disk correctly
-                let _ = storage_provider.write_chunks(next_range.partition_id, next_range.chunk_interval, range, None, ChunkState::Packed).unwrap();
+                let _ = storage_provider.write_chunks(next_range.partition_id, next_range.chunk_interval, range, None, IntervalState::packed()).unwrap();
 
                 // Remove from queue once complete
                 let _ = chunks.write().unwrap().pop_front();
@@ -84,7 +84,7 @@ struct PartitionInfo {
     filename: String,
 }
 
-fn get_partition_info(id: IrysTxId) -> PartitionInfo {
+fn get_partition_info(id: u64) -> PartitionInfo {
     PartitionInfo {
         mining_addr: Address::random(),
         filename: "".to_string(),
@@ -97,7 +97,7 @@ impl Actor for PackingActor {
     fn start(self) -> actix::Addr<Self> {
         // Create packing worker that runs every
         self.runtime_handle
-            .spawn(Self::poll_chunks(self.chunks.clone(), &self.storage_provider));
+            .spawn(Self::poll_chunks(self.chunks.clone(), self.storage_provider.clone()));
 
         Context::new().run(self)
     }
