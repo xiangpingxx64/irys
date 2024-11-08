@@ -52,3 +52,7 @@ futures-util.workspace = true
 futures.workspace = true
 reth-tracing.workspace = true
 k256 = { version = "0.13", default-features = false, features = ["ecdsa"] }
+
+[[bin]]
+name = "irys"
+path = "src/main.rs"

@@ -4,7 +4,7 @@ use actix::{Actor, Addr, Context, Handler, Message};
 use irys_storage::{ii, partition_provider::PartitionStorageProvider};
 use irys_types::{
     block_production::{Partition, SolutionContext},
-    PartitionStorageProviderConfig, StorageModuleConfig, CHUNK_SIZE, H256,
+    ChunkBin, PartitionStorageProviderConfig, StorageModuleConfig, CHUNK_SIZE, H256,
     NUM_CHUNKS_IN_RECALL_RANGE, NUM_OF_CHUNKS_IN_PARTITION, NUM_RECALL_RANGES_IN_PARTITION, U256,
 };
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
@@ -84,7 +84,7 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
         let start_chunk_index = (recall_range_index * NUM_CHUNKS_IN_RECALL_RANGE) as usize;
 
         // Create a contiguous piece of memory on the heap where chunks can be written into
-        let mut chunks_buffer: Vec<[u8; CHUNK_SIZE as usize]> =
+        let mut chunks_buffer: Vec<ChunkBin> =
             Vec::with_capacity((NUM_CHUNKS_IN_RECALL_RANGE * CHUNK_SIZE) as usize);
 
         // TODO: read chunks. For now creates random
@@ -110,7 +110,7 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
                     partition_id: partition.id,
                     // TODO: Fix
                     chunk_index: 0,
-                    mining_address: partition.mining_addr,
+                    mining_address: partition.mining_address,
                 };
                 // TODO: Send info to block builder code
 

@@ -102,7 +102,14 @@ thiserror = "1.0.61"
 tikv-jemallocator = "^0.6.0"
 tokio = "1.37.0"
 tokio-stream = "0.1.15"
-
+reth-stages-types.workspace = true
+reth-network-peers.workspace = true
+reth-rpc-types-compat.workspace = true
+alloy-signer.workspace = true
+alloy-network.workspace = true
+alloy-consensus = { workspace = true, features = ["kzg"] }
+reth-payload-builder.workspace = true
+reth-rpc-layer.workspace = true
 [features]
 default = ["jemalloc"]
 jemalloc = []

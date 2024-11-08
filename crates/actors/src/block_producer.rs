@@ -4,8 +4,13 @@ use std::{
 };
 
 use actix::{Actor, Addr, Context, Handler, ResponseFuture};
-use irys_reth_node_bridge::node::RethNodeProvider;
-use irys_types::{app_state::DatabaseProvider, block_production::SolutionContext, IrysBlockHeader};
+use alloy_rpc_types_engine::PayloadAttributes;
+// use irys_primitives::PayloadAttributes;
+use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
+use irys_types::{
+    app_state::DatabaseProvider, block_production::SolutionContext, Address, IrysBlockHeader,
+};
+use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
 
 use crate::mempool::{GetBestMempoolTxs, MempoolActor};
@@ -48,6 +53,8 @@ impl Handler<SolutionContext> for BlockProducerActor {
         let mempool_addr = self.mempool_addr.clone();
         let current_height = *self.last_height.read().unwrap();
         let arc_rwlock = self.last_height.clone();
+        let reth = self.reth_provider.clone();
+
         Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
             let mut write_current_height = arc_rwlock.write().unwrap();
@@ -57,7 +64,42 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             let r = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
-            let base_block = IrysBlockHeader::new();
+            let mut irys_block = IrysBlockHeader::new();
+
+            // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
+            let context = RethNodeContext::new(reth.0.as_ref().clone()).await.unwrap();
+
+            // create a new reth payload
+
+            // generate payload attributes
+            // TODO: we need previous block metadata to fill in parent & prev_randao
+            let payload_attrs = PayloadAttributes {
+                timestamp: irys_block.timestamp, // tie timestamp together
+                prev_randao: B256::ZERO,
+                suggested_fee_recipient: irys_block.reward_address,
+                withdrawals: None,
+                parent_beacon_block_root: None,
+                shadows: None,
+            };
+
+            let exec_payload = context
+                .engine_api
+                .build_payload_v1_irys(B256::ZERO, payload_attrs)
+                .await
+                .unwrap();
+
+            // TODO @JesseTheRobot create a deref(?) trait so this isn't as bad
+            let block_hash = exec_payload
+                .execution_payload
+                .payload_inner
+                .payload_inner
+                .payload_inner
+                .block_hash;
+
+            irys_block.evm_block_hash = block_hash;
+
+            // TODO: Irys block header building logic
+
             // let final_block = IrysBlockHeader {
             //     block_hash: todo!(),
             //     diff: todo!(),

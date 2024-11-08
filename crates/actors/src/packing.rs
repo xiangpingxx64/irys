@@ -17,7 +17,7 @@ use tokio::runtime::Handle;
 #[rtype("()")]
 struct PackingRequestRange {
     pub partition_id: u64,
-    pub chunk_interval: Interval<u32>
+    pub chunk_interval: Interval<u32>,
 }
 
 type AtomicChunkRange = Arc<RwLock<VecDeque<PackingRequestRange>>>;
@@ -68,7 +68,17 @@ impl PackingActor {
                 };
 
                 // TODO: Write to disk correctly
-                let _ = storage_provider.write_chunks(next_range.partition_id, next_range.chunk_interval, range, None, IntervalState::packed()).unwrap();
+                let _ = storage_provider
+                    .write_chunks(
+                        next_range.partition_id,
+                        next_range.chunk_interval,
+                        range,
+                        None,
+                        IntervalState {
+                            chunk_state: ChunkState::Packed,
+                        },
+                    )
+                    .unwrap();
 
                 // Remove from queue once complete
                 let _ = chunks.write().unwrap().pop_front();
@@ -107,8 +117,10 @@ impl Actor for PackingActor {
 
     fn start(self) -> actix::Addr<Self> {
         // Create packing worker that runs every
-        self.runtime_handle
-            .spawn(Self::poll_chunks(self.chunks.clone(), self.storage_provider.clone()));
+        self.runtime_handle.spawn(Self::poll_chunks(
+            self.chunks.clone(),
+            self.storage_provider.clone(),
+        ));
 
         Context::new().run(self)
     }
