@@ -5,6 +5,7 @@ use std::{
 
 use actix::{Actor, Addr, Context, Handler, ResponseFuture};
 use alloy_rpc_types_engine::PayloadAttributes;
+use irys_primitives::{ShadowTx, Shadows};
 // use irys_primitives::PayloadAttributes;
 use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
 use irys_types::{
@@ -13,7 +14,8 @@ use irys_types::{
 use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
 
-use crate::mempool::{GetBestMempoolTxs, MempoolActor};
+use crate::mempool::{GetBestMempoolTxs, MempoolActor, RemoveConfirmedTxs};
+use irys_primitives::*;
 
 pub struct BlockProducerActor {
     pub db: DatabaseProvider,
@@ -62,12 +64,23 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 return ();
             };
 
-            let r = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
+            let data_txs: Vec<irys_types::IrysTransactionHeader> = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
             let mut irys_block = IrysBlockHeader::new();
 
             // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
             let context = RethNodeContext::new(reth.0.as_ref().clone()).await.unwrap();
+
+            let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect();
+
+            let shadows = Shadows::new(data_txs.iter()
+                .map(|header| ShadowTx {
+                    tx_id: IrysTxId::from_slice(header.id.as_bytes()),
+                    fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                    address: header.signer,
+                    tx: ShadowTxType::Data(DataShadow { fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)) }),
+                })
+                .collect());
 
             // create a new reth payload
 
@@ -79,7 +92,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 suggested_fee_recipient: irys_block.reward_address,
                 withdrawals: None,
                 parent_beacon_block_root: None,
-                shadows: None,
+                shadows: Some(shadows),
             };
 
             let exec_payload = context
@@ -99,6 +112,12 @@ impl Handler<SolutionContext> for BlockProducerActor {
             irys_block.evm_block_hash = block_hash;
 
             // TODO: Irys block header building logic
+
+            // TODO: Commit block
+
+
+            let _ = mempool_addr.send(RemoveConfirmedTxs(data_tx_ids)).await.unwrap();
+
 
             // let final_block = IrysBlockHeader {
             //     block_hash: todo!(),

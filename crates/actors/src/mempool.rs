@@ -5,8 +5,7 @@ use irys_types::{
 };
 use reth_db::DatabaseEnv;
 use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Arc,
+    collections::{BTreeMap, HashMap}, ops::Rem, sync::Arc
 };
 
 /// The Mempool oversees pending transactions and validation of incoming tx.
@@ -183,7 +182,22 @@ impl Handler<GetBestMempoolTxs> for MempoolActor {
     type Result = Vec<IrysTransactionHeader>;
 
     fn handle(&mut self, msg: GetBestMempoolTxs, ctx: &mut Self::Context) -> Self::Result {
-        vec![]
+        self.valid_tx.iter().take(10).map(|(_, header)| header.clone()).collect()
+    }
+}
+
+// Message for getting txs for block building
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+pub struct RemoveConfirmedTxs(pub Vec<H256>);
+
+impl Handler<RemoveConfirmedTxs> for MempoolActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: RemoveConfirmedTxs, ctx: &mut Self::Context) -> Self::Result {
+        for tx_id in msg.0 {
+            self.valid_tx.remove(&tx_id);
+        };
     }
 }
 
