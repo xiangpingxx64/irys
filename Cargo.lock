@@ -2117,6 +2117,7 @@ dependencies = [
  "futures-util",
  "irys-api-server",
  "irys-c",
+ "irys-config",
  "irys-reth-node-bridge",
  "irys-storage",
  "irys-types",
@@ -5179,6 +5180,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "irys-config"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "irys-storage",
+ "irys-types",
+]
+
+[[package]]
 name = "irys-primitives"
 version = "0.1.0"
 dependencies = [
@@ -5218,6 +5228,7 @@ dependencies = [
  "foldhash",
  "futures",
  "futures-util",
+ "irys-config",
  "irys-primitives",
  "irys-types",
  "jsonrpsee",

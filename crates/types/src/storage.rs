@@ -45,7 +45,9 @@ impl IntervalState {
     }
 
     pub fn packed() -> Self {
-        Self { chunk_state: ChunkState::Packed }
+        Self {
+            chunk_state: ChunkState::Packed,
+        }
     }
 }
 

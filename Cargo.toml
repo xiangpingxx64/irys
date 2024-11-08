@@ -11,6 +11,7 @@ members = [
     "crates/database",
     "crates/storage",
     "crates/testing-utils",
+    "crates/config",
 ]
 resolver = "2"
 rust-version = "1.82"
@@ -53,6 +54,7 @@ futures = "0.3"
 irys-api-server = { path = "./crates/api-server" }
 irys-c = { path = "./crates/c" }
 irys-primitives = { path = "./crates/primitives" }
+irys-config = { path = "./crates/config" }
 irys-reth-node-bridge = { path = "./crates/reth-node-bridge" }
 irys-types = { path = "./crates/types" }
 irys-storage = { path = "./crates/storage" }

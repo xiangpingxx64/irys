@@ -17,7 +17,7 @@ impl StorageProvider {
     ) -> Self {
         return Self {
             partition_providers: Arc::new(partition_providers.unwrap_or(HashMap::new())),
-        } 
+        };
     }
 
     // /// add a storage provider

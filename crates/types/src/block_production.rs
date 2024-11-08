@@ -8,7 +8,7 @@ pub struct SolutionContext {
     pub chunk_index: u32,
     pub mining_address: Address,
 }
-
+#[derive(Debug, Clone)]
 pub struct Partition {
     pub id: PartitionId,
     pub mining_address: Address,

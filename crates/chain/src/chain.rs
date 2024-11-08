@@ -1,4 +1,4 @@
-use crate::partitions::{get_partitions_and_storage_providers, mine_partition};
+use crate::partitions::mine_partition;
 use ::database::{config::get_data_dir, open_or_create_db, tables::Tables};
 use actix::{Actor, Addr, Arbiter, System};
 use actors::{
@@ -11,6 +11,7 @@ use actors::{
 };
 use clap::Parser;
 use irys_api_server::run_server;
+use irys_config::IrysNodeConfig;
 pub use irys_reth_node_bridge::{
     chainspec,
     node::{RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider},
@@ -51,18 +52,6 @@ use tokio::{
 use crate::vdf::run_vdf;
 use tracing::{debug, error, span, trace, Level};
 
-pub struct IrysNodeConfig {
-    pub sm_partition_config: Vec<(Partition, PartitionStorageProvider)>,
-}
-
-impl Default for IrysNodeConfig {
-    fn default() -> Self {
-        Self {
-            sm_partition_config: get_partitions_and_storage_providers().unwrap(),
-        }
-    }
-}
-
 pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
     start_irys_node(config).await
 }
@@ -75,23 +64,20 @@ pub struct IrysNodeCtx {
     pub db: DatabaseProvider,
 }
 
-pub async fn start_irys_node(
-    node_config: IrysNodeConfig,
-) -> eyre::Result<IrysNodeCtx> {
-    let (actor_addr_channel_sender, actor_addr_channel_receiver) =
-        oneshot::channel::<ActorAddresses>();
-
+pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
     let (reth_handle_sender, reth_handle_receiver) =
         oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
     // Spawn thread and runtime for actors
+    let node_config_copy = node_config.clone();
     std::thread::spawn(move || {
         let rt = actix_rt::Runtime::new().unwrap();
+        let node_config = node_config_copy;
         rt.block_on(async move {
             // the RethNodeHandle doesn't *need* to be Arc, but it will reduce the copy cost
             let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await.unwrap()));
             let db = DatabaseProvider(reth_node.provider.database.db.clone());
-            
+
             let mempool_actor = MempoolActor::new(db.clone());
             let mempool_actor_addr = mempool_actor.start();
 
@@ -107,8 +93,12 @@ pub async fn start_irys_node(
             for (part, storage_provider) in node_config.sm_partition_config {
                 partition_storage_providers.insert(part.id, storage_provider.clone());
 
-                let partition_mining_actor =
-                    PartitionMiningActor::new(part, db.clone(), block_producer_addr.clone(), storage_provider);
+                let partition_mining_actor = PartitionMiningActor::new(
+                    part,
+                    db.clone(),
+                    block_producer_addr.clone(),
+                    storage_provider,
+                );
                 part_actors.push(partition_mining_actor.start());
             }
 
@@ -129,8 +119,6 @@ pub async fn start_irys_node(
                 mempool: mempool_actor_addr,
             };
 
-            let _ = actor_addr_channel_sender.send(actor_addresses.clone());
-
             let _ = irys_node_handle_sender.send(IrysNodeCtx {
                 storage_provider,
                 actor_addresses: actor_addresses.clone(),
@@ -144,35 +132,36 @@ pub async fn start_irys_node(
 
     let builder = IrysChainSpecBuilder::mainnet();
     let reth_chainspec = builder.reth_builder.build();
-
+    let node_config_copy = node_config.clone();
+    // run reth in it's own thread w/ it's own tokio runtime
+    // this is done as reth exhibits strange behaviour (notably channel dropping) when not in it's own context/when the exit future isn't been awaited
     std::thread::Builder::new()
         .stack_size(32 * 1024 * 1024)
         .spawn(move || {
+            let node_config= node_config_copy;
             let tokio_runtime = /* Handle::current(); */ tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
             let mut task_manager = TaskManager::new(tokio_runtime.handle().clone());
             let exec: reth::tasks::TaskExecutor = task_manager.executor();
 
             tokio_runtime.block_on(run_to_completion_or_panic(
                 &mut task_manager,
-                run_until_ctrl_c(start_reth_node(exec, reth_chainspec, Tables::ALL, reth_handle_sender)),
+                run_until_ctrl_c(start_reth_node(exec, reth_chainspec, node_config, Tables::ALL, reth_handle_sender)),
             )).unwrap();
-
-           
         })?;
 
-    // send over the reth handle, wait for the full handle
+    // wait for the full handle to be send over by the actix thread
     return Ok(irys_node_handle_receiver.await?);
 }
 
 async fn start_reth_node<T: HasName + HasTableType>(
     exec: TaskExecutor,
     chainspec: ChainSpec,
+    irys_config: IrysNodeConfig,
     tables: &[T],
     sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
 ) -> eyre::Result<NodeExitReason> {
-
-    let pb = absolute(PathBuf::from_str("./.reth").unwrap()).unwrap();
-    let node_handle = irys_reth_node_bridge::run_node(Arc::new(chainspec), exec, pb, tables).await?;
+    let node_handle =
+        irys_reth_node_bridge::run_node(Arc::new(chainspec), exec, irys_config, tables).await?;
     let r = sender
         .send(node_handle.node.clone())
         .expect("unable to send reth node handle");

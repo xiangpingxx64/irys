@@ -10,6 +10,7 @@ use std::{
 };
 
 use clap::{command, Args, Parser};
+use irys_config::IrysNodeConfig;
 use irys_types::H256;
 use reth::{
     chainspec::EthereumChainSpecParser,
@@ -104,7 +105,7 @@ impl Deref for RethNodeProvider {
 pub async fn run_node<T: HasName + HasTableType>(
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
-    data_dir: PathBuf,
+    irys_config: IrysNodeConfig,
     tables: &[T],
 ) -> eyre::Result<RethNodeExitHandle> {
     let mut os_args: Vec<String> = std::env::args().collect();
@@ -121,9 +122,9 @@ pub async fn run_node<T: HasName + HasTableType>(
             "--http.api",
             "debug,rpc,reth,eth",
             "--datadir",
-            format!("{}", data_dir.to_str().unwrap()),
+            format!("{}", irys_config.reth_data_dir().to_str().unwrap()),
             "--log.file.directory",
-            format!("{}", data_dir.join("logs").to_str().unwrap()),
+            format!("{}", irys_config.reth_log_dir().to_str().unwrap()),
             "--log.file.format",
             "json",
             "--log.stdout.format",

@@ -11,54 +11,6 @@ use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
 
-pub fn get_partitions_and_storage_providers(
-) -> eyre::Result<Vec<(Partition, PartitionStorageProvider)>> {
-    Ok(vec![
-        (
-            Partition::default(),
-            PartitionStorageProvider::from_config(PartitionStorageProviderConfig {
-                sm_paths_offsets: vec![
-                    (
-                        ii(0, 3),
-                        StorageModuleConfig {
-                            directory_path: "/tmp/sm/sm1".into(),
-                            size_bytes: 10 * CHUNK_SIZE,
-                        },
-                    ),
-                    (
-                        ii(4, 10),
-                        StorageModuleConfig {
-                            directory_path: "/tmp/sm/sm2".into(),
-                            size_bytes: 10 * CHUNK_SIZE,
-                        },
-                    ),
-                ],
-            })?,
-        ),
-        (
-            Partition::default(),
-            PartitionStorageProvider::from_config(PartitionStorageProviderConfig {
-                sm_paths_offsets: vec![
-                    (
-                        ii(0, 5),
-                        StorageModuleConfig {
-                            directory_path: "/tmp/sm/sm3".into(),
-                            size_bytes: 10 * CHUNK_SIZE,
-                        },
-                    ),
-                    (
-                        ii(6, 10),
-                        StorageModuleConfig {
-                            directory_path: "/tmp/sm/sm4".into(),
-                            size_bytes: 10 * CHUNK_SIZE,
-                        },
-                    ),
-                ],
-            })?,
-        ),
-    ])
-}
-
 pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256>) {
     // Random difficulty
     let mut difficulty = U256::from_little_endian(H256::random().as_bytes());
