@@ -3,7 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use actix::{Actor, Addr, Context, Handler, ResponseFuture};
+use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, ResponseFuture};
 use alloy_rpc_types_engine::PayloadAttributes;
 use irys_primitives::{ShadowTx, Shadows};
 // use irys_primitives::PayloadAttributes;
@@ -57,6 +57,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
         let arc_rwlock = self.last_height.clone();
         let reth = self.reth_provider.clone();
         let db = self.db.clone();
+        let self_addr = ctx.address();
 
         Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
@@ -148,6 +149,8 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             database::insert_block(&db, &irys_block).unwrap();
 
+            self_addr.do_send(BlockConfirmed());
+
             *write_current_height += 1;
             ()
         })
@@ -161,4 +164,16 @@ fn get_current_timestamp() -> u64 {
 
 fn get_current_block_height() -> u64 {
     0
+}
+
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct BlockConfirmed();
+
+impl Handler<BlockConfirmed> for BlockProducerActor {
+    type Result = ();
+    
+    fn handle(&mut self, msg: BlockConfirmed, ctx: &mut Self::Context) -> Self::Result {
+        todo!()
+    } 
 }
