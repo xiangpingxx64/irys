@@ -18,14 +18,14 @@ use std::marker::PhantomData;
 
 /// Helper for engine api operations
 #[derive(Debug)]
-pub struct EngineApiTestContext<E> {
+pub struct EngineApiContext<E> {
     pub canonical_stream: CanonStateNotificationStream,
     pub engine_api_client: HttpClient<AuthClientService<HttpBackend>>,
     pub _marker: PhantomData<E>,
 }
 
-impl<E: EngineTypes> EngineApiTestContext<E> {
-    /// Retrieves a v3 payload from the engine api
+impl<E: EngineTypes> EngineApiContext<E> {
+    /// Retrieves a v1 Irys payload from the engine api
     pub async fn get_payload_v1_irys(
         &self,
         payload_id: PayloadId,
@@ -33,7 +33,20 @@ impl<E: EngineTypes> EngineApiTestContext<E> {
         Ok(EngineApiClient::<E>::get_payload_v1_irys(&self.engine_api_client, payload_id).await?)
     }
 
-    /// Retrieves a v3 payload from the engine api as serde value
+    pub async fn build_payload_v1_irys(
+        &self,
+        parent: B256,
+        payload_attributes: E::PayloadAttributes,
+    ) -> eyre::Result<E::ExecutionPayloadV1Irys> {
+        Ok(EngineApiClient::<E>::build_new_payload_irys(
+            &self.engine_api_client,
+            parent,
+            payload_attributes,
+        )
+        .await?)
+    }
+
+    /// Retrieves a v1 Irys payload from the engine api as serde value
     pub async fn get_payload_v1_irys_value(
         &self,
         payload_id: PayloadId,

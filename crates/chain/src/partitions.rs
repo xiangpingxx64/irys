@@ -110,7 +110,7 @@ pub fn mine_partition(partition: Partition, seed_receiver_channel: Receiver<H256
                     partition_id: partition.id,
                     // TODO: Fix
                     chunk_index: 0,
-                    mining_address: partition.mining_addr,
+                    mining_address: partition.mining_address,
                 };
                 // TODO: Send info to block builder code
 

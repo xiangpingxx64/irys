@@ -19,17 +19,18 @@ use reth::{
 };
 use reth_chainspec::EthereumHardforks;
 use reth_node_builder::{NodeAddOns, NodeTypesWithEngine};
+use reth_payload_primitives::PayloadBuilder;
 use reth_stages_types::StageId;
 use tokio_stream::StreamExt;
 
 use crate::adapter::{
-    engine_api::EngineApiTestContext, network::NetworkTestContext, payload::PayloadTestContext,
-    rpc::RpcTestContext, traits::PayloadEnvelopeExt,
+    engine_api::EngineApiContext, network::NetworkContext, payload::PayloadContext,
+    rpc::RpcContext, traits::PayloadEnvelopeExt,
 };
 
 /// An helper struct to handle node actions
 #[allow(missing_debug_implementations)]
-pub struct NodeTestContext<Node, AddOns>
+pub struct RethNodeContext<Node, AddOns>
 where
     Node: FullNodeComponents,
     AddOns: NodeAddOns<Node>,
@@ -37,16 +38,16 @@ where
     /// The core structure representing the full node.
     pub inner: FullNode<Node, AddOns>,
     /// Context for testing payload-related features.
-    pub payload: PayloadTestContext<<Node::Types as NodeTypesWithEngine>::Engine>,
+    pub payload: PayloadContext<<Node::Types as NodeTypesWithEngine>::Engine>,
     /// Context for testing network functionalities.
-    pub network: NetworkTestContext<Node::Network>,
+    pub network: NetworkContext<Node::Network>,
     /// Context for testing the Engine API.
-    pub engine_api: EngineApiTestContext<<Node::Types as NodeTypesWithEngine>::Engine>,
+    pub engine_api: EngineApiContext<<Node::Types as NodeTypesWithEngine>::Engine>,
     /// Context for testing RPC features.
-    pub rpc: RpcTestContext<Node, AddOns::EthApi>,
+    pub rpc: RpcContext<Node, AddOns::EthApi>,
 }
 
-impl<Node, Engine, AddOns> NodeTestContext<Node, AddOns>
+impl<Node, Engine, AddOns> RethNodeContext<Node, AddOns>
 where
     Engine: EngineTypes,
     Node: FullNodeComponents,
@@ -60,14 +61,14 @@ where
 
         Ok(Self {
             inner: node.clone(),
-            payload: PayloadTestContext::new(builder).await?,
-            network: NetworkTestContext::new(node.network.clone()),
-            engine_api: EngineApiTestContext {
+            payload: PayloadContext::new(builder).await?,
+            network: NetworkContext::new(node.network.clone()),
+            engine_api: EngineApiContext {
                 engine_api_client: node.auth_server_handle().http_client(),
                 canonical_stream: node.provider.canonical_state_stream(),
                 _marker: PhantomData::<Engine>,
             },
-            rpc: RpcTestContext {
+            rpc: RpcContext {
                 inner: node.rpc_registry,
             },
         })
@@ -138,6 +139,42 @@ where
         // ensure we're also receiving the built payload as event
         let built_payload = self.payload.expect_built_payload().await?;
         Ok((built_payload, eth_attr))
+    }
+
+    pub async fn new_payload_irys(
+        &mut self,
+        attributes: Engine::PayloadBuilderAttributes,
+    ) -> eyre::Result<(
+        Engine::ExecutionPayloadV1Irys,
+        Engine::PayloadBuilderAttributes,
+    )>
+    where
+        <Engine as EngineTypes>::ExecutionPayloadV1Irys:
+            From<Engine::BuiltPayload> + PayloadEnvelopeExt,
+    {
+        // trigger new payload building draining the pool
+        self.payload
+            .payload_builder
+            .new_payload(attributes.clone())
+            .await?;
+
+        let eth_attr = attributes;
+        // first event is the payload attributes
+        // self.payload.expect_attr_event(eth_attr.clone()).await?;
+        // wait for the payload builder to have finished building
+        self.payload
+            .wait_for_built_payload(eth_attr.payload_id())
+            .await;
+        // trigger resolve payload via engine api
+        let execution_payload = self
+            .engine_api
+            .get_payload_v1_irys(eth_attr.payload_id())
+            .await?;
+        // ensure we're also receiving the built payload as event
+        // let built_payload = self.payload.expect_built_payload().await?;
+        // self.
+        // Ok((built_payload, eth_attr))
+        Ok((execution_payload, eth_attr))
     }
 
     /// Advances the node forward one block

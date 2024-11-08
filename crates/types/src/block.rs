@@ -70,7 +70,7 @@ pub struct IrysBlockHeader {
     /// and ledger.
     pub ledgers: Vec<TransactionLedger>,
 
-    pub evm_block_hash: Option<B256>,
+    pub evm_block_hash: B256,
 }
 
 impl IrysBlockHeader {
@@ -117,7 +117,7 @@ impl IrysBlockHeader {
                     expires: Some(1622543200),
                 },
             ],
-            evm_block_hash: None,
+            evm_block_hash: B256::ZERO,
         }
     }
 }

@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use node::NodeTestContext;
+use node::RethNodeContext;
 use reth::{
     args::{DiscoveryArgs, NetworkArgs, RpcServerArgs},
     builder::{NodeBuilder, NodeConfig, NodeHandle},
@@ -74,7 +74,7 @@ where
     };
 
     // Create nodes and peer them
-    let mut nodes: Vec<NodeTestContext<_, _>> = Vec::with_capacity(num_nodes);
+    let mut nodes: Vec<RethNodeContext<_, _>> = Vec::with_capacity(num_nodes);
 
     for idx in 0..num_nodes {
         let node_config = NodeConfig::new(chain_spec.clone())
@@ -94,7 +94,7 @@ where
             .launch()
             .await?;
 
-        let mut node = NodeTestContext::new(node).await?;
+        let mut node = RethNodeContext::new(node).await?;
 
         // Connect each node in a chain.
         if let Some(previous_node) = nodes.last_mut() {
@@ -134,4 +134,4 @@ type Adapter<N> = NodeAdapter<
 >;
 
 /// Type alias for a type of `NodeHelper`
-pub type NodeHelperType<N, AO> = NodeTestContext<Adapter<N>, AO>;
+pub type NodeHelperType<N, AO> = RethNodeContext<Adapter<N>, AO>;

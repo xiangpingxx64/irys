@@ -13,11 +13,11 @@ use reth_chainspec::EthereumHardforks;
 use reth_node_builder::{EthApiTypes, NodeTypes};
 
 #[allow(missing_debug_implementations)]
-pub struct RpcTestContext<Node: FullNodeComponents, EthApi: EthApiTypes> {
+pub struct RpcContext<Node: FullNodeComponents, EthApi: EthApiTypes> {
     pub inner: RpcRegistry<Node, EthApi>,
 }
 
-impl<Node, EthApi> RpcTestContext<Node, EthApi>
+impl<Node, EthApi> RpcContext<Node, EthApi>
 where
     Node: FullNodeComponents<Types: NodeTypes<ChainSpec: EthereumHardforks>>,
     EthApi: EthApiSpec + EthTransactions + TraceExt,

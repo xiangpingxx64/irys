@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use crate::{block_producer::BlockProducerActor, chunk_storage::ChunkStorageActor};
 use actix::{Actor, Addr, Context, Handler, Message};
+use irys_storage::StorageProvider;
 use irys_storage::{ie, partition_provider::PartitionStorageProvider};
 use irys_types::{
     block_production::{Partition, SolutionContext},
@@ -9,17 +11,11 @@ use irys_types::{
 use rand::{seq::SliceRandom, RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
-use irys_storage::StorageProvider;
-use crate::{
-    block_producer::BlockProducerActor, chunk_storage::ChunkStorageActor,
-    
-};
 
 pub struct PartitionMiningActor {
     partition: Partition,
     block_producer_actor: Addr<BlockProducerActor>,
     part_storage_provider: PartitionStorageProvider,
-    
 }
 
 impl PartitionMiningActor {
@@ -50,7 +46,16 @@ impl PartitionMiningActor {
         let start_chunk_index = (recall_range_index * NUM_CHUNKS_IN_RECALL_RANGE) as usize;
 
         // haven't tested this, but it looks correct
-        let chunks = self.part_storage_provider.read_chunks(ie(start_chunk_index as u32, start_chunk_index as u32 + NUM_CHUNKS_IN_RECALL_RANGE as u32), None).unwrap();
+        let chunks = self
+            .part_storage_provider
+            .read_chunks(
+                ie(
+                    start_chunk_index as u32,
+                    start_chunk_index as u32 + NUM_CHUNKS_IN_RECALL_RANGE as u32,
+                ),
+                None,
+            )
+            .unwrap();
 
         let mut hasher = Sha256::new();
         for chunk in &chunks {
@@ -66,7 +71,7 @@ impl PartitionMiningActor {
                     partition_id: self.partition.id,
                     // TODO: Fix
                     chunk_index: 0,
-                    mining_address: self.partition.mining_addr,
+                    mining_address: self.partition.mining_address,
                 };
                 // TODO: Send info to block builder code
 
@@ -100,10 +105,7 @@ impl Handler<Seed> for PartitionMiningActor {
 
     fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
         let difficuly = get_latest_difficulty();
-        match self.mine_partition_with_seed(
-            seed.into_inner(),
-            difficuly,
-        ) {
+        match self.mine_partition_with_seed(seed.into_inner(), difficuly) {
             Some(s) => {
                 let _ = self.block_producer_actor.send(s);
             }

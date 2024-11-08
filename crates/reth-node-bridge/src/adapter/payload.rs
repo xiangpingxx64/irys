@@ -7,19 +7,23 @@ use tracing::{error, info, trace};
 
 /// Helper for payload operations
 #[derive(Debug)]
-pub struct PayloadTestContext<E: EngineTypes> {
+pub struct PayloadContext<E: EngineTypes> {
     pub payload_event_stream: BroadcastStream<Events<E>>,
     pub payload_builder: PayloadBuilderHandle<E>,
     pub timestamp: u64,
 }
 
-impl<E: EngineTypes> PayloadTestContext<E> {
+impl<E: EngineTypes> PayloadContext<E> {
     /// Creates a new payload helper
     pub async fn new(payload_builder: PayloadBuilderHandle<E>) -> eyre::Result<Self> {
         let payload_events = payload_builder.subscribe().await?;
         let payload_event_stream = payload_events.into_stream();
         // Cancun timestamp
-        Ok(Self { payload_event_stream, payload_builder, timestamp: 1710338135 })
+        Ok(Self {
+            payload_event_stream,
+            payload_builder,
+            timestamp: 1710338135,
+        })
     }
 
     /// Creates a new payload job from static attributes
@@ -29,7 +33,10 @@ impl<E: EngineTypes> PayloadTestContext<E> {
     ) -> eyre::Result<E::PayloadBuilderAttributes> {
         self.timestamp += 1;
         let attributes: E::PayloadBuilderAttributes = attributes_generator(self.timestamp);
-        self.payload_builder.new_payload(attributes.clone()).await.unwrap();
+        self.payload_builder
+            .new_payload(attributes.clone())
+            .await
+            .unwrap();
         Ok(attributes)
     }
 

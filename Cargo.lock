@@ -259,6 +259,7 @@ name = "actors"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "alloy-rpc-types-engine",
  "assert_matches",
  "color-eyre",
  "database",
@@ -271,6 +272,7 @@ dependencies = [
  "packing",
  "rand",
  "rand_chacha",
+ "reth",
  "reth-db",
  "serde_json",
  "sha2 0.10.8",
