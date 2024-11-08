@@ -228,12 +228,18 @@ impl EpochServiceActor {
     /// Computes active capacity partitions available for pledges based on
     /// data partitions and scaling factor
     fn get_num_capacity_partitions(data_partition_count: u64, scalar: u64) -> u64 {
-        let min_count = NUM_PARTITIONS_PER_SLOT * 2;
+        // Every ledger needs at least one slot filled with data partitions
+        let min_count = Ledger::ALL.len() as u64 * NUM_PARTITIONS_PER_SLOT;
         let base_count = std::cmp::max(data_partition_count, min_count);
-
-        let result = truncate_to_3_decimals((base_count as f64).log10()).ceil() * scalar as f64;
-
-        result.ceil() as u64
+        let log_10 = (base_count as f64).log10();
+        let trunc = truncate_to_3_decimals(log_10);
+        let scaled = truncate_to_3_decimals(trunc * scalar as f64);
+        let rounded = truncate_to_3_decimals(scaled).ceil() as u64;
+        // println!(
+        //     "- base_count: {}, log_10: {}, trunc: {}, scaled: {}, rounded: {}",
+        //     base_count, log_10, trunc, scaled, rounded
+        // );
+        rounded
     }
 
     /// Adds new capacity partitions to the protocols pool of partitions. This
@@ -400,9 +406,6 @@ mod tests {
         // This allows us to inspect the actor's state after processing
         let _ = epoch_service.handle(NewEpochMessage(genesis_block), &mut Context::new());
 
-        // Verify the correct number of genesis partitions have been activated
-        assert_eq!(epoch_service.all_active_partitions.len(), 102);
-
         // Verify the correct number of ledgers have been added
         let expected_ledger_count = Ledger::ALL.len();
         assert_eq!(epoch_service.ledgers.len(), expected_ledger_count);
@@ -467,6 +470,15 @@ mod tests {
             }
             assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
         }
+
+        // Verify the correct number of genesis partitions have been activated
+        let data_partition_count = epoch_service.data_partitions.len() as u64;
+        let expected_partitions = data_partition_count
+            + EpochServiceActor::get_num_capacity_partitions(data_partition_count, CAPACITY_SCALAR);
+        assert_eq!(
+            epoch_service.all_active_partitions.len(),
+            expected_partitions as usize
+        );
 
         // Validate that all the capacity partitions are assigned to the
         // bootstrap miner but not assigned to any ledger
@@ -540,4 +552,21 @@ mod tests {
 
     #[actix::test]
     async fn expire_slots_test() {}
+
+    #[actix::test]
+    async fn capacity_projection_tests() {
+        let max_data_parts = 1000;
+        for i in (0..max_data_parts).step_by(10) {
+            let data_partition_count = i;
+            let capacity_count = EpochServiceActor::get_num_capacity_partitions(
+                data_partition_count,
+                CAPACITY_SCALAR,
+            );
+            let total = data_partition_count + capacity_count;
+            println!(
+                "data:{}, capacity:{}, total:{}",
+                data_partition_count, capacity_count, total
+            );
+        }
+    }
 }
