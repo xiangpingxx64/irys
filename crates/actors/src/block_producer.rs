@@ -56,6 +56,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
         let current_height = *self.last_height.read().unwrap();
         let arc_rwlock = self.last_height.clone();
         let reth = self.reth_provider.clone();
+        let db = self.db.clone();
 
         Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
@@ -144,6 +145,8 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 .update_forkchoice(v1_payload.parent_hash, v1_payload.block_hash)
                 .await
                 .unwrap();
+
+            database::insert_block(&db, &irys_block).unwrap();
 
             *write_current_height += 1;
             ()
