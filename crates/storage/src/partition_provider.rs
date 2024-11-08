@@ -1,6 +1,7 @@
 use eyre::eyre;
 use irys_types::{
-    ChunkState, IntervalState, PartitionStorageProviderConfig, StorageModuleConfig, CHUNK_SIZE,
+    ChunkBin, ChunkState, IntervalState, PartitionStorageProviderConfig, StorageModuleConfig,
+    CHUNK_SIZE,
 };
 use nodit::{interval::ii, InclusiveInterval, Interval, NoditMap};
 use serde::{Deserialize, Serialize};
@@ -44,12 +45,11 @@ impl PartitionStorageProvider {
         &self,
         read_interval: Interval<u32>,
         expected_state: Option<ChunkState>,
-    ) -> eyre::Result<Vec<[u8; CHUNK_SIZE as usize]>> {
+    ) -> eyre::Result<Vec<ChunkBin>> {
         // figure out what SMs we need
         let sm_iter = self.sm_map.overlapping(read_interval);
         // TODO: read in parallel, probably use streams?
-        let mut result: Vec<[u8; CHUNK_SIZE as usize]> =
-            Vec::with_capacity(read_interval.width() as usize);
+        let mut result: Vec<ChunkBin> = Vec::with_capacity(read_interval.width() as usize);
         for (sm_interval, sm) in sm_iter {
             // storage modules use relative 0 based offsets, as that's what works well with files
             let sm_offset = sm_interval.start();
@@ -73,7 +73,7 @@ impl PartitionStorageProvider {
     /// write a vec of chunks to a partition-relative interval
     pub fn write_chunks(
         &self,
-        chunks: Vec<[u8; CHUNK_SIZE as usize]>,
+        chunks: Vec<ChunkBin>,
         write_interval: Interval<u32>,
         expected_state: Option<ChunkState>,
         new_state: IntervalState,

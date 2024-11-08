@@ -162,7 +162,7 @@ impl StorageModule {
             }
             while chunks_read < chunks_to_read {
                 // read 1 chunk
-                let mut buf: [u8; CHUNK_SIZE as usize] = [0; CHUNK_SIZE as usize];
+                let mut buf: ChunkBin = [0; CHUNK_SIZE as usize];
                 debug!(
                     "handle pos: {:?}, path: {:?}",
                     handle.stream_position()?,
@@ -181,7 +181,7 @@ impl StorageModule {
     /// Writes some chunks to an interval, and tags the written interval with new state
     pub fn write_chunks(
         &self,
-        chunks: Vec<[u8; CHUNK_SIZE as usize]>,
+        chunks: Vec<ChunkBin>,
         interval: Interval<u32>,
         expected_state: Option<ChunkState>,
         new_state: IntervalState,
