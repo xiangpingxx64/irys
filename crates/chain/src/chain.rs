@@ -1,5 +1,5 @@
 use crate::partitions::{get_partitions_and_storage_providers, mine_partition};
-use ::database::{config::get_data_dir, open_or_create_db};
+use ::database::{config::get_data_dir, open_or_create_db, tables::Tables};
 use actix::{Actor, Addr, Arbiter, System};
 use actors::{
     block_producer::BlockProducerActor,
@@ -30,7 +30,7 @@ use reth::{
     CliContext,
 };
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
-use reth_db::{database, DatabaseEnv};
+use reth_db::{database, DatabaseEnv, HasName, HasTableType};
 use std::{
     collections::HashMap,
     fs::canonicalize,
@@ -91,7 +91,7 @@ pub async fn start_irys_node(
             // the RethNodeHandle doesn't *need* to be Arc, but it will reduce the copy cost
             let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await.unwrap()));
             let db = DatabaseProvider(reth_node.provider.database.db.clone());
-
+            
             let mempool_actor = MempoolActor::new(db.clone());
             let mempool_actor_addr = mempool_actor.start();
 
@@ -154,7 +154,7 @@ pub async fn start_irys_node(
 
             tokio_runtime.block_on(run_to_completion_or_panic(
                 &mut task_manager,
-                run_until_ctrl_c(start_reth_node(exec, reth_chainspec, reth_handle_sender)),
+                run_until_ctrl_c(start_reth_node(exec, reth_chainspec, Tables::ALL, reth_handle_sender)),
             )).unwrap();
 
            
@@ -164,14 +164,15 @@ pub async fn start_irys_node(
     return Ok(irys_node_handle_receiver.await?);
 }
 
-async fn start_reth_node(
+async fn start_reth_node<T: HasName + HasTableType>(
     exec: TaskExecutor,
     chainspec: ChainSpec,
+    tables: &[T],
     sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
 ) -> eyre::Result<NodeExitReason> {
 
     let pb = absolute(PathBuf::from_str("./.reth").unwrap()).unwrap();
-    let node_handle = irys_reth_node_bridge::run_node(Arc::new(chainspec), exec, pb).await?;
+    let node_handle = irys_reth_node_bridge::run_node(Arc::new(chainspec), exec, pb, tables).await?;
     let r = sender
         .send(node_handle.node.clone())
         .expect("unable to send reth node handle");

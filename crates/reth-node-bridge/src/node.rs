@@ -22,7 +22,7 @@ use reth_chainspec::{ChainSpec, EthChainSpec, EthereumHardforks};
 use reth_cli::chainspec::ChainSpecParser;
 use reth_cli_commands::{node::NoArgs, NodeCommand};
 use reth_consensus::Consensus;
-use reth_db::{init_db, DatabaseEnv};
+use reth_db::{init_db, DatabaseEnv, HasName, HasTableType};
 use reth_engine_tree::tree::TreeConfig;
 use reth_ethereum_engine_primitives::EthereumEngineValidator;
 use reth_node_api::{FullNodeTypesAdapter, NodeTypesWithDBAdapter};
@@ -101,10 +101,11 @@ impl Deref for RethNodeProvider {
     }
 }
 
-pub async fn run_node(
+pub async fn run_node<T: HasName + HasTableType>(
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
     data_dir: PathBuf,
+    tables: &[T],
 ) -> eyre::Result<RethNodeExitHandle> {
     let mut os_args: Vec<String> = std::env::args().collect();
     let bp = os_args.remove(0);
@@ -224,7 +225,8 @@ pub async fn run_node(
     let db_path = data_dir.db();
 
     tracing::info!(target: "reth::cli", path = ?db_path, "Opening database");
-    let database = Arc::new(init_db(db_path.clone(), db.database_args())?.with_metrics());
+    let database =
+        Arc::new(init_db(db_path.clone(), db.database_args())?.with_metrics_and_tables(tables));
 
     if with_unused_ports {
         node_config = node_config.with_unused_ports();
