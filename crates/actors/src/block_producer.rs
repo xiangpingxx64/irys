@@ -174,6 +174,7 @@ impl Handler<BlockConfirmed> for BlockProducerActor {
     type Result = ();
     
     fn handle(&mut self, msg: BlockConfirmed, ctx: &mut Self::Context) -> Self::Result {
-        todo!()
+        // TODO: Likely want to do several actions upon a block being confirmed such as update indexes
+        ()
     } 
 }
