@@ -4,6 +4,7 @@ use crate::{block_producer::BlockProducerActor, chunk_storage::ChunkStorageActor
 use actix::{Actor, Addr, Context, Handler, Message};
 use irys_storage::StorageProvider;
 use irys_storage::{ie, partition_provider::PartitionStorageProvider};
+use irys_types::app_state::DatabaseProvider;
 use irys_types::{
     block_production::{Partition, SolutionContext},
     CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_RECALL_RANGES_IN_PARTITION, U256,
@@ -14,6 +15,7 @@ use sha2::{Digest, Sha256};
 
 pub struct PartitionMiningActor {
     partition: Partition,
+    database_provider: DatabaseProvider,
     block_producer_actor: Addr<BlockProducerActor>,
     part_storage_provider: PartitionStorageProvider,
 }
@@ -21,11 +23,13 @@ pub struct PartitionMiningActor {
 impl PartitionMiningActor {
     pub fn new(
         partition: Partition,
+        database_provider: DatabaseProvider,
         block_producer_addr: Addr<BlockProducerActor>,
         storage_provider: PartitionStorageProvider,
     ) -> Self {
         Self {
             partition,
+            database_provider,
             block_producer_actor: block_producer_addr,
             part_storage_provider: storage_provider,
         }
@@ -103,7 +107,7 @@ impl Handler<Seed> for PartitionMiningActor {
     type Result = ();
 
     fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
-        let difficuly = get_latest_difficulty();
+        let difficuly = get_latest_difficulty(&self.database_provider);
         match self.mine_partition_with_seed(seed.into_inner(), difficuly) {
             Some(s) => {
                 let _ = self.block_producer_actor.send(s);
@@ -113,8 +117,8 @@ impl Handler<Seed> for PartitionMiningActor {
     }
 }
 
-fn get_latest_difficulty() -> U256 {
-    U256::max_value()
+fn get_latest_difficulty(db: &DatabaseProvider) -> U256 {
+    U256::zero()
 }
 
 fn hash_to_number(hash: &[u8]) -> U256 {

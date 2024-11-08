@@ -108,7 +108,7 @@ pub async fn start_irys_node(
                 partition_storage_providers.insert(part.id, storage_provider.clone());
 
                 let partition_mining_actor =
-                    PartitionMiningActor::new(part, block_producer_addr.clone(), storage_provider);
+                    PartitionMiningActor::new(part, db.clone(), block_producer_addr.clone(), storage_provider);
                 part_actors.push(partition_mining_actor.start());
             }
 
