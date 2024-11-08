@@ -1,5 +1,4 @@
 use actix::{Actor, Context, Handler, Message};
-use color_eyre::eyre::eyre;
 use database::data_ledger::*;
 use eyre::{Error, Result};
 use irys_types::{
@@ -306,16 +305,22 @@ impl EpochServiceActor {
         ledger_num: Ledger,
     ) -> u64 {
         let ledger = &self.ledgers[ledger_num];
-        let max_capacity = U256::from(ledger.slot_count() as u64 * PARTITION_SIZE);
-        let ledger_size = new_epoch_block.ledgers[ledger.ledger_num()].ledger_size;
+        let num_slots = ledger.slot_count() as u64;
+        let max_capacity = U256::from(num_slots * PARTITION_SIZE);
+        let ledger_size = new_epoch_block.ledgers[ledger_num as usize].ledger_size;
 
         // Add capacity slots if ledger usage exceeds 50% of partition size from max capacity
         let add_capacity_threshold = U256::from(max_capacity - PARTITION_SIZE / 2);
         let mut slots_to_add: u64 = 0;
         if ledger_size >= add_capacity_threshold {
-            // Calculate needed slots + 1 buffer slot for safety margin
-            let size_delta = ledger_size - max_capacity;
-            slots_to_add = 1 + (size_delta.as_u64() / PARTITION_SIZE); // Add 1 for safety buffer
+            // Add 1 slot for buffer plus enough slots to handle size above threshold
+            let excess = ledger_size.saturating_sub(max_capacity);
+            slots_to_add = 1 + (excess.as_u64() / PARTITION_SIZE);
+
+            // Check if we need to add an additional slot for excess > half of PARTITION_SIZE
+            if excess.as_u64() % PARTITION_SIZE >= PARTITION_SIZE / 2 {
+                slots_to_add += 1;
+            }
         }
 
         // Compute Data uploaded to the ledger last epoch
@@ -439,6 +444,7 @@ mod tests {
                     }
                 );
             }
+            assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
         }
 
         // Verify data partition assignments match _SUBMIT_ledger slots
@@ -459,6 +465,7 @@ mod tests {
                     }
                 );
             }
+            assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
         }
 
         // Validate that all the capacity partitions are assigned to the
@@ -478,7 +485,59 @@ mod tests {
         }
 
         // Debug output for verification
-        println!("Data Partitions: {:#?}", epoch_service.capacity_partitions);
+        // println!("Data Partitions: {:#?}", epoch_service.capacity_partitions);
         println!("Ledger State: {:#?}", epoch_service.ledgers);
     }
+
+    #[actix::test]
+    async fn add_slots_test() {
+        // Initialize genesis block at height 0
+        let mut genesis_block = IrysBlockHeader::new();
+        genesis_block.height = 0;
+
+        // Create epoch service with random miner address
+        let miner_address = Address::random();
+        let mut epoch_service = EpochServiceActor::new(miner_address);
+
+        // Process genesis message directly instead of through actor system
+        // This allows us to inspect the actor's state after processing
+        let mut ctx = Context::new();
+        let _ = epoch_service.handle(NewEpochMessage(genesis_block), &mut ctx);
+
+        // Now create a new epoch block & give the Submit ledger enough size to add a slot
+        let mut new_epoch_block = IrysBlockHeader::new();
+        new_epoch_block.height = NUM_BLOCKS_IN_EPOCH;
+        new_epoch_block.ledgers[Ledger::Submit as usize].ledger_size =
+            U256::from(PARTITION_SIZE / 2);
+
+        let _ = epoch_service.handle(NewEpochMessage(new_epoch_block), &mut ctx);
+
+        // Verify each ledger has one slot and the correct number of partitions
+        let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
+        let sub_slots = epoch_service.ledgers.get_slots(Ledger::Submit);
+
+        assert_eq!(pub_slots.len(), 1);
+        assert_eq!(sub_slots.len(), 2);
+
+        // Simulate a subsequent epoch block that adds multiple ledger slots
+        let mut new_epoch_block = IrysBlockHeader::new();
+        new_epoch_block.height = NUM_BLOCKS_IN_EPOCH * 2;
+        new_epoch_block.ledgers[Ledger::Submit as usize].ledger_size =
+            U256::from((PARTITION_SIZE as f64 * 2.5) as u64);
+        new_epoch_block.ledgers[Ledger::Publish as usize].ledger_size =
+            U256::from((PARTITION_SIZE as f64 * 0.75) as u64);
+
+        let _ = epoch_service.handle(NewEpochMessage(new_epoch_block), &mut ctx);
+
+        // Validate the correct number of ledgers slots were added to each ledger
+        let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
+        let sub_slots = epoch_service.ledgers.get_slots(Ledger::Submit);
+        assert_eq!(pub_slots.len(), 2);
+        assert_eq!(sub_slots.len(), 4);
+
+        println!("Ledger State: {:#?}", epoch_service.ledgers);
+    }
+
+    #[actix::test]
+    async fn expire_slots_test() {}
 }
