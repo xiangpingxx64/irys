@@ -58,7 +58,7 @@ impl PartitionMiningActor {
             .unwrap();
 
         let mut hasher = Sha256::new();
-        for chunk in &chunks {
+        for (index, chunk) in chunks.iter().enumerate() {
             hasher.update(chunk);
             let hash = hasher.finalize_reset().to_vec();
 
@@ -69,8 +69,7 @@ impl PartitionMiningActor {
                 dbg!("SOLUTION FOUND!!!!!!!!!");
                 let solution = SolutionContext {
                     partition_id: self.partition.id,
-                    // TODO: Fix
-                    chunk_index: 0,
+                    chunk_index: (start_chunk_index + index) as u32,
                     mining_address: self.partition.mining_address,
                 };
                 // TODO: Send info to block builder code

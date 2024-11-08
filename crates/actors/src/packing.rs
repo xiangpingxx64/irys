@@ -50,8 +50,8 @@ impl PackingActor {
 
                 let f = fs::File::open(filename.clone()).unwrap();
 
-                let mut data_in_range = match fs::read(filename) {
-                    Ok(r) => r,
+                let data_in_range = match fs::read(filename) {
+                    Ok(r) => cast_vec_u8_to_vec_u8_array(r),
                     Err(_) => continue,
                 };
 
@@ -86,6 +86,17 @@ impl PackingActor {
 
             tokio::time::sleep(tokio::time::Duration::from_millis(CHUNK_POLL_TIME_MS)).await;
         }
+    }
+}
+
+fn cast_vec_u8_to_vec_u8_array<const N: usize>(input: Vec<u8>) -> Vec<[u8; N]> {
+    assert!(input.len() % N != 0, "Input vector must have a length of {}", N);
+    let length = input.len() / N;
+
+    unsafe {
+        let ptr = input.as_ptr() as *const [u8; N];
+        let result = Vec::from_raw_parts(ptr as *mut [u8; N], length, length);
+        result
     }
 }
 
