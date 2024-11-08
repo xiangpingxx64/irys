@@ -100,14 +100,13 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 .build_payload_v1_irys(B256::ZERO, payload_attrs)
                 .await
                 .unwrap();
-
-            // TODO @JesseTheRobot create a deref(?) trait so this isn't as bad
-            let block_hash = exec_payload
+            let v1_payload = exec_payload
                 .execution_payload
                 .payload_inner
                 .payload_inner
-                .payload_inner
-                .block_hash;
+                .payload_inner;
+            // TODO @JesseTheRobot create a deref(?) trait so this isn't as bad
+            let block_hash = v1_payload.block_hash;
 
             irys_block.evm_block_hash = block_hash;
 
@@ -139,6 +138,12 @@ impl Handler<SolutionContext> for BlockProducerActor {
             // };
 
             // TODO: Commit block to DB and send to networking layer
+
+            context
+                .engine_api
+                .update_forkchoice(v1_payload.parent_hash, v1_payload.block_hash)
+                .await
+                .unwrap();
 
             *write_current_height += 1;
             ()
