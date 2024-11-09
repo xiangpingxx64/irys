@@ -76,6 +76,13 @@ impl BlockIndex<Uninitialized> {
             state: Initialized,
         })
     }
+
+    /// Saves an empty block index to disk, resetting any persisted block state
+    pub async fn reset() -> eyre::Result<()> {
+        let block_items: Vec<BlockIndexItem> = Vec::new();
+        save_block_index(&block_items)?;
+        Ok(())
+    }
 }
 
 //==============================================================================
