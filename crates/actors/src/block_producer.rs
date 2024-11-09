@@ -66,7 +66,8 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 return ();
             };
 
-            let data_txs: Vec<irys_types::IrysTransactionHeader> = mempool_addr.send(GetBestMempoolTxs).await.unwrap();
+            let data_txs: Vec<irys_types::IrysTransactionHeader> =
+                mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
             let mut irys_block = IrysBlockHeader::new();
 
@@ -75,14 +76,19 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect();
 
-            let shadows = Shadows::new(data_txs.iter()
-                .map(|header| ShadowTx {
-                    tx_id: IrysTxId::from_slice(header.id.as_bytes()),
-                    fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
-                    address: header.signer,
-                    tx: ShadowTxType::Data(DataShadow { fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)) }),
-                })
-                .collect());
+            let shadows = Shadows::new(
+                data_txs
+                    .iter()
+                    .map(|header| ShadowTx {
+                        tx_id: IrysTxId::from_slice(header.id.as_bytes()),
+                        fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                        address: header.signer,
+                        tx: ShadowTxType::Data(DataShadow {
+                            fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                        }),
+                    })
+                    .collect(),
+            );
 
             // create a new reth payload
 
@@ -114,11 +120,32 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             // TODO: Irys block header building logic
 
+            /*
+
+            // Calculate storage requirements for new transactions
+            let mut total_chunks = 0;
+            for data_tx in data_txs {
+                // Convert data size to required number of 256KB chunks, rounding up
+                let num_chunks = (data_tx.data_size + CHUNK_SIZE - 1) / CHUNK_SIZE;
+                total_chunks += num_chunks;
+            }
+
+            // Calculate total bytes needed in submit ledger
+            let bytes_added = total_chunks * CHUNK_SIZE;
+
+            // Update submit ledger size with new data
+            let prev_block = self.block_index.get_item(self.last_height).unwrap();
+            let submit_ledger_size = prev_block.ledgers[Ledger::Submit as usize].ledger_size;
+            let new_submit_ledger_size = submit_ledger_size + u128::from(bytes_added);
+
+            */
+
             // TODO: Commit block
 
-
-            let _ = mempool_addr.send(RemoveConfirmedTxs(data_tx_ids)).await.unwrap();
-
+            let _ = mempool_addr
+                .send(RemoveConfirmedTxs(data_tx_ids))
+                .await
+                .unwrap();
 
             // let final_block = IrysBlockHeader {
             //     block_hash: todo!(),
@@ -172,9 +199,9 @@ pub struct BlockConfirmed();
 
 impl Handler<BlockConfirmed> for BlockProducerActor {
     type Result = ();
-    
+
     fn handle(&mut self, msg: BlockConfirmed, ctx: &mut Self::Context) -> Self::Result {
         // TODO: Likely want to do several actions upon a block being confirmed such as update indexes
         ()
-    } 
+    }
 }

@@ -19,4 +19,5 @@ pub mod db_index;
 pub mod tables;
 
 pub use block_index::*;
+pub use data_ledger::*;
 pub use database::*;
