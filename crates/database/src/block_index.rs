@@ -25,7 +25,7 @@ pub struct Initialized;
 pub struct BlockIndex<State = Uninitialized> {
     #[allow(dead_code)]
     state: State,
-    /// Stored as a fixed size array with an Arc to allow multi threaded access
+    /// Stored as a fixed size array with an Arc to allow multithreaded access
     items: Arc<[BlockIndexItem]>,
 }
 
@@ -109,8 +109,8 @@ impl BlockIndex<Initialized> {
         let result = self.get_block_index_item(ledger, byte_offset);
         if let Ok((block_height, found_item)) = result {
             let previous_item = self.get_item(block_height - 1).unwrap();
-            block_bounds.start_ledger_size = previous_item.ledgers[ledger as usize].ledger_size;
-            block_bounds.end_ledger_size = found_item.ledgers[ledger as usize].ledger_size;
+            block_bounds.start_ledger_offset = previous_item.ledgers[ledger as usize].ledger_size;
+            block_bounds.end_ledger_offset = found_item.ledgers[ledger as usize].ledger_size;
             block_bounds.tx_root = found_item.ledgers[ledger as usize].tx_root;
             block_bounds.height = block_height as u128;
         }
@@ -150,10 +150,10 @@ pub struct BlockBounds {
     pub height: u128,
     /// Ledger for which the bounds are described
     pub ledger: Ledger,
-    /// The (inclusive) ledger_size before the blocks tx are applied
-    pub start_ledger_size: u128,
-    /// The (non inclusive) ledger_size after the blocks tx are applied
-    pub end_ledger_size: u128,
+    /// The (inclusive) ledger byte offset before the blocks tx are applied
+    pub start_ledger_offset: u128,
+    /// The (non inclusive) ledger byte offset after the blocks tx are applied
+    pub end_ledger_offset: u128,
     /// The tx root of the ledger in that block
     pub tx_root: H256,
 }
@@ -403,8 +403,8 @@ mod tests {
             BlockBounds {
                 height: 1,
                 ledger: Ledger::Publish,
-                start_ledger_size: 100,
-                end_ledger_size: 200,
+                start_ledger_offset: 100,
+                end_ledger_offset: 200,
                 tx_root: block_items[1].ledgers[Ledger::Publish as usize].tx_root
             }
         );
@@ -415,8 +415,8 @@ mod tests {
             BlockBounds {
                 height: 1,
                 ledger: Ledger::Submit,
-                start_ledger_size: 1000,
-                end_ledger_size: 2000,
+                start_ledger_offset: 1000,
+                end_ledger_offset: 2000,
                 tx_root: block_items[1].ledgers[Ledger::Submit as usize].tx_root
             }
         );
