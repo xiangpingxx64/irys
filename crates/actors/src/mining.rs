@@ -76,7 +76,6 @@ impl PartitionMiningActor {
                     chunk_index: (start_chunk_index + index) as u32,
                     mining_address: self.partition.mining_address,
                 };
-                // TODO: Send info to block builder code
 
                 // TODO: Let all partitions know to stop mining
 
@@ -107,10 +106,13 @@ impl Handler<Seed> for PartitionMiningActor {
     type Result = ();
 
     fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
-        let difficuly = get_latest_difficulty(&self.database_provider);
-        match self.mine_partition_with_seed(seed.into_inner(), difficuly) {
+        let difficulty = get_latest_difficulty(&self.database_provider);
+
+        dbg!("Partition {} -- looking for solution with difficulty >= {}", self.partition.id, difficulty);
+
+        match self.mine_partition_with_seed(seed.into_inner(), difficulty) {
             Some(s) => {
-                let _ = self.block_producer_actor.send(s);
+                let _ = self.block_producer_actor.do_send(s);
             }
             None => (),
         };

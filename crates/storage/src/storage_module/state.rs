@@ -52,12 +52,18 @@ impl StorageModule {
     }
 
     /// creates a new storage module by loading state from disk
-    pub fn load_from_disk(path: PathBuf) -> eyre::Result<Self> {
+    pub fn load_from_disk(path: PathBuf) -> eyre::Result<StorageModule> {
         // TODO @JesseTheRobot - validate provided config against stored config
         // perform any operations like resizing etc
         let s = read_to_string(path.join(SM_STATE_FILE))?;
-        let state: Self = serde_json::from_str(s.as_str())?;
-        Ok(state)
+        let state: StorageModule = serde_json::from_str(s.as_str())?;
+        dbg!(&state);
+        Ok(StorageModule {
+            path,
+            interval_map: state.interval_map,
+            capacity: state.capacity,
+            config: state.config
+        })
     }
 
     /// creates a new storage module if it can't load it from disk
@@ -121,6 +127,7 @@ impl StorageModule {
 
     /// Acquire a read only File handle for the SM's path
     pub fn get_handle(&self) -> Result<File, std::io::Error> {
+        dbg!("Getting handle {}", self.path.clone());
         File::open(&self.path.join(SM_DATA_FILE))
     }
 
@@ -143,9 +150,9 @@ impl StorageModule {
             handle.seek(SeekFrom::Start(interval.start() as u64 * CHUNK_SIZE))?;
         }
 
-        error!("getting read lock {:?}", &interval);
+        debug!("getting read lock {:?}", &interval);
         let map = self.interval_map.read().unwrap();
-        error!("got read lock {:?}", &interval);
+        debug!("got read lock {:?}", &interval);
         let overlap_iter = map.overlapping(interval);
 
         let mut result = Vec::with_capacity(chunks_to_read.try_into()?);

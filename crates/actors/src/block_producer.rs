@@ -59,6 +59,8 @@ impl Handler<SolutionContext> for BlockProducerActor {
     type Result = ResponseFuture<Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>>;
 
     fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
+        dbg!("BlockProducerActor solution received {}", &msg);
+
         let mempool_addr = self.mempool_addr.clone();
         let block_index_addr = self.block_index_addr.clone();
         let current_height = *self.last_height.read().unwrap();
@@ -236,7 +238,7 @@ impl Handler<BlockConfirmedMessage> for BlockProducerActor {
         let data_tx = &msg.1;
 
         // Do something with the block
-        println!("Block height: {} num tx: {}", block.height, data_tx.len());
+        dbg!("Block height: {} num tx: {}", block.height, data_tx.len());
 
         // No return value needed since result type is ()
     }

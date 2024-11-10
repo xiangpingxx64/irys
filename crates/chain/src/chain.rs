@@ -33,13 +33,7 @@ use reth::{
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
 use reth_db::{database, DatabaseEnv, HasName, HasTableType};
 use std::{
-    collections::HashMap,
-    fs::canonicalize,
-    future::IntoFuture,
-    path::{absolute, PathBuf},
-    str::FromStr,
-    sync::{mpsc, Arc, RwLock},
-    time::Duration,
+    collections::HashMap, fs::canonicalize, future::IntoFuture, path::{absolute, PathBuf}, str::FromStr, sync::{mpsc, Arc, RwLock}, thread, time::Duration
 };
 
 use futures::FutureExt;
@@ -71,7 +65,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
 
     let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
-        BlockIndex::reset().await?; // Always reset the block_index for now
+        BlockIndex::reset()?; // Always reset the block_index for now
         BlockIndex::default().init().await.unwrap()
     }));
 

@@ -29,7 +29,8 @@ pub fn run_vdf(
         }
 
         for a in &partition_channels {
-            a.send(Seed(hash));
+            dbg!("Seed created {}", hash.clone());
+            a.do_send(Seed(hash));
         }
 
         if let Ok(h) = new_seed_listener.try_recv() {
