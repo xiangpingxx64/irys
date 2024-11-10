@@ -66,6 +66,10 @@ impl IrysNodeConfig {
     pub fn reth_log_dir(&self) -> PathBuf {
         self.reth_data_dir().join("logs")
     }
+    /// get the instance-specific block_index directory path  
+    pub fn block_index_dir(&self) -> PathBuf {
+        self.instance_directory().join("block_index")
+    }
     /// Extend the configured genesis accounts
     /// These accounts are used as the genesis state for the chain
     pub fn extend_genesis_accounts(

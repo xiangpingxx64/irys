@@ -2809,6 +2809,7 @@ dependencies = [
  "bytes",
  "color-eyre",
  "eyre",
+ "irys-config",
  "irys-types",
  "modular-bitfield",
  "reth",

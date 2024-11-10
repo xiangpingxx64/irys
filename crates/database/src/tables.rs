@@ -85,5 +85,5 @@ tables! {
 
     table CachedDataRoots<Key = H256, Value = CachedDataRoot>;
 
-        table CachedChunks<Key = H256, Value = CachedChunk>;
+    table CachedChunks<Key = H256, Value = CachedChunk>;
 }

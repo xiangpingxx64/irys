@@ -2,10 +2,10 @@
 //! block height.
 use crate::data_ledger::Ledger;
 use color_eyre::eyre::Result;
+use irys_config::IrysNodeConfig;
 use irys_types::H256;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::path::Path;
 use std::sync::Arc;
 
 /// This struct represents the `Uninitialized` block_index type state.
@@ -30,7 +30,7 @@ pub struct BlockIndex<State = Uninitialized> {
 }
 
 const HASH_INDEX_ITEM_SIZE: u64 = 48 + 16 + 32;
-const FILE_PATH: &str = "data/index.dat";
+const FILE_NAME: &str = "index.dat";
 
 /// Use a Type State pattern for BlockIndex with two states, Uninitialized and Initialized
 impl BlockIndex {
@@ -57,13 +57,7 @@ impl BlockIndex<Uninitialized> {
     /// Initializes a block index from disk, if this was a multi node network
     /// it could also read the latest block information from the network.
     pub async fn init(mut self) -> Result<BlockIndex<Initialized>> {
-        // Ensure the path exists
-        let path = Path::new(FILE_PATH);
-
-        if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir)?;
-        }
-
+        Self::ensure_path_exists()?;
         // Try to load the block index from disk
         match load_index_from_file() {
             Ok(indexes) => self.items = indexes.into(),
@@ -79,8 +73,21 @@ impl BlockIndex<Uninitialized> {
 
     /// Saves an empty block index to disk, resetting any persisted block state
     pub async fn reset() -> eyre::Result<()> {
+        Self::ensure_path_exists()?;
         let block_items: Vec<BlockIndexItem> = Vec::new();
         save_block_index(&block_items)?;
+        Ok(())
+    }
+
+    fn ensure_path_exists() -> eyre::Result<()> {
+        // Ensure the path exists
+        let node_config = IrysNodeConfig::default();
+        let path = node_config.block_index_dir();
+        let path = path.join(FILE_NAME);
+
+        if let Some(dir) = path.parent() {
+            fs::create_dir_all(dir)?;
+        }
         Ok(())
     }
 }
@@ -253,7 +260,10 @@ impl BlockIndexItem {
 
 #[allow(dead_code)]
 fn save_block_index(block_index_items: &[BlockIndexItem]) -> io::Result<()> {
-    let mut file = File::create(FILE_PATH)?;
+    let node_config = IrysNodeConfig::default();
+    let path = node_config.block_index_dir();
+    let path = path.join(FILE_NAME);
+    let mut file = File::create(path)?;
     for item in block_index_items {
         let bytes = item.to_bytes();
         file.write_all(&bytes)?;
@@ -263,7 +273,10 @@ fn save_block_index(block_index_items: &[BlockIndexItem]) -> io::Result<()> {
 
 #[allow(dead_code)]
 fn read_item_at(block_height: u64) -> io::Result<BlockIndexItem> {
-    let mut file = File::open(FILE_PATH)?;
+    let node_config = IrysNodeConfig::default();
+    let path = node_config.block_index_dir();
+    let path = path.join(FILE_NAME);
+    let mut file = File::open(path)?;
     let mut buffer = [0; HASH_INDEX_ITEM_SIZE as usize];
     file.seek(SeekFrom::Start(block_height * HASH_INDEX_ITEM_SIZE))?;
     file.read_exact(&mut buffer)?;
@@ -272,14 +285,20 @@ fn read_item_at(block_height: u64) -> io::Result<BlockIndexItem> {
 
 #[allow(dead_code)]
 fn append_item(item: BlockIndexItem) -> io::Result<()> {
-    let mut file = OpenOptions::new().append(true).open(FILE_PATH)?;
+    let node_config = IrysNodeConfig::default();
+    let path = node_config.block_index_dir();
+    let path = path.join(FILE_NAME);
+    let mut file = OpenOptions::new().append(true).open(path)?;
     file.write_all(&item.to_bytes())?;
     Ok(())
 }
 
 #[allow(dead_code)]
 fn append_items_to_file(items: &Vec<BlockIndexItem>) -> io::Result<()> {
-    let mut file = OpenOptions::new().append(true).open(FILE_PATH)?;
+    let node_config = IrysNodeConfig::default();
+    let path = node_config.block_index_dir();
+    let path = path.join(FILE_NAME);
+    let mut file = OpenOptions::new().append(true).open(path)?;
 
     for item in items {
         file.write_all(&item.to_bytes())?;
@@ -290,17 +309,23 @@ fn append_items_to_file(items: &Vec<BlockIndexItem>) -> io::Result<()> {
 
 #[allow(dead_code)]
 fn update_file_item_at(block_height: u64, item: BlockIndexItem) -> io::Result<()> {
-    let mut file = OpenOptions::new().read(true).write(true).open(FILE_PATH)?;
+    let node_config = IrysNodeConfig::default();
+    let path = node_config.block_index_dir();
+    let path = path.join(FILE_NAME);
+    let mut file = OpenOptions::new().read(true).write(true).open(path)?;
     file.seek(SeekFrom::Start(block_height * HASH_INDEX_ITEM_SIZE))?;
     file.write_all(&item.to_bytes())?;
     Ok(())
 }
 fn load_index_from_file() -> io::Result<Vec<BlockIndexItem>> {
+    let node_config = IrysNodeConfig::default();
+    let path = node_config.block_index_dir();
+    let path = path.join(FILE_NAME);
     let mut file = OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
-        .open(FILE_PATH)?;
+        .open(path)?;
 
     // Determine the file size
     let file_size = file.seek(SeekFrom::End(0))?;

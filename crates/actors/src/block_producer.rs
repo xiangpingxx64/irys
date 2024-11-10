@@ -10,6 +10,7 @@ use irys_primitives::{ShadowTx, Shadows};
 use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
 use irys_types::{
     app_state::DatabaseProvider, block_production::SolutionContext, Address, IrysBlockHeader,
+    IrysTransactionHeader,
 };
 use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
@@ -49,7 +50,7 @@ impl Actor for BlockProducerActor {
 }
 
 impl Handler<SolutionContext> for BlockProducerActor {
-    type Result = ResponseFuture<Option<(IrysBlockHeader, ExecutionPayloadEnvelopeV1Irys)>>;
+    type Result = ResponseFuture<Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>>;
 
     fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
         let mempool_addr = self.mempool_addr.clone();
@@ -182,10 +183,14 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             database::insert_block(&db, &irys_block).unwrap();
 
-            self_addr.do_send(BlockConfirmed());
+            let block = Arc::new(irys_block);
+            let txs = Arc::new(data_txs);
+            let msg = BlockConfirmedMessage(Arc::clone(&block), Arc::clone(&txs));
+
+            self_addr.do_send(msg);
 
             *write_current_height += 1;
-            Some((irys_block, exec_payload))
+            Some((Arc::clone(&block), exec_payload))
         })
     }
 }
@@ -201,13 +206,21 @@ fn get_current_block_height() -> u64 {
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub struct BlockConfirmed();
+pub struct BlockConfirmedMessage(
+    pub Arc<IrysBlockHeader>,
+    pub Arc<Vec<IrysTransactionHeader>>,
+);
 
-impl Handler<BlockConfirmed> for BlockProducerActor {
+impl Handler<BlockConfirmedMessage> for BlockProducerActor {
     type Result = ();
+    fn handle(&mut self, msg: BlockConfirmedMessage, _ctx: &mut Context<Self>) -> Self::Result {
+        // Access the block header through msg.0
+        let block = &msg.0;
+        let data_tx = &msg.1;
 
-    fn handle(&mut self, msg: BlockConfirmed, ctx: &mut Self::Context) -> Self::Result {
-        // TODO: Likely want to do several actions upon a block being confirmed such as update indexes
-        ()
+        // Do something with the block
+        println!("Block height: {} num tx: {}", block.height, data_tx.len());
+
+        // No return value needed since result type is ()
     }
 }

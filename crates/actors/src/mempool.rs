@@ -3,12 +3,7 @@ use irys_types::{
     app_state::DatabaseProvider, chunk::Chunk, hash_sha256, validate_path, IrysTransactionHeader,
     CHUNK_SIZE, H256,
 };
-use reth_db::DatabaseEnv;
-use std::{
-    collections::{BTreeMap, HashMap},
-    ops::Rem,
-    sync::Arc,
-};
+use std::collections::BTreeMap;
 
 /// The Mempool oversees pending transactions and validation of incoming tx.
 #[derive(Debug)]
@@ -212,6 +207,8 @@ impl Handler<RemoveConfirmedTxs> for MempoolActor {
 //------------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use assert_matches::assert_matches;
     use database::{config::get_data_dir, open_or_create_db};
     use irys_types::{irys::IrysSigner, Base64, MAX_CHUNK_SIZE};
@@ -240,10 +237,7 @@ mod tests {
 
         // Create a new Irys API instance & a signed transaction
         let irys = IrysSigner::random_signer();
-        let tx = irys
-            .create_transaction(data_bytes.clone(), None)
-            .await
-            .unwrap();
+        let tx = irys.create_transaction(data_bytes.clone(), None).unwrap();
         let tx = irys.sign_transaction(tx).unwrap();
 
         println!("{:?}", tx.header);

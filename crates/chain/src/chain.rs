@@ -37,7 +37,7 @@ use std::{
     future::IntoFuture,
     path::{absolute, PathBuf},
     str::FromStr,
-    sync::{mpsc, Arc},
+    sync::{mpsc, Arc, RwLock},
     time::Duration,
 };
 
@@ -69,12 +69,10 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
         oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
 
-    // Initialize the block index which loads any BlockIndexItems from disk
-    let block_index = BlockIndex::default();
-
-    /// For now reset the block index every time by saving an empty index
-    BlockIndex::reset().await?;
-    let block_index = block_index.init().await.unwrap();
+    let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
+        BlockIndex::reset().await?;
+        BlockIndex::default().init().await.unwrap()
+    }));
 
     // Spawn thread and runtime for actors
     let node_config_copy = node_config.clone();
