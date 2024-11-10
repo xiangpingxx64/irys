@@ -28,7 +28,6 @@ pub struct BlockProducerActor {
     pub mempool_addr: Addr<MempoolActor>,
     pub block_index_addr: Addr<BlockIndexActor>,
     pub reth_provider: RethNodeProvider,
-    pub block_height: AtomicU64,
 }
 
 impl BlockProducerActor {
@@ -39,18 +38,12 @@ impl BlockProducerActor {
         reth_provider: RethNodeProvider,
     ) -> Self {
         Self {
-            block_height: AtomicU64::ZERO,
             db,
             mempool_addr,
             block_index_addr,
             reth_provider,
         }
     }
-}
-
-// TODO: Implement real query
-fn get_latest_height_from_db(db: &DatabaseEnv) -> u64 {
-    0
 }
 
 impl Actor for BlockProducerActor {
