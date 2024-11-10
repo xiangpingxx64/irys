@@ -247,7 +247,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
             block_index_addr.do_send(block_confirm_message.clone());
 
             *write_current_height += 1;
-            Some((Arc::clone(&block), exec_payload))
+            Some((block.clone(), exec_payload))
         })
     }
 }
