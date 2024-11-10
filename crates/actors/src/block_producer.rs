@@ -1,16 +1,14 @@
 use std::{
-    sync::{atomic::AtomicU64, Arc, Mutex, RwLock},
-    time::{SystemTime, UNIX_EPOCH},
+    str::FromStr, sync::{atomic::AtomicU64, Arc, Mutex, RwLock}, time::{SystemTime, UNIX_EPOCH}
 };
 
 use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, ResponseFuture};
 use alloy_rpc_types_engine::{ExecutionPayloadEnvelopeV1Irys, PayloadAttributes};
-use irys_primitives::{ShadowTx, Shadows};
+use irys_primitives::{DataShadow, IrysTxId, ShadowTx, ShadowTxType, Shadows};
 // use irys_primitives::PayloadAttributes;
 use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
 use irys_types::{
-    app_state::DatabaseProvider, block_production::SolutionContext, Address, IrysBlockHeader,
-    IrysTransactionHeader,
+    app_state::DatabaseProvider, block_production::SolutionContext, Address, Base64, H256List, IrysBlockHeader, IrysSignature, IrysTransactionHeader, PoaData, Signature, TransactionLedger, H256, U256
 };
 use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
@@ -19,7 +17,6 @@ use crate::{
     block_index::{BlockIndexActor, GetBlockHeightMessage},
     mempool::{GetBestMempoolTxs, MempoolActor, RemoveConfirmedTxs},
 };
-use irys_primitives::*;
 
 pub struct BlockProducerActor {
     pub db: DatabaseProvider,
@@ -84,25 +81,66 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 return None;
             };
 
-            let data_txs: Vec<irys_types::IrysTransactionHeader> =
+            let data_txs: Vec<IrysTransactionHeader> =
                 mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
-            let mut irys_block = IrysBlockHeader::new();
+            let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect::<Vec<H256>>();
+
+            let mut irys_block = IrysBlockHeader {
+                diff: U256::from(1000),
+                cumulative_diff: U256::from(5000),
+                last_retarget: 1622543200,
+                solution_hash: H256::zero(),
+                previous_solution_hash: H256::zero(),
+                last_epoch_hash: H256::random(),
+                chunk_hash: H256::zero(),
+                height: 42,
+                block_hash: H256::zero(),
+                previous_block_hash: H256::zero(),
+                previous_cumulative_diff: U256::from(4000),
+                poa: PoaData {
+                    tx_path: Base64::from_str("").unwrap(),
+                    data_path: Base64::from_str("").unwrap(),
+                    chunk: Base64::from_str("").unwrap(),
+                },
+                reward_address: Address::ZERO,
+                reward_key: Base64::from_str("").unwrap(),
+                signature: IrysSignature {
+                    reth_signature: Signature::test_signature(),
+                },
+                timestamp: 1622543200,
+                ledgers: vec![
+                    // Permanent Publish Ledger
+                    TransactionLedger {
+                        tx_root: H256::zero(),
+                        txids: H256List(data_tx_ids.clone()),
+                        ledger_size: U256::from(0),
+                        expires: None,
+                    },
+                    // Term Submit Ledger
+                    TransactionLedger {
+                        tx_root: H256::zero(),
+                        txids: H256List::new(),
+                        ledger_size: U256::from(0),
+                        expires: Some(1622543200),
+                    },
+                ],
+                evm_block_hash: B256::ZERO,
+            };
 
             // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
             let context = RethNodeContext::new(reth.into()).await.unwrap();
 
-            let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect();
 
             let shadows = Shadows::new(
                 data_txs
                     .iter()
                     .map(|header| ShadowTx {
                         tx_id: IrysTxId::from_slice(header.id.as_bytes()),
-                        fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                        fee: irys_primitives::U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
                         address: header.signer,
                         tx: ShadowTxType::Data(DataShadow {
-                            fee: U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                            fee: irys_primitives::U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
                         }),
                     })
                     .collect(),
