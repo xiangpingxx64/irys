@@ -94,7 +94,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 previous_solution_hash: H256::zero(),
                 last_epoch_hash: H256::random(),
                 chunk_hash: H256::zero(),
-                height: 42,
+                height: current_height + 1,
                 block_hash: H256::zero(),
                 previous_block_hash: H256::zero(),
                 previous_cumulative_diff: U256::from(4000),
@@ -108,7 +108,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 signature: IrysSignature {
                     reth_signature: Signature::test_signature(),
                 },
-                timestamp: 1622543200,
+                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
                 ledgers: vec![
                     // Permanent Publish Ledger
                     TransactionLedger {
