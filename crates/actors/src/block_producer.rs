@@ -15,12 +15,16 @@ use irys_types::{
 use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
 
-use crate::mempool::{GetBestMempoolTxs, MempoolActor, RemoveConfirmedTxs};
+use crate::{
+    block_index::{BlockIndexActor, GetBlockHeightMessage},
+    mempool::{GetBestMempoolTxs, MempoolActor, RemoveConfirmedTxs},
+};
 use irys_primitives::*;
 
 pub struct BlockProducerActor {
     pub db: DatabaseProvider,
     pub mempool_addr: Addr<MempoolActor>,
+    pub block_index_addr: Addr<BlockIndexActor>,
     pub last_height: Arc<RwLock<u64>>,
     pub reth_provider: RethNodeProvider,
 }
@@ -29,12 +33,14 @@ impl BlockProducerActor {
     pub fn new(
         db: DatabaseProvider,
         mempool_addr: Addr<MempoolActor>,
+        block_index_addr: Addr<BlockIndexActor>,
         reth_provider: RethNodeProvider,
     ) -> Self {
         Self {
             last_height: Arc::new(RwLock::new(get_latest_height_from_db(&db))),
             db,
             mempool_addr,
+            block_index_addr,
             reth_provider,
         }
     }
@@ -54,6 +60,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
     fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
         let mempool_addr = self.mempool_addr.clone();
+        let block_index_addr = self.block_index_addr.clone();
         let current_height = *self.last_height.read().unwrap();
         let arc_rwlock = self.last_height.clone();
         let reth = self.reth_provider.clone();
@@ -62,6 +69,14 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
         Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
+
+            // TEMP: This demonstrates how to get the block height from the block_index_actor
+            let bh = block_index_addr
+                .send(GetBlockHeightMessage {})
+                .await
+                .unwrap();
+            println!("block_height: {:?}", bh);
+
             let mut write_current_height = arc_rwlock.write().unwrap();
             if current_height != *write_current_height {
                 return None;
@@ -185,9 +200,11 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             let block = Arc::new(irys_block);
             let txs = Arc::new(data_txs);
-            let msg = BlockConfirmedMessage(Arc::clone(&block), Arc::clone(&txs));
+            let block_confirm_message = BlockConfirmedMessage(Arc::clone(&block), Arc::clone(&txs));
 
-            self_addr.do_send(msg);
+            // We can clone messages because it only contains references to the data
+            self_addr.do_send(block_confirm_message.clone());
+            block_index_addr.do_send(block_confirm_message.clone());
 
             *write_current_height += 1;
             Some((Arc::clone(&block), exec_payload))
@@ -204,7 +221,7 @@ fn get_current_block_height() -> u64 {
     0
 }
 
-#[derive(Message)]
+#[derive(Message, Clone)]
 #[rtype(result = "()")]
 pub struct BlockConfirmedMessage(
     pub Arc<IrysBlockHeader>,

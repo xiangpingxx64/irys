@@ -5,6 +5,7 @@ use ::database::{
 };
 use actix::{Actor, Addr, Arbiter, System};
 use actors::{
+    block_index::BlockIndexActor,
     block_producer::BlockProducerActor,
     mempool::{self, MempoolActor},
     mining::PartitionMiningActor,
@@ -70,7 +71,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
 
     let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
-        BlockIndex::reset().await?;
+        BlockIndex::reset().await?; // Always reset the block_index for now
         BlockIndex::default().init().await.unwrap()
     }));
 
@@ -90,11 +91,15 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let mempool_actor = MempoolActor::new(db.clone());
                 let mempool_actor_addr = mempool_actor.start();
 
+                let block_index_actor = BlockIndexActor::new(block_index);
+                let block_index_actor_addr = block_index_actor.start();
+
                 let mut part_actors = Vec::new();
 
                 let block_producer_actor = BlockProducerActor::new(
                     db.clone(),
                     mempool_actor_addr.clone(),
+                    block_index_actor_addr.clone(),
                     reth_node.clone(),
                     // &block_index,
                 );
@@ -132,6 +137,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     block_producer: block_producer_addr,
                     packing: packing_actor_addr,
                     mempool: mempool_actor_addr,
+                    block_index: block_index_actor_addr,
                 };
 
                 let _ = irys_node_handle_sender.send(IrysNodeCtx {

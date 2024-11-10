@@ -1,8 +1,8 @@
 use actix::Addr;
 
 use crate::{
-    block_producer::BlockProducerActor, mempool::MempoolActor, mining::PartitionMiningActor,
-    packing::PackingActor,
+    block_index::BlockIndexActor, block_producer::BlockProducerActor, mempool::MempoolActor,
+    mining::PartitionMiningActor, packing::PackingActor,
 };
 
 /// Serves as a kind of app state that can be passed into actix web to allow
@@ -13,4 +13,5 @@ pub struct ActorAddresses {
     pub block_producer: Addr<BlockProducerActor>,
     pub packing: Addr<PackingActor>,
     pub mempool: Addr<MempoolActor>,
+    pub block_index: Addr<BlockIndexActor>,
 }
