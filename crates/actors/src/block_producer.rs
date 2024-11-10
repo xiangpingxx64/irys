@@ -4,7 +4,7 @@ use std::{
 };
 
 use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, ResponseFuture};
-use alloy_rpc_types_engine::PayloadAttributes;
+use alloy_rpc_types_engine::{ExecutionPayloadEnvelopeV1Irys, PayloadAttributes};
 use irys_primitives::{ShadowTx, Shadows};
 // use irys_primitives::PayloadAttributes;
 use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
@@ -49,7 +49,7 @@ impl Actor for BlockProducerActor {
 }
 
 impl Handler<SolutionContext> for BlockProducerActor {
-    type Result = ResponseFuture<()>;
+    type Result = ResponseFuture<Option<(IrysBlockHeader, ExecutionPayloadEnvelopeV1Irys)>>;
 
     fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
         let mempool_addr = self.mempool_addr.clone();
@@ -63,7 +63,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
             // Acquire lock and check that the height hasn't changed identifying a race condition
             let mut write_current_height = arc_rwlock.write().unwrap();
             if current_height != *write_current_height {
-                return ();
+                return None;
             };
 
             let data_txs: Vec<irys_types::IrysTransactionHeader> =
@@ -72,7 +72,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
             let mut irys_block = IrysBlockHeader::new();
 
             // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
-            let context = RethNodeContext::new(reth.0.as_ref().clone()).await.unwrap();
+            let context = RethNodeContext::new(reth.into()).await.unwrap();
 
             let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect();
 
@@ -108,7 +108,12 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 .build_payload_v1_irys(B256::ZERO, payload_attrs)
                 .await
                 .unwrap();
+
+            // we can examine the execution status of generated shadow txs
+            // let shadow_receipts = exec_payload.shadow_receipts;
+
             let v1_payload = exec_payload
+                .clone()
                 .execution_payload
                 .payload_inner
                 .payload_inner
@@ -168,6 +173,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             // TODO: Commit block to DB and send to networking layer
 
+            // make the built evm payload canonical
             context
                 .engine_api
                 .update_forkchoice(v1_payload.parent_hash, v1_payload.block_hash)
@@ -179,7 +185,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
             self_addr.do_send(BlockConfirmed());
 
             *write_current_height += 1;
-            ()
+            Some((irys_block, exec_payload))
         })
     }
 }
