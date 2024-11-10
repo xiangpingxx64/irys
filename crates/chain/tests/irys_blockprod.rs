@@ -122,16 +122,14 @@ async fn mine_ten_blocks() -> eyre::Result<()> {
     for i in 1..10 {
         info!("mining block {}", i);
         info!("sending message to block producer...");
-        let (block, reth_exec_env) = node
-            .actor_addresses
-            .block_producer
-            .send(SolutionContext {
-                partition_id: 0,
-                chunk_index: 0,
-                mining_address: node.config.mining_signer.address(),
-            })
-            .await?
-            .unwrap();
+        let fut = node.actor_addresses.block_producer.send(SolutionContext {
+            partition_id: 0,
+            chunk_index: 0,
+            mining_address: node.config.mining_signer.address(),
+        });
+        info!("send successful!");
+
+        let (block, reth_exec_env) = fut.await?.unwrap();
         info!("get response from block producer!");
 
         //check reth for built block
