@@ -90,3 +90,18 @@ impl Handler<BlockConfirmedMessage> for BlockIndexActor {
         // No return value needed since result type is ()
     }
 }
+
+/// Returns the current block height in the index
+#[derive(Message, Clone, Debug)]
+#[rtype(result = "u64")]
+pub struct GetBlockHeightMessage {}
+
+impl Handler<GetBlockHeightMessage> for BlockIndexActor {
+    type Result = u64;
+
+    fn handle(&mut self, msg: GetBlockHeightMessage, ctx: &mut Self::Context) -> Self::Result {
+        let _ = ctx;
+        let _ = msg;
+        self.block_index.read().unwrap().num_blocks()
+    }
+}
