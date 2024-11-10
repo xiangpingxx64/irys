@@ -24,5 +24,6 @@ openssl.workspace = true
 irys-reth-node-bridge.workspace = true
 reth.workspace = true
 alloy-rpc-types-engine.workspace = true
+tracing.workspace = true
 [lints]
 workspace = true

@@ -277,6 +277,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.8",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2821,6 +2822,7 @@ dependencies = [
  "tempfile",
  "test-fuzz",
  "tokio",
+ "tracing",
 ]
 
 [[package]]

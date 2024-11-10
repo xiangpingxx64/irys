@@ -121,7 +121,7 @@ async fn mine_ten_blocks() -> eyre::Result<()> {
 
     for i in 1..10 {
         info!("mining block {}", i);
-
+        info!("sending message to block producer...");
         let (block, reth_exec_env) = node
             .actor_addresses
             .block_producer
@@ -132,6 +132,7 @@ async fn mine_ten_blocks() -> eyre::Result<()> {
             })
             .await?
             .unwrap();
+        info!("get response from block producer!");
 
         //check reth for built block
         let reth_block = reth_context
@@ -147,8 +148,8 @@ async fn mine_ten_blocks() -> eyre::Result<()> {
         let db_irys_block = database::block_by_hash(&node.db, block.block_hash)?.unwrap();
 
         assert_eq!(db_irys_block.evm_block_hash, reth_block.hash_slow());
-
-        sleep(Duration::from_secs(1)).await;
+        // MAGIC: we wait more than 1s so that the block timestamps (evm block timestamps are seconds) don't overlap
+        sleep(Duration::from_millis(1500)).await;
     }
     Ok(())
 }

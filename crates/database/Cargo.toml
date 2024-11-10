@@ -22,6 +22,7 @@ eyre.workspace = true
 irys-types.workspace = true
 test-fuzz.workspace = true
 tempfile.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true

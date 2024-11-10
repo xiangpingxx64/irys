@@ -41,7 +41,8 @@ impl BlockIndexActor {
         let bytes_added = total_chunks * CHUNK_SIZE;
         // Get read lock once and keep it for multiple operations
         let index = self.block_index.read().unwrap();
-        let last_height = index.num_blocks() as usize;
+        // MAGIC: block index includes the genesis block (0th block, would make index size 1, so we minus 1)
+        let last_height = (index.num_blocks() - 1) as usize;
 
         // Use same lock to get previous block
         let prev_block = index.get_item(last_height).unwrap();

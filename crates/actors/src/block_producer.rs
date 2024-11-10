@@ -1,5 +1,7 @@
 use std::{
-    str::FromStr, sync::{atomic::AtomicU64, Arc, Mutex, RwLock}, time::{SystemTime, UNIX_EPOCH}
+    str::FromStr,
+    sync::{atomic::AtomicU64, Arc, Mutex, RwLock},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, ResponseFuture};
@@ -8,10 +10,13 @@ use irys_primitives::{DataShadow, IrysTxId, ShadowTx, ShadowTxType, Shadows};
 // use irys_primitives::PayloadAttributes;
 use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
 use irys_types::{
-    app_state::DatabaseProvider, block_production::SolutionContext, Address, Base64, H256List, IrysBlockHeader, IrysSignature, IrysTransactionHeader, PoaData, Signature, TransactionLedger, H256, U256
+    app_state::DatabaseProvider, block_production::SolutionContext, Address, Base64, H256List,
+    IrysBlockHeader, IrysSignature, IrysTransactionHeader, PoaData, Signature, TransactionLedger,
+    H256, U256,
 };
 use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
+use tracing::info;
 
 use crate::{
     block_index::{BlockIndexActor, GetBlockHeightMessage},
@@ -56,7 +61,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
     type Result = ResponseFuture<Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>>;
 
     fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
-        dbg!("BlockProducerActor solution received {}", &msg);
+        info!("BlockProducerActor solution received {:?}", &msg);
 
         let mempool_addr = self.mempool_addr.clone();
         let block_index_addr = self.block_index_addr.clone();
@@ -66,7 +71,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
         let db = self.db.clone();
         let self_addr = ctx.address();
 
-        Box::pin(async move {
+        return Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
 
             // TEMP: This demonstrates how to get the block height from the block_index_actor
@@ -85,6 +90,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
             let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect::<Vec<H256>>();
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
             let mut irys_block = IrysBlockHeader {
                 diff: U256::from(1000),
@@ -108,7 +114,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 signature: IrysSignature {
                     reth_signature: Signature::test_signature(),
                 },
-                timestamp: SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64,
+                timestamp: now.as_millis() as u64,
                 ledgers: vec![
                     // Permanent Publish Ledger
                     TransactionLedger {
@@ -131,16 +137,19 @@ impl Handler<SolutionContext> for BlockProducerActor {
             // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
             let context = RethNodeContext::new(reth.into()).await.unwrap();
 
-
             let shadows = Shadows::new(
                 data_txs
                     .iter()
                     .map(|header| ShadowTx {
                         tx_id: IrysTxId::from_slice(header.id.as_bytes()),
-                        fee: irys_primitives::U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                        fee: irys_primitives::U256::from(
+                            header.term_fee + header.perm_fee.unwrap_or(0),
+                        ),
                         address: header.signer,
                         tx: ShadowTxType::Data(DataShadow {
-                            fee: irys_primitives::U256::from(header.term_fee + header.perm_fee.unwrap_or(0)),
+                            fee: irys_primitives::U256::from(
+                                header.term_fee + header.perm_fee.unwrap_or(0),
+                            ),
                         }),
                     })
                     .collect(),
@@ -151,7 +160,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
             // generate payload attributes
             // TODO: we need previous block metadata to fill in parent & prev_randao
             let payload_attrs = PayloadAttributes {
-                timestamp: irys_block.timestamp, // tie timestamp together
+                timestamp: now.as_secs(), // tie timestamp together **THIS HAS TO BE SECONDS**
                 prev_randao: B256::ZERO,
                 suggested_fee_recipient: irys_block.reward_address,
                 withdrawals: None,
@@ -248,7 +257,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             *write_current_height += 1;
             Some((block.clone(), exec_payload))
-        })
+        });
     }
 }
 

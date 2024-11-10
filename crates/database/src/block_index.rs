@@ -3,10 +3,11 @@
 use crate::data_ledger::Ledger;
 use color_eyre::eyre::Result;
 use irys_config::IrysNodeConfig;
-use irys_types::H256;
-use std::fs::{self, File, OpenOptions};
+use irys_types::{IrysBlockHeader, H256};
+use std::fs::{self, remove_file, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::sync::Arc;
+use tracing::info;
 
 /// This struct represents the `Uninitialized` block_index type state.
 #[derive(Debug)]
@@ -56,12 +57,44 @@ impl Default for BlockIndex<Uninitialized> {
 impl BlockIndex<Uninitialized> {
     /// Initializes a block index from disk, if this was a multi node network
     /// it could also read the latest block information from the network.
-    pub async fn init(mut self) -> Result<BlockIndex<Initialized>> {
+    pub async fn init(mut self, genesis_block: IrysBlockHeader) -> Result<BlockIndex<Initialized>> {
         Self::ensure_path_exists()?;
         // Try to load the block index from disk
         match load_index_from_file() {
-            Ok(indexes) => self.items = indexes.into(),
-            Err(err) => println!("Error encountered\n {:?}", err),
+            Ok(indexes) => {
+                self.items = indexes.into();
+                // validate that the genesis block is present & valid
+                assert_eq!(
+                    // safety: index 0 should always be present
+                    self.items
+                        .get(0)
+                        .expect("Genesis block is not present in block index")
+                        .block_hash,
+                    genesis_block.block_hash
+                );
+            }
+            Err(err) => {
+                info!(
+                    "could not load block index from disk due to {}, re-initializing...",
+                    &err
+                );
+                // insert the genesis block if there's no index from disk
+                self.items = vec![BlockIndexItem {
+                    block_hash: genesis_block.block_hash,
+                    num_ledgers: genesis_block.ledgers.len() as u8, // TODO @DanMacDonald check this type?
+                    ledgers: genesis_block
+                        .ledgers
+                        .into_iter()
+                        .map(|l| LedgerIndexItem {
+                            ledger_size: l.ledger_size.as_u128(), // TODO @DanMacDonald check this type?
+                            tx_root: l.tx_root,
+                        })
+                        .collect(),
+                }]
+                .into();
+
+                save_block_index(&self.items)?;
+            }
         }
 
         // Return the "Initialized" state of the BlockIndex type
@@ -71,11 +104,41 @@ impl BlockIndex<Uninitialized> {
         })
     }
 
-    /// Saves an empty block index to disk, resetting any persisted block state
-    pub async fn reset() -> eyre::Result<()> {
+    /// test-only method that Initializes a block index from disk, if this was a multi node network
+    /// it could also read the latest block information from the network.
+    #[allow(dead_code)]
+    pub(crate) async fn init_without_genesis(mut self) -> Result<BlockIndex<Initialized>> {
         Self::ensure_path_exists()?;
-        let block_items: Vec<BlockIndexItem> = Vec::new();
-        save_block_index(&block_items)?;
+        // Try to load the block index from disk
+        match load_index_from_file() {
+            Ok(indexes) => self.items = indexes.into(),
+            Err(err) => {
+                println!(
+                    "Error encountered loading block index from disk\n {:?}",
+                    err
+                )
+            }
+        }
+        // Return the "Initialized" state of the BlockIndex type
+        Ok(BlockIndex {
+            items: self.items,
+            state: Initialized,
+        })
+    }
+
+    /// Deletes the block index file
+    pub fn reset() -> eyre::Result<()> {
+        // Self::ensure_path_exists()?;
+        // let block_items: Vec<BlockIndexItem> = Vec::new();
+        // save_block_index(&block_items)?;
+
+        // TODO remove default IrysNodeConfig instances
+        let node_config = IrysNodeConfig::default();
+        let path = node_config.block_index_dir();
+        let path = path.join(FILE_NAME);
+        if path.exists() {
+            remove_file(path)?;
+        }
         Ok(())
     }
 
@@ -83,11 +146,7 @@ impl BlockIndex<Uninitialized> {
         // Ensure the path exists
         let node_config = IrysNodeConfig::default();
         let path = node_config.block_index_dir();
-        let path = path.join(FILE_NAME);
-
-        if let Some(dir) = path.parent() {
-            fs::create_dir_all(dir)?;
-        }
+        fs::create_dir_all(path)?;
         Ok(())
     }
 }
@@ -321,11 +380,7 @@ fn load_index_from_file() -> io::Result<Vec<BlockIndexItem>> {
     let node_config = IrysNodeConfig::default();
     let path = node_config.block_index_dir();
     let path = path.join(FILE_NAME);
-    let mut file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(path)?;
+    let mut file = OpenOptions::new().read(true).write(true).open(path)?;
 
     // Determine the file size
     let file_size = file.seek(SeekFrom::End(0))?;
@@ -420,7 +475,7 @@ mod tests {
 
         // Load the items from disk
         let block_index = BlockIndex::new();
-        let block_index = block_index.init().await.unwrap();
+        let block_index = block_index.init_without_genesis().await.unwrap();
 
         println!("{:?}", block_index.items);
 

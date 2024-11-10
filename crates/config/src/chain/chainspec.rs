@@ -24,6 +24,10 @@ impl IrysChainSpecBuilder {
         }
     }
 
+    pub fn genesis(&self) -> IrysBlockHeader {
+        self.genesis.clone()
+    }
+
     pub fn new() -> Self {
         Self {
             ..Default::default()
