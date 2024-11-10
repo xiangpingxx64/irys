@@ -114,12 +114,15 @@ impl Handler<Seed> for PartitionMiningActor {
             difficulty
         );
 
-        // match self.mine_partition_with_seed(seed.into_inner(), difficulty) {
-        //     Some(s) => {
-        //         let _ = self.block_producer_actor.do_send(s);
-        //     }
-        //     None => (),
-        // };
+        match self.mine_partition_with_seed(seed.into_inner(), difficulty) {
+            Some(s) => {
+                let bpd = self.block_producer_actor.clone();
+                tokio::task::spawn(async move {
+                    let x = bpd.send(s).await.expect("uh oh");
+                });
+            }
+            None => (),
+        };
     }
 }
 

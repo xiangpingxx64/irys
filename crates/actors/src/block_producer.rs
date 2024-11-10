@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use actix::{Actor, Addr, AsyncContext, Context, Handler, Message, ResponseFuture};
+use actix::{Actor, Addr, AsyncContext, AtomicResponse, Context, Handler, Message, ResponseFuture, WrapFuture};
 use alloy_rpc_types_engine::{ExecutionPayloadEnvelopeV1Irys, PayloadAttributes};
 use irys_primitives::{DataShadow, IrysTxId, ShadowTx, ShadowTxType, Shadows};
 // use irys_primitives::PayloadAttributes;
@@ -14,7 +14,7 @@ use irys_types::{
     IrysBlockHeader, IrysSignature, IrysTransactionHeader, PoaData, Signature, TransactionLedger,
     H256, U256,
 };
-use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
+use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::{bitvec::view::BitViewSized, B256}};
 use reth_db::DatabaseEnv;
 use tracing::{error, info};
 
@@ -27,8 +27,8 @@ pub struct BlockProducerActor {
     pub db: DatabaseProvider,
     pub mempool_addr: Addr<MempoolActor>,
     pub block_index_addr: Addr<BlockIndexActor>,
-    pub last_height: Arc<RwLock<u64>>,
     pub reth_provider: RethNodeProvider,
+    pub block_height: AtomicU64,
 }
 
 impl BlockProducerActor {
@@ -39,7 +39,7 @@ impl BlockProducerActor {
         reth_provider: RethNodeProvider,
     ) -> Self {
         Self {
-            last_height: Arc::new(RwLock::new(get_latest_height_from_db(&db))),
+            block_height: AtomicU64::ZERO,
             db,
             mempool_addr,
             block_index_addr,
@@ -58,20 +58,20 @@ impl Actor for BlockProducerActor {
 }
 
 impl Handler<SolutionContext> for BlockProducerActor {
-    type Result = ResponseFuture<Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>>;
+    type Result = AtomicResponse<Self, Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>>;
 
     fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
         info!("BlockProducerActor solution received {:?}", &msg);
 
         let mempool_addr = self.mempool_addr.clone();
         let block_index_addr = self.block_index_addr.clone();
-        let current_height = *self.last_height.read().unwrap();
-        let arc_rwlock = self.last_height.clone();
+        info!("After");
+        let current_height = 0;
         let reth = self.reth_provider.clone();
         let db = self.db.clone();
         let self_addr = ctx.address();
 
-        return Box::pin(async move {
+        return AtomicResponse::new(Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
             info!("before block index read");
             // TEMP: This demonstrates how to get the block height from the block_index_actor
@@ -79,12 +79,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 .send(GetBlockHeightMessage {})
                 .await
                 .unwrap();
-            println!("block_height: {:?}", bh);
-
-            let mut write_current_height = arc_rwlock.write().unwrap();
-            if current_height != *write_current_height {
-                return None;
-            };
+            println!("block_height: {:?}", bh);          
 
             let data_txs: Vec<IrysTransactionHeader> =
                 mempool_addr.send(GetBestMempoolTxs).await.unwrap();
@@ -100,7 +95,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 previous_solution_hash: H256::zero(),
                 last_epoch_hash: H256::random(),
                 chunk_hash: H256::zero(),
-                height: current_height + 1,
+                height: bh + 1,
                 block_hash: H256::zero(),
                 previous_block_hash: H256::zero(),
                 previous_cumulative_diff: U256::from(4000),
@@ -260,10 +255,9 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 Ok(_r) => info!("good"),
                 Err(err) => error!("error: {:?}", err),
             }
-
-            *write_current_height += 1;
+            
             Some((block.clone(), exec_payload))
-        });
+        }.into_actor(self)));
     }
 }
 
