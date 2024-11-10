@@ -3,7 +3,6 @@ use std::sync::{Arc, RwLock};
 use actix::prelude::*;
 use database::{BlockIndex, BlockIndexItem, Initialized, Ledger, LedgerIndexItem};
 use irys_types::{IrysBlockHeader, IrysTransactionHeader, CHUNK_SIZE, H256};
-use tracing::info;
 
 use crate::block_producer::BlockConfirmedMessage;
 
@@ -81,12 +80,7 @@ impl Handler<BlockConfirmedMessage> for BlockIndexActor {
         let data_txs = &msg.1;
 
         // Do something with the block
-        info!("Block height: {}", irys_block_header.height);
-
         self.add_finalized_block(&irys_block_header, &data_txs);
-
-        info!("BI handler done")
-        // No return value needed since result type is ()
     }
 }
 

@@ -1,23 +1,22 @@
-use std::sync::Arc;
-
-use crate::{block_producer::BlockProducerActor, chunk_storage::ChunkStorageActor};
+use crate::block_producer::BlockProducerActor;
 use actix::{Actor, Addr, Context, Handler, Message};
-use irys_storage::StorageProvider;
 use irys_storage::{ie, partition_provider::PartitionStorageProvider};
 use irys_types::app_state::DatabaseProvider;
 use irys_types::{
     block_production::{Partition, SolutionContext},
-    CHUNK_SIZE, H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_RECALL_RANGES_IN_PARTITION, U256,
+    H256, NUM_CHUNKS_IN_RECALL_RANGE, NUM_RECALL_RANGES_IN_PARTITION, U256,
 };
-use rand::{seq::SliceRandom, RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 use sha2::{Digest, Sha256};
+use tracing::{debug, error, info};
 
 pub struct PartitionMiningActor {
     partition: Partition,
     database_provider: DatabaseProvider,
     block_producer_actor: Addr<BlockProducerActor>,
     part_storage_provider: PartitionStorageProvider,
+    should_mine: bool,
 }
 
 impl PartitionMiningActor {
@@ -26,12 +25,14 @@ impl PartitionMiningActor {
         database_provider: DatabaseProvider,
         block_producer_addr: Addr<BlockProducerActor>,
         storage_provider: PartitionStorageProvider,
+        start_mining: bool,
     ) -> Self {
         Self {
             partition,
             database_provider,
             block_producer_actor: block_producer_addr,
             part_storage_provider: storage_provider,
+            should_mine: start_mining,
         }
     }
 
@@ -92,7 +93,7 @@ impl Actor for PartitionMiningActor {
     type Context = Context<Self>;
 }
 
-#[derive(Message)]
+#[derive(Message, Debug)]
 #[rtype(result = "()")]
 pub struct Seed(pub H256);
 
@@ -106,23 +107,50 @@ impl Handler<Seed> for PartitionMiningActor {
     type Result = ();
 
     fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
+        if !self.should_mine {
+            debug!("Mining disabled, skipping seed {:?}", seed);
+            return ();
+        }
+
         let difficulty = get_latest_difficulty(&self.database_provider);
 
-        dbg!(
+        debug!(
             "Partition {} -- looking for solution with difficulty >= {}",
-            self.partition.id,
-            difficulty
+            self.partition.id, difficulty
         );
 
         match self.mine_partition_with_seed(seed.into_inner(), difficulty) {
-            Some(s) => {
-                let bpd = self.block_producer_actor.clone();
-                tokio::task::spawn(async move {
-                    let x = bpd.send(s).await.expect("uh oh");
-                });
-            }
+            Some(s) => match self.block_producer_actor.try_send(s) {
+                Ok(_) => (),
+                Err(err) => error!("Error submitting solution to block producer {:?}", err),
+            },
+
             None => (),
         };
+    }
+}
+
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
+/// Message type for controlling mining
+pub struct MiningControl(pub bool);
+
+impl MiningControl {
+    fn into_inner(self) -> bool {
+        self.0
+    }
+}
+
+impl Handler<MiningControl> for PartitionMiningActor {
+    type Result = ();
+
+    fn handle(&mut self, control: MiningControl, _ctx: &mut Context<Self>) -> Self::Result {
+        let should_mine = control.into_inner();
+        debug!(
+            "Setting should_mine to {} from {}",
+            &self.should_mine, &should_mine
+        );
+        self.should_mine = should_mine
     }
 }
 

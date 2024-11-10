@@ -1,8 +1,11 @@
 use actix::Addr;
 
 use crate::{
-    block_index::BlockIndexActor, block_producer::BlockProducerActor, mempool::MempoolActor,
-    mining::PartitionMiningActor, packing::PackingActor,
+    block_index::BlockIndexActor,
+    block_producer::BlockProducerActor,
+    mempool::MempoolActor,
+    mining::{MiningControl, PartitionMiningActor},
+    packing::PackingActor,
 };
 
 /// Serves as a kind of app state that can be passed into actix web to allow
@@ -14,4 +17,22 @@ pub struct ActorAddresses {
     pub packing: Addr<PackingActor>,
     pub mempool: Addr<MempoolActor>,
     pub block_index: Addr<BlockIndexActor>,
+}
+
+impl ActorAddresses {
+    /// Send a message to all known partition actors to ignore any received VDF steps
+    pub fn stop_mining(&self) -> eyre::Result<()> {
+        self.set_mining(false)
+    }
+    /// Send a message to all known partition actors to begin mining when they receive a VDF step
+    pub fn start_mining(&self) -> eyre::Result<()> {
+        self.set_mining(true)
+    }
+    /// Send a custom control message toa all known partition actors
+    pub fn set_mining(&self, should_mine: bool) -> eyre::Result<()> {
+        for part in self.partitions.iter() {
+            part.try_send(MiningControl(should_mine))?;
+        }
+        Ok(())
+    }
 }

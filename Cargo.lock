@@ -244,6 +244,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix_async_handler"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ca201f173c8bcea4f7f97855709b257ec0bac121c14f391ddfad0ab2930bc2c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rust-format",
+ "syn 2.0.80",
+]
+
+[[package]]
 name = "actix_derive"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -259,6 +271,7 @@ name = "actors"
 version = "0.1.0"
 dependencies = [
  "actix",
+ "actix_async_handler",
  "alloy-rpc-types-engine",
  "assert_matches",
  "color-eyre",
@@ -10125,6 +10138,15 @@ dependencies = [
  "hashlink 0.9.1",
  "libsqlite3-sys",
  "smallvec",
+]
+
+[[package]]
+name = "rust-format"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60e7c00b6c3bf5e38a880eec01d7e829d12ca682079f8238a464def3c4b31627"
+dependencies = [
+ "proc-macro2",
 ]
 
 [[package]]

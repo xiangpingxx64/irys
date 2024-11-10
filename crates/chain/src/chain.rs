@@ -1,16 +1,8 @@
-use crate::partitions::mine_partition;
-use ::database::{
-    config::get_data_dir, open_or_create_db, tables::Tables, BlockIndex, BlockIndexItem,
-    Initialized,
-};
-use actix::{Actor, Addr, Arbiter, System};
+use ::database::{tables::Tables, BlockIndex, Initialized};
+use actix::Actor;
 use actors::{
-    block_index::BlockIndexActor,
-    block_producer::BlockProducerActor,
-    mempool::{self, MempoolActor},
-    mining::PartitionMiningActor,
-    packing::PackingActor,
-    ActorAddresses,
+    block_index::BlockIndexActor, block_producer::BlockProducerActor, mempool::MempoolActor,
+    mining::PartitionMiningActor, packing::PackingActor, ActorAddresses,
 };
 use irys_api_server::run_server;
 use irys_config::IrysNodeConfig;
@@ -18,40 +10,26 @@ pub use irys_reth_node_bridge::node::{
     RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
 };
 use irys_storage::{partition_provider::PartitionStorageProvider, StorageProvider};
-use irys_types::{
-    app_state::DatabaseProvider,
-    block_production::{Partition, PartitionId},
-    H256,
-};
+use irys_types::{app_state::DatabaseProvider, block_production::PartitionId, H256};
 use reth::{
-    builder::{FullNode, NodeHandle},
+    builder::FullNode,
     chainspec::ChainSpec,
-    core::{exit::NodeExitFuture, irys_ext::NodeExitReason},
+    core::irys_ext::NodeExitReason,
     tasks::{TaskExecutor, TaskManager},
-    CliContext,
 };
-use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c, AsyncCliRunner};
-use reth_db::{database, DatabaseEnv, HasName, HasTableType};
+use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c};
+use reth_db::{HasName, HasTableType};
 use std::{
     collections::HashMap,
-    fs::canonicalize,
-    future::IntoFuture,
-    path::{absolute, PathBuf},
-    str::FromStr,
     sync::{mpsc, Arc, RwLock},
-    thread,
-    time::Duration,
 };
 
-use futures::FutureExt;
 use tokio::{
     runtime::Handle,
-    sync::oneshot::{self, Sender},
-    time::sleep,
+    sync::oneshot::{self},
 };
 
 use crate::vdf::run_vdf;
-use tracing::{debug, error, span, trace, Level};
 
 pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
     start_irys_node(config).await
@@ -119,6 +97,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                         db.clone(),
                         block_producer_addr.clone(),
                         storage_provider,
+                        false, // do not start mining automatically
                     );
                     part_actors.push(partition_mining_actor.start());
                 }
@@ -184,7 +163,7 @@ async fn start_reth_node<T: HasName + HasTableType>(
 ) -> eyre::Result<NodeExitReason> {
     let node_handle =
         irys_reth_node_bridge::run_node(Arc::new(chainspec), exec, irys_config, tables).await?;
-    let r = sender
+    sender
         .send(node_handle.node.clone())
         .expect("unable to send reth node handle");
     let exit_reason = node_handle.node_exit_future.await?;
