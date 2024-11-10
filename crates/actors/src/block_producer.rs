@@ -16,7 +16,7 @@ use irys_types::{
 };
 use reth::{payload::EthPayloadBuilderAttributes, primitives::SealedBlock, revm::primitives::B256};
 use reth_db::DatabaseEnv;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
     block_index::{BlockIndexActor, GetBlockHeightMessage},
@@ -73,7 +73,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
         return Box::pin(async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
-
+            info!("before block index read");
             // TEMP: This demonstrates how to get the block height from the block_index_actor
             let bh = block_index_addr
                 .send(GetBlockHeightMessage {})
@@ -253,7 +253,13 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
             // We can clone messages because it only contains references to the data
             self_addr.do_send(block_confirm_message.clone());
-            block_index_addr.do_send(block_confirm_message.clone());
+
+            info!("actor is alive before");
+            info!("actor is alive? {:?}", block_index_addr.connected());
+            match block_index_addr.try_send(block_confirm_message.clone()) {
+                Ok(_r) => info!("good"),
+                Err(err) => error!("error: {:?}", err),
+            }
 
             *write_current_height += 1;
             Some((block.clone(), exec_payload))
@@ -285,7 +291,7 @@ impl Handler<BlockConfirmedMessage> for BlockProducerActor {
         let data_tx = &msg.1;
 
         // Do something with the block
-        dbg!("Block height: {} num tx: {}", block.height, data_tx.len());
+        info!("Block height: {} num tx: {}", block.height, data_tx.len());
 
         // No return value needed since result type is ()
     }

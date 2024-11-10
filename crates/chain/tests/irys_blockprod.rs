@@ -128,7 +128,6 @@ async fn mine_ten_blocks() -> eyre::Result<()> {
             mining_address: node.config.mining_signer.address(),
         });
         info!("send successful!");
-
         let (block, reth_exec_env) = fut.await?.unwrap();
         info!("get response from block producer!");
 

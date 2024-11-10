@@ -3,6 +3,7 @@ use std::sync::{Arc, RwLock};
 use actix::prelude::*;
 use database::{BlockIndex, BlockIndexItem, Initialized, Ledger, LedgerIndexItem};
 use irys_types::{IrysBlockHeader, IrysTransactionHeader, CHUNK_SIZE, H256};
+use tracing::info;
 
 use crate::block_producer::BlockConfirmedMessage;
 
@@ -40,7 +41,7 @@ impl BlockIndexActor {
         // Calculate total bytes needed in submit ledger
         let bytes_added = total_chunks * CHUNK_SIZE;
         // Get read lock once and keep it for multiple operations
-        let index = self.block_index.read().unwrap();
+        let mut index = self.block_index.write().unwrap();
         // MAGIC: block index includes the genesis block (0th block, would make index size 1, so we minus 1)
         let last_height = (index.num_blocks() - 1) as usize;
 
@@ -48,7 +49,6 @@ impl BlockIndexActor {
         let prev_block = index.get_item(last_height).unwrap();
         let submit_ledger_size = prev_block.ledgers[Ledger::Submit as usize].ledger_size;
         let new_submit_ledger_size = submit_ledger_size + u128::from(bytes_added);
-
         // Create a new BlockIndexItem
         let block_index_item = BlockIndexItem {
             block_hash: irys_block_header.block_hash,
@@ -65,10 +65,7 @@ impl BlockIndexActor {
             ],
         };
 
-        self.block_index
-            .write()
-            .unwrap()
-            .push_item(&block_index_item);
+        index.push_item(&block_index_item);
     }
 }
 
@@ -84,10 +81,11 @@ impl Handler<BlockConfirmedMessage> for BlockIndexActor {
         let data_txs = &msg.1;
 
         // Do something with the block
-        println!("Block height: {}", irys_block_header.height);
+        info!("Block height: {}", irys_block_header.height);
 
         self.add_finalized_block(&irys_block_header, &data_txs);
 
+        info!("BI handler done")
         // No return value needed since result type is ()
     }
 }
@@ -103,6 +101,7 @@ impl Handler<GetBlockHeightMessage> for BlockIndexActor {
     fn handle(&mut self, msg: GetBlockHeightMessage, ctx: &mut Self::Context) -> Self::Result {
         let _ = ctx;
         let _ = msg;
+
         self.block_index.read().unwrap().num_blocks()
     }
 }

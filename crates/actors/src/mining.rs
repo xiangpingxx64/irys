@@ -108,14 +108,18 @@ impl Handler<Seed> for PartitionMiningActor {
     fn handle(&mut self, seed: Seed, _ctx: &mut Context<Self>) -> Self::Result {
         let difficulty = get_latest_difficulty(&self.database_provider);
 
-        dbg!("Partition {} -- looking for solution with difficulty >= {}", self.partition.id, difficulty);
+        dbg!(
+            "Partition {} -- looking for solution with difficulty >= {}",
+            self.partition.id,
+            difficulty
+        );
 
-        match self.mine_partition_with_seed(seed.into_inner(), difficulty) {
-            Some(s) => {
-                let _ = self.block_producer_actor.do_send(s);
-            }
-            None => (),
-        };
+        // match self.mine_partition_with_seed(seed.into_inner(), difficulty) {
+        //     Some(s) => {
+        //         let _ = self.block_producer_actor.do_send(s);
+        //     }
+        //     None => (),
+        // };
     }
 }
 
