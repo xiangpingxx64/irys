@@ -107,14 +107,14 @@ impl Handler<SolutionContext> for BlockProducerActor {
                         TransactionLedger {
                             tx_root: H256::zero(),
                             txids: H256List(data_tx_ids.clone()),
-                            ledger_size: U256::from(0),
+                            ledger_size: 0 as u128,
                             expires: None,
                         },
                         // Term Submit Ledger
                         TransactionLedger {
                             tx_root: H256::zero(),
                             txids: H256List::new(),
-                            ledger_size: U256::from(0),
+                            ledger_size: 0 as u128,
                             expires: Some(1622543200),
                         },
                     ],

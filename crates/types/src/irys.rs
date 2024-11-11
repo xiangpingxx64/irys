@@ -131,10 +131,7 @@ mod tests {
         let irys = IrysSigner::random_signer();
 
         // Create a transaction from the random bytes
-        let mut tx = irys
-            .create_transaction(data_bytes.clone(), None)
-            .await
-            .unwrap();
+        let mut tx = irys.create_transaction(data_bytes.clone(), None).unwrap();
 
         // Sign the transaction
         tx = irys.sign_transaction(tx).unwrap();

@@ -7,7 +7,8 @@ use crate::U256;
 use std::{fmt, str::FromStr};
 
 use crate::{
-    option_u64_stringify, Arbitrary, Base64, Compact, H256List, IrysSignature, Signature, H256,
+    option_u64_stringify, u128_stringify, Arbitrary, Base64, Compact, H256List, IrysSignature,
+    Signature, H256,
 };
 use alloy_primitives::{Address, B256};
 
@@ -106,14 +107,14 @@ impl IrysBlockHeader {
                 TransactionLedger {
                     tx_root: H256::zero(),
                     txids,
-                    ledger_size: U256::from(0),
+                    ledger_size: 0 as u128,
                     expires: None,
                 },
                 // Term Submit Ledger
                 TransactionLedger {
                     tx_root: H256::zero(),
                     txids: H256List::new(),
-                    ledger_size: U256::from(0),
+                    ledger_size: 0 as u128,
                     expires: Some(1622543200),
                 },
             ],
@@ -135,7 +136,8 @@ pub struct TransactionLedger {
     pub tx_root: H256,
     /// List of transaction ids included in the block
     pub txids: H256List,
-    pub ledger_size: U256,
+    #[serde(default, with = "u128_stringify")]
+    pub ledger_size: u128,
     pub expires: Option<u64>,
 }
 
@@ -220,7 +222,7 @@ mod tests {
             ledgers: vec![TransactionLedger {
                 tx_root: H256::zero(),
                 txids,
-                ledger_size: U256::from(100),
+                ledger_size: 100 as u128,
                 expires: Some(1622543200),
             }],
             evm_block_hash: B256::ZERO,
@@ -241,8 +243,8 @@ mod tests {
         rng.fill(&mut header.reward_address.as_bytes_mut()[..]);
 
         // Serialize the header to a JSON string
-        let serialized = serde_json::to_string(&header).unwrap();
-        // println!("\n{}", serialized);
+        let serialized = serde_json::to_string_pretty(&header).unwrap();
+        println!("\n{}", serialized);
 
         // Deserialize back to IrysBlockHeader struct
         let deserialized: IrysBlockHeader = serde_json::from_str(&serialized).unwrap();

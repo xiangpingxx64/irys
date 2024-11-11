@@ -16,6 +16,7 @@
 		"rngs",
 		"rtype",
 		"rustc",
+		"rwlock",
 		"secp",
 		"Seedable",
 		"txid",

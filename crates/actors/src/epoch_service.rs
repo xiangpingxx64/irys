@@ -312,19 +312,19 @@ impl EpochServiceActor {
     ) -> u64 {
         let ledger = &self.ledgers[ledger_num];
         let num_slots = ledger.slot_count() as u64;
-        let max_capacity = U256::from(num_slots * PARTITION_SIZE);
+        let max_capacity = (num_slots * PARTITION_SIZE) as u128;
         let ledger_size = new_epoch_block.ledgers[ledger_num as usize].ledger_size;
 
         // Add capacity slots if ledger usage exceeds 50% of partition size from max capacity
-        let add_capacity_threshold = U256::from(max_capacity - PARTITION_SIZE / 2);
+        let add_capacity_threshold: u128 = max_capacity - PARTITION_SIZE as u128 / 2;
         let mut slots_to_add: u64 = 0;
         if ledger_size >= add_capacity_threshold {
             // Add 1 slot for buffer plus enough slots to handle size above threshold
             let excess = ledger_size.saturating_sub(max_capacity);
-            slots_to_add = 1 + (excess.as_u64() / PARTITION_SIZE);
+            slots_to_add = 1 + (excess as u64 / PARTITION_SIZE);
 
             // Check if we need to add an additional slot for excess > half of PARTITION_SIZE
-            if excess.as_u64() % PARTITION_SIZE >= PARTITION_SIZE / 2 {
+            if excess as u64 % PARTITION_SIZE >= PARTITION_SIZE / 2 {
                 slots_to_add += 1;
             }
         }

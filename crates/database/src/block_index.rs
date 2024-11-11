@@ -81,12 +81,12 @@ impl BlockIndex<Uninitialized> {
                 // insert the genesis block if there's no index from disk
                 self.items = vec![BlockIndexItem {
                     block_hash: genesis_block.block_hash,
-                    num_ledgers: genesis_block.ledgers.len() as u8, // TODO @DanMacDonald check this type?
+                    num_ledgers: genesis_block.ledgers.len() as u8,
                     ledgers: genesis_block
                         .ledgers
                         .into_iter()
                         .map(|l| LedgerIndexItem {
-                            ledger_size: l.ledger_size.as_u128(), // TODO @DanMacDonald check this type?
+                            ledger_size: l.ledger_size,
                             tx_root: l.tx_root,
                         })
                         .collect(),
