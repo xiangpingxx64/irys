@@ -110,7 +110,7 @@ impl Into<RethNodeHandle> for RethNodeProvider {
 pub async fn run_node<T: HasName + HasTableType>(
     chainspec: Arc<ChainSpec>,
     task_executor: TaskExecutor,
-    irys_config: IrysNodeConfig,
+    irys_config: Arc<IrysNodeConfig>,
     tables: &[T],
 ) -> eyre::Result<RethNodeExitHandle> {
     let mut os_args: Vec<String> = std::env::args().collect();

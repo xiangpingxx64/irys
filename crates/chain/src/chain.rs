@@ -41,7 +41,7 @@ pub struct IrysNodeCtx {
     pub storage_provider: StorageProvider,
     pub actor_addresses: ActorAddresses,
     pub db: DatabaseProvider,
-    pub config: IrysNodeConfig,
+    pub config: Arc<IrysNodeConfig>,
 }
 
 pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
@@ -49,19 +49,32 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
         oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
     let irys_genesis = node_config.chainspec_builder.genesis();
-    let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
-        BlockIndex::reset()?; // Always reset the block_index for now
-        BlockIndex::default().init(irys_genesis).await.unwrap()
-    }));
+    let arc_config = Arc::new(node_config);
+    let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new(
+        BlockIndex::default()
+            .reset(&arc_config.clone())?
+            .init(irys_genesis, arc_config.clone())
+            .await
+            .unwrap(),
+    ));
+
+    let reth_chainspec = arc_config
+        .clone()
+        .chainspec_builder
+        .reth_builder
+        .clone()
+        .build();
+
+    let cloned_arc = arc_config.clone();
 
     // Spawn thread and runtime for actors
-    let node_config_copy = node_config.clone();
+    let arc_config_copy = arc_config.clone();
     std::thread::Builder::new()
         .name("actor-main-thread".to_string())
         .stack_size(32 * 1024 * 1024)
         .spawn(move || {
-            let rt = actix_rt::Runtime::new().unwrap();
-            let node_config = node_config_copy;
+            let rt: actix_rt::Runtime = actix_rt::Runtime::new().unwrap();
+            let node_config = arc_config_copy.clone();
             rt.block_on(async move {
                 // the RethNodeHandle doesn't *need* to be Arc, but it will reduce the copy cost
                 let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await.unwrap()));
@@ -125,21 +138,20 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     actor_addresses: actor_addresses.clone(),
                     reth_handle: reth_node,
                     db: db.clone(),
-                    config: node_config,
+                    config: arc_config.clone(),
                 });
 
                 run_server(actor_addresses).await;
             });
         })?;
 
-    let reth_chainspec = node_config.chainspec_builder.reth_builder.clone().build();
-    let node_config_copy = node_config.clone();
     // run reth in it's own thread w/ it's own tokio runtime
     // this is done as reth exhibits strange behaviour (notably channel dropping) when not in it's own context/when the exit future isn't been awaited
+
     std::thread::Builder::new().name("reth-thread".to_string())
         .stack_size(32 * 1024 * 1024)
         .spawn(move || {
-            let node_config= node_config_copy;
+            let node_config= cloned_arc.clone();
             let tokio_runtime = /* Handle::current(); */ tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
             let mut task_manager = TaskManager::new(tokio_runtime.handle().clone());
             let exec: reth::tasks::TaskExecutor = task_manager.executor();
@@ -157,7 +169,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
 async fn start_reth_node<T: HasName + HasTableType>(
     exec: TaskExecutor,
     chainspec: ChainSpec,
-    irys_config: IrysNodeConfig,
+    irys_config: Arc<IrysNodeConfig>,
     tables: &[T],
     sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
 ) -> eyre::Result<NodeExitReason> {
