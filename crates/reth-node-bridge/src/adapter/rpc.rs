@@ -36,7 +36,7 @@ where
     }
 
     pub async fn get_balance(
-        &mut self,
+        &self,
         address: Address,
         block_id: Option<BlockId>,
     ) -> eyre::Result<U256> {

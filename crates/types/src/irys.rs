@@ -5,6 +5,7 @@ use crate::{
 use alloy_core::primitives::keccak256;
 
 use alloy_signer::utils::secret_key_to_address;
+use alloy_signer_local::LocalSigner;
 use eyre::Result;
 use k256::ecdsa::SigningKey;
 use rand::rngs::OsRng;
@@ -101,6 +102,12 @@ impl IrysSigner {
             proofs,
             ..Default::default()
         })
+    }
+}
+
+impl Into<LocalSigner<SigningKey>> for IrysSigner {
+    fn into(self) -> LocalSigner<SigningKey> {
+        LocalSigner::from_signing_key(self.signer)
     }
 }
 
