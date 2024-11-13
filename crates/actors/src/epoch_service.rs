@@ -6,7 +6,7 @@ use irys_types::{
     PARTITION_SIZE, U256,
 };
 use openssl::sha;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 /// Temporarily track all of the ledger definitions inside the epoch service actor
 #[derive(Debug)]
@@ -32,10 +32,10 @@ impl Actor for EpochServiceActor {
 /// Sent when a new epoch block is reached (and at genesis)
 #[derive(Message, Debug)]
 #[rtype(result = "Result<(),EpochServiceError>")]
-pub struct NewEpochMessage(pub IrysBlockHeader);
+pub struct NewEpochMessage(pub Arc<IrysBlockHeader>);
 
 impl NewEpochMessage {
-    fn into_inner(self) -> IrysBlockHeader {
+    fn into_inner(self) -> Arc<IrysBlockHeader> {
         self.0
     }
 }
@@ -88,7 +88,7 @@ impl EpochServiceActor {
     /// Main worker function
     pub fn perform_epoch_tasks(
         &mut self,
-        new_epoch_block: IrysBlockHeader,
+        new_epoch_block: Arc<IrysBlockHeader>,
     ) -> Result<(), EpochServiceError> {
         // Validate this is an epoch block height
         if new_epoch_block.height % NUM_BLOCKS_IN_EPOCH != 0 {
@@ -404,7 +404,7 @@ mod tests {
 
         // Process genesis message directly instead of through actor system
         // This allows us to inspect the actor's state after processing
-        let _ = epoch_service.handle(NewEpochMessage(genesis_block), &mut Context::new());
+        let _ = epoch_service.handle(NewEpochMessage(genesis_block.into()), &mut Context::new());
 
         // Verify the correct number of ledgers have been added
         let expected_ledger_count = Ledger::ALL.len();
@@ -514,14 +514,14 @@ mod tests {
         // Process genesis message directly instead of through actor system
         // This allows us to inspect the actor's state after processing
         let mut ctx = Context::new();
-        let _ = epoch_service.handle(NewEpochMessage(genesis_block), &mut ctx);
+        let _ = epoch_service.handle(NewEpochMessage(genesis_block.into()), &mut ctx);
 
         // Now create a new epoch block & give the Submit ledger enough size to add a slot
         let mut new_epoch_block = IrysBlockHeader::new();
         new_epoch_block.height = NUM_BLOCKS_IN_EPOCH;
         new_epoch_block.ledgers[Ledger::Submit as usize].ledger_size = (PARTITION_SIZE / 2) as u128;
 
-        let _ = epoch_service.handle(NewEpochMessage(new_epoch_block), &mut ctx);
+        let _ = epoch_service.handle(NewEpochMessage(new_epoch_block.into()), &mut ctx);
 
         // Verify each ledger has one slot and the correct number of partitions
         let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
@@ -538,7 +538,7 @@ mod tests {
         new_epoch_block.ledgers[Ledger::Publish as usize].ledger_size =
             (PARTITION_SIZE as f64 * 0.75) as u128;
 
-        let _ = epoch_service.handle(NewEpochMessage(new_epoch_block), &mut ctx);
+        let _ = epoch_service.handle(NewEpochMessage(new_epoch_block.into()), &mut ctx);
 
         // Validate the correct number of ledgers slots were added to each ledger
         let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
