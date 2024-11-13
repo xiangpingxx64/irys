@@ -3,7 +3,7 @@ use actix::Actor;
 use actors::{
     block_index::BlockIndexActor,
     block_producer::{BlockConfirmedMessage, BlockProducerActor},
-    epoch_service::{EpochServiceActor, NewEpochMessage},
+    epoch_service::{EpochServiceActor, GetLedgersMessage, NewEpochMessage},
     mempool::MempoolActor,
     mining::PartitionMiningActor,
     packing::PackingActor,
@@ -108,6 +108,14 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     Ok(_) => println!("Genesis Epoch tasks complete."),
                     Err(_) => panic!("Failed to perform genesis epoch tasks"),
                 }
+
+                // DMEO: How you read partition assignments
+                let ledgers = epoch_service_actor_addr
+                    .send(GetLedgersMessage)
+                    .await
+                    .unwrap()
+                    .unwrap(); // I don't like this double unwrap but I haven't figured out how to avoid it.
+                println!("{:?}", ledgers.read());
 
                 let mut part_actors = Vec::new();
 

@@ -3,25 +3,28 @@ use database::data_ledger::*;
 use eyre::{Error, Result};
 use irys_types::{
     Address, IrysBlockHeader, CAPACITY_SCALAR, H256, NUM_BLOCKS_IN_EPOCH, NUM_PARTITIONS_PER_SLOT,
-    PARTITION_SIZE, U256,
+    PARTITION_SIZE,
 };
 use openssl::sha;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock, RwLockReadGuard},
+};
 
 /// Temporarily track all of the ledger definitions inside the epoch service actor
 #[derive(Debug)]
 pub struct EpochServiceActor {
-    /// The previous epoch hash is used in the current epochs tasks as a reliable source of randomness
+    /// Source of randomness derived from previous epoch
     pub last_epoch_hash: H256,
-    /// Encapsulates a list of data ledgers currently managed by the protocol
-    pub ledgers: Ledgers,
-    /// Data partition assignments mapped by partition hash
+    /// Protocol-managed data ledgers (one permanent, N term)
+    pub ledgers: Arc<RwLock<Ledgers>>,
+    /// Active data partition state mapped by partition hash
     pub data_partitions: HashMap<H256, PartitionAssignment>,
-    /// Capacity partition assignments mapped by partition hash
+    /// Available capacity partitions mapped by partition hash
     pub capacity_partitions: HashMap<H256, PartitionAssignment>,
-    /// Ordered sequence of active partition hashes
+    /// Sequential list of activated partition hashes
     pub all_active_partitions: Vec<H256>,
-    /// Address of the local miner
+    /// Identifier of this mining node
     pub miner_address: Address,
 }
 
@@ -40,14 +43,6 @@ impl NewEpochMessage {
     }
 }
 
-/// Reasons why the epoch service actors epoch tasks might fail
-#[derive(Debug)]
-pub enum EpochServiceError {
-    /// Catchall error until more detailed errors are added
-    InternalError,
-    NotAnEpochBlock,
-}
-
 impl Handler<NewEpochMessage> for EpochServiceActor {
     type Result = Result<(), EpochServiceError>;
     fn handle(&mut self, msg: NewEpochMessage, ctx: &mut Self::Context) -> Self::Result {
@@ -57,6 +52,46 @@ impl Handler<NewEpochMessage> for EpochServiceActor {
 
         Ok(())
     }
+}
+
+/// Wraps the internal Arc<RwLock<>> to make the reference readonly
+pub struct LedgersReadGuard {
+    ledgers: Arc<RwLock<Ledgers>>,
+}
+
+impl LedgersReadGuard {
+    /// Creates a new ReadGard for Ledgers
+    pub fn new(ledgers: Arc<RwLock<Ledgers>>) -> Self {
+        Self { ledgers }
+    }
+
+    /// Accessor method to get a read guard for Ledgers
+    pub fn read(&self) -> RwLockReadGuard<'_, Ledgers> {
+        self.ledgers.read().unwrap()
+    }
+}
+
+/// Retrieve a read only reference to the ledger partition assignments
+#[derive(Message, Debug)]
+#[rtype(result = "Result<LedgersReadGuard, EpochServiceError>")]
+pub struct GetLedgersMessage;
+
+impl Handler<GetLedgersMessage> for EpochServiceActor {
+    type Result = Result<LedgersReadGuard, EpochServiceError>;
+
+    fn handle(&mut self, _msg: GetLedgersMessage, _ctx: &mut Self::Context) -> Self::Result {
+        // Create a LedgersReadGuard, encapsulating read-only access to ledgers
+        let ledgers_guard = LedgersReadGuard::new(Arc::clone(&self.ledgers));
+        Ok(ledgers_guard)
+    }
+}
+
+/// Reasons why the epoch service actors epoch tasks might fail
+#[derive(Debug)]
+pub enum EpochServiceError {
+    /// Catchall error until more detailed errors are added
+    InternalError,
+    NotAnEpochBlock,
 }
 
 /// Temporary struct tracking partition assignments to miners - will be moved to database
@@ -77,7 +112,7 @@ impl EpochServiceActor {
     pub fn new(miner_address: Address) -> Self {
         Self {
             last_epoch_hash: H256::zero(),
-            ledgers: Ledgers::new(),
+            ledgers: Arc::new(RwLock::new(Ledgers::new())),
             data_partitions: HashMap::new(),
             capacity_partitions: HashMap::new(),
             all_active_partitions: Vec::new(),
@@ -120,8 +155,13 @@ impl EpochServiceActor {
 
             // Allocate 1 slot to each ledger and calculate the number of partitions
             let mut num_data_partitions = 0;
-            for ledger_num in Ledger::iter() {
-                num_data_partitions += self.ledgers[ledger_num].allocate_slots(1);
+
+            // Create a scope for the write lock to expire with
+            {
+                let mut ledgers = self.ledgers.write().unwrap();
+                for ledger_num in Ledger::iter() {
+                    num_data_partitions += ledgers[ledger_num].allocate_slots(1);
+                }
             }
 
             // Calculate the total number of partitions
@@ -136,7 +176,11 @@ impl EpochServiceActor {
     /// than the epoch_length (term length) of the ledger.
     fn expire_term_ledger_slots(&mut self, new_epoch_block: &IrysBlockHeader) {
         let epoch_height = new_epoch_block.height;
-        let expired_hashes = self.ledgers.get_expired_partition_hashes(epoch_height);
+        let expired_hashes: Vec<H256>;
+        {
+            let mut ledgers = self.ledgers.write().unwrap();
+            expired_hashes = ledgers.get_expired_partition_hashes(epoch_height);
+        }
 
         // Update expired data partitions assignments marking them as capacity partitions
         for partition_hash in expired_hashes {
@@ -149,7 +193,10 @@ impl EpochServiceActor {
     fn allocate_additional_ledger_slots(&mut self, new_epoch_block: &IrysBlockHeader) {
         for ledger_num in Ledger::iter() {
             let part_slots = self.calculate_additional_slots(new_epoch_block, ledger_num);
-            self.ledgers[ledger_num].allocate_slots(part_slots);
+            {
+                let mut ledgers = self.ledgers.write().unwrap();
+                ledgers[ledger_num].allocate_slots(part_slots);
+            }
         }
     }
 
@@ -199,7 +246,11 @@ impl EpochServiceActor {
         rng: &mut SimpleRNG,
     ) {
         // Get slot needs for the specified ledger
-        let slot_needs = self.ledgers.get_slot_needs(ledger);
+        let slot_needs: Vec<(usize, usize)>;
+        {
+            let ledgers = self.ledgers.read().unwrap();
+            slot_needs = ledgers.get_slot_needs(ledger);
+        }
         let mut capacity_count = capacity_partitions.len() as u32;
 
         // Iterate over slots that need partitions and assign them
@@ -219,8 +270,10 @@ impl EpochServiceActor {
 
                 // Push the newly assigned partition hash to the appropriate slot
                 // in the ledger
-                self.ledgers
-                    .push_partition_to_slot(ledger, slot_index, partition_hash);
+                {
+                    let mut ledgers = self.ledgers.write().unwrap();
+                    ledgers.push_partition_to_slot(ledger, slot_index, partition_hash);
+                }
             }
         }
     }
@@ -310,8 +363,12 @@ impl EpochServiceActor {
         new_epoch_block: &IrysBlockHeader,
         ledger_num: Ledger,
     ) -> u64 {
-        let ledger = &self.ledgers[ledger_num];
-        let num_slots = ledger.slot_count() as u64;
+        let num_slots: u64;
+        {
+            let ledgers = self.ledgers.read().unwrap();
+            let ledger = &ledgers[ledger_num];
+            num_slots = ledger.slot_count() as u64;
+        }
         let max_capacity = (num_slots * PARTITION_SIZE) as u128;
         let ledger_size = new_epoch_block.ledgers[ledger_num as usize].ledger_size;
 
@@ -406,69 +463,72 @@ mod tests {
         // This allows us to inspect the actor's state after processing
         let _ = epoch_service.handle(NewEpochMessage(genesis_block.into()), &mut Context::new());
 
-        // Verify the correct number of ledgers have been added
-        let expected_ledger_count = Ledger::ALL.len();
-        assert_eq!(epoch_service.ledgers.len(), expected_ledger_count);
+        {
+            // Verify the correct number of ledgers have been added
+            let ledgers = epoch_service.ledgers.read().unwrap();
+            let expected_ledger_count = Ledger::ALL.len();
+            assert_eq!(ledgers.len(), expected_ledger_count);
 
-        // Verify each ledger has one slot and the correct number of partitions
-        let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
-        let sub_slots = epoch_service.ledgers.get_slots(Ledger::Submit);
+            // Verify each ledger has one slot and the correct number of partitions
+            let pub_slots = ledgers.get_slots(Ledger::Publish);
+            let sub_slots = ledgers.get_slots(Ledger::Submit);
 
-        assert_eq!(pub_slots.len(), 1);
-        assert_eq!(sub_slots.len(), 1);
+            assert_eq!(pub_slots.len(), 1);
+            assert_eq!(sub_slots.len(), 1);
 
-        assert_eq!(
-            pub_slots[0].partitions.len() as u64,
-            NUM_PARTITIONS_PER_SLOT
-        );
-        assert_eq!(
-            sub_slots[0].partitions.len() as u64,
-            NUM_PARTITIONS_PER_SLOT
-        );
+            assert_eq!(
+                pub_slots[0].partitions.len() as u64,
+                NUM_PARTITIONS_PER_SLOT
+            );
+            assert_eq!(
+                sub_slots[0].partitions.len() as u64,
+                NUM_PARTITIONS_PER_SLOT
+            );
 
-        let pub_ledger_num = Ledger::Publish as u64;
-        let sub_ledger_num = Ledger::Submit as u64;
+            let pub_ledger_num = Ledger::Publish as u64;
+            let sub_ledger_num = Ledger::Submit as u64;
 
-        // Verify data partition assignments match _PUBLISH_ ledger slots
-        for (slot_idx, slot) in pub_slots.iter().enumerate() {
-            for &partition_hash in &slot.partitions {
-                let assignment = epoch_service
-                    .data_partitions
-                    .get(&partition_hash)
-                    .expect("partition should be assigned");
+            // Verify data partition assignments match _PUBLISH_ ledger slots
+            for (slot_idx, slot) in pub_slots.iter().enumerate() {
+                for &partition_hash in &slot.partitions {
+                    let assignment = epoch_service
+                        .data_partitions
+                        .get(&partition_hash)
+                        .expect("partition should be assigned");
 
-                assert_eq!(
-                    assignment,
-                    &PartitionAssignment {
-                        partition_hash,
-                        ledger_num: Some(pub_ledger_num),
-                        slot_index: Some(slot_idx),
-                        miner_address,
-                    }
-                );
+                    assert_eq!(
+                        assignment,
+                        &PartitionAssignment {
+                            partition_hash,
+                            ledger_num: Some(pub_ledger_num),
+                            slot_index: Some(slot_idx),
+                            miner_address,
+                        }
+                    );
+                }
+                assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
             }
-            assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
-        }
 
-        // Verify data partition assignments match _SUBMIT_ledger slots
-        for (slot_idx, slot) in sub_slots.iter().enumerate() {
-            for &partition_hash in &slot.partitions {
-                let assignment = epoch_service
-                    .data_partitions
-                    .get(&partition_hash)
-                    .expect("partition should be assigned");
+            // Verify data partition assignments match _SUBMIT_ledger slots
+            for (slot_idx, slot) in sub_slots.iter().enumerate() {
+                for &partition_hash in &slot.partitions {
+                    let assignment = epoch_service
+                        .data_partitions
+                        .get(&partition_hash)
+                        .expect("partition should be assigned");
 
-                assert_eq!(
-                    assignment,
-                    &PartitionAssignment {
-                        partition_hash,
-                        ledger_num: Some(sub_ledger_num),
-                        slot_index: Some(slot_idx),
-                        miner_address,
-                    }
-                );
+                    assert_eq!(
+                        assignment,
+                        &PartitionAssignment {
+                            partition_hash,
+                            ledger_num: Some(sub_ledger_num),
+                            slot_index: Some(slot_idx),
+                            miner_address,
+                        }
+                    );
+                }
+                assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
             }
-            assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
         }
 
         // Verify the correct number of genesis partitions have been activated
@@ -499,6 +559,12 @@ mod tests {
         // Debug output for verification
         // println!("Data Partitions: {:#?}", epoch_service.capacity_partitions);
         println!("Ledger State: {:#?}", epoch_service.ledgers);
+
+        let ledgers = epoch_service
+            .handle(GetLedgersMessage, &mut Context::new())
+            .unwrap();
+
+        println!("{:?}", ledgers.read());
     }
 
     #[actix::test]
@@ -524,11 +590,13 @@ mod tests {
         let _ = epoch_service.handle(NewEpochMessage(new_epoch_block.into()), &mut ctx);
 
         // Verify each ledger has one slot and the correct number of partitions
-        let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
-        let sub_slots = epoch_service.ledgers.get_slots(Ledger::Submit);
-
-        assert_eq!(pub_slots.len(), 1);
-        assert_eq!(sub_slots.len(), 2);
+        {
+            let ledgers = epoch_service.ledgers.read().unwrap();
+            let pub_slots = ledgers.get_slots(Ledger::Publish);
+            let sub_slots = ledgers.get_slots(Ledger::Submit);
+            assert_eq!(pub_slots.len(), 1);
+            assert_eq!(sub_slots.len(), 2);
+        }
 
         // Simulate a subsequent epoch block that adds multiple ledger slots
         let mut new_epoch_block = IrysBlockHeader::new();
@@ -541,12 +609,14 @@ mod tests {
         let _ = epoch_service.handle(NewEpochMessage(new_epoch_block.into()), &mut ctx);
 
         // Validate the correct number of ledgers slots were added to each ledger
-        let pub_slots = epoch_service.ledgers.get_slots(Ledger::Publish);
-        let sub_slots = epoch_service.ledgers.get_slots(Ledger::Submit);
-        assert_eq!(pub_slots.len(), 2);
-        assert_eq!(sub_slots.len(), 4);
-
-        println!("Ledger State: {:#?}", epoch_service.ledgers);
+        {
+            let ledgers = epoch_service.ledgers.read().unwrap();
+            let pub_slots = ledgers.get_slots(Ledger::Publish);
+            let sub_slots = ledgers.get_slots(Ledger::Submit);
+            assert_eq!(pub_slots.len(), 2);
+            assert_eq!(sub_slots.len(), 4);
+            println!("Ledger State: {:#?}", ledgers);
+        }
     }
 
     #[actix::test]
