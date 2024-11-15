@@ -369,7 +369,7 @@ mod tests {
 
     use super::BlockIndex;
     use crate::{
-        block_index::{ensure_path_exists, save_block_index},
+        block_index_data::{ensure_path_exists, save_block_index},
         data_ledger::Ledger,
         BlockBounds, BlockIndexItem, LedgerIndexItem,
     };
