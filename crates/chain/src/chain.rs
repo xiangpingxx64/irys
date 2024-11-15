@@ -3,7 +3,7 @@ use actix::Actor;
 use actors::{
     block_index::BlockIndexActor,
     block_producer::{BlockConfirmedMessage, BlockProducerActor},
-    epoch_service::{EpochServiceActor, GetLedgersMessage, NewEpochMessage},
+    epoch_service::{EpochServiceActor, EpochServiceConfig, GetLedgersMessage, NewEpochMessage},
     mempool::MempoolActor,
     mining::PartitionMiningActor,
     packing::PackingActor,
@@ -90,7 +90,9 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let mempool_actor_addr = mempool_actor.start();
 
                 // Initialize the epoch_service actor to handle partition ledger assignments
-                let epoch_service = EpochServiceActor::new(node_config.mining_signer.address());
+                let config = EpochServiceConfig::default();
+                let miner_address = node_config.mining_signer.address();
+                let epoch_service = EpochServiceActor::new(miner_address, Some(config));
                 let epoch_service_actor_addr = epoch_service.start();
 
                 // Initialize the block index actor and tell it about the genesis block

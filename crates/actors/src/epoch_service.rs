@@ -11,6 +11,32 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
+/// Allows for overriding of the consensus parameters for ledgers and partitions
+#[derive(Debug, Clone)]
+pub struct EpochServiceConfig {
+    /// Capacity partitions are allocated on a logarithmic curve, this scalar
+    /// shifts the curve on the Y axis. Allowing there to be more or less
+    /// capacity partitions relative to data partitions.
+    capacity_scalar: u64,
+    /// The length of an epoch denominated in block heights
+    num_blocks_in_epoch: u64,
+    /// The number of replica partitions in a ledger slot
+    num_partitions_per_slot: u64,
+    /// Size (in bytes) of each partition
+    partition_size: u64,
+}
+
+impl Default for EpochServiceConfig {
+    fn default() -> Self {
+        Self {
+            capacity_scalar: CAPACITY_SCALAR,
+            num_blocks_in_epoch: NUM_BLOCKS_IN_EPOCH,
+            num_partitions_per_slot: NUM_PARTITIONS_PER_SLOT,
+            partition_size: PARTITION_SIZE,
+        }
+    }
+}
+
 /// Temporarily track all of the ledger definitions inside the epoch service actor
 #[derive(Debug)]
 pub struct EpochServiceActor {
@@ -26,6 +52,8 @@ pub struct EpochServiceActor {
     pub all_active_partitions: Vec<H256>,
     /// Identifier of this mining node
     pub miner_address: Address,
+    /// Current partition & ledger parameters
+    pub config: EpochServiceConfig,
 }
 
 impl Actor for EpochServiceActor {
@@ -109,7 +137,13 @@ pub struct PartitionAssignment {
 
 impl EpochServiceActor {
     /// Create a new instance of the epoch service actor
-    pub fn new(miner_address: Address) -> Self {
+    pub fn new(miner_address: Address, config: Option<EpochServiceConfig>) -> Self {
+        let config = match config {
+            Some(cfg) => cfg,
+            // If no config was provided, use the default protocol parameters
+            None => EpochServiceConfig::default(),
+        };
+
         Self {
             last_epoch_hash: H256::zero(),
             ledgers: Arc::new(RwLock::new(Ledgers::new())),
@@ -117,6 +151,7 @@ impl EpochServiceActor {
             capacity_partitions: HashMap::new(),
             all_active_partitions: Vec::new(),
             miner_address,
+            config,
         }
     }
 
@@ -166,7 +201,7 @@ impl EpochServiceActor {
 
             // Calculate the total number of partitions
             let num_partitions = num_data_partitions
-                + Self::get_num_capacity_partitions(num_data_partitions, CAPACITY_SCALAR);
+                + Self::get_num_capacity_partitions(num_data_partitions, &self.config);
 
             self.add_capacity_partitions(num_partitions);
         }
@@ -207,7 +242,7 @@ impl EpochServiceActor {
         // Calculate total number of active partitions based on the amount of data stored
         let num_data_partitions = self.data_partitions.len() as u64;
         let num_capacity_partitions =
-            Self::get_num_capacity_partitions(num_data_partitions, CAPACITY_SCALAR);
+            Self::get_num_capacity_partitions(num_data_partitions, &self.config);
         let total_parts = num_capacity_partitions + num_data_partitions;
 
         // Add additional capacity partitions as needed
@@ -280,13 +315,13 @@ impl EpochServiceActor {
 
     /// Computes active capacity partitions available for pledges based on
     /// data partitions and scaling factor
-    fn get_num_capacity_partitions(data_partition_count: u64, scalar: u64) -> u64 {
+    fn get_num_capacity_partitions(num_data_partitions: u64, config: &EpochServiceConfig) -> u64 {
         // Every ledger needs at least one slot filled with data partitions
-        let min_count = Ledger::ALL.len() as u64 * NUM_PARTITIONS_PER_SLOT;
-        let base_count = std::cmp::max(data_partition_count, min_count);
+        let min_count = Ledger::ALL.len() as u64 * config.num_partitions_per_slot;
+        let base_count = std::cmp::max(num_data_partitions, min_count);
         let log_10 = (base_count as f64).log10();
         let trunc = truncate_to_3_decimals(log_10);
-        let scaled = truncate_to_3_decimals(trunc * scalar as f64);
+        let scaled = truncate_to_3_decimals(trunc * config.capacity_scalar as f64);
         let rounded = truncate_to_3_decimals(scaled).ceil() as u64;
         // println!(
         //     "- base_count: {}, log_10: {}, trunc: {}, scaled: {}, rounded: {}",
@@ -369,26 +404,28 @@ impl EpochServiceActor {
             let ledger = &ledgers[ledger_num];
             num_slots = ledger.slot_count() as u64;
         }
-        let max_capacity = (num_slots * PARTITION_SIZE) as u128;
+        let partition_size = self.config.partition_size;
+        let max_capacity = (num_slots * partition_size) as u128;
         let ledger_size = new_epoch_block.ledgers[ledger_num as usize].ledger_size;
 
         // Add capacity slots if ledger usage exceeds 50% of partition size from max capacity
-        let add_capacity_threshold: u128 = max_capacity - PARTITION_SIZE as u128 / 2;
+        let add_capacity_threshold: u128 = max_capacity - partition_size as u128 / 2;
         let mut slots_to_add: u64 = 0;
         if ledger_size >= add_capacity_threshold {
             // Add 1 slot for buffer plus enough slots to handle size above threshold
             let excess = ledger_size.saturating_sub(max_capacity);
-            slots_to_add = 1 + (excess as u64 / PARTITION_SIZE);
+            slots_to_add = 1 + (excess as u64 / partition_size);
 
-            // Check if we need to add an additional slot for excess > half of PARTITION_SIZE
-            if excess as u64 % PARTITION_SIZE >= PARTITION_SIZE / 2 {
+            // Check if we need to add an additional slot for excess > half of
+            // the partition size
+            if excess as u64 % partition_size >= partition_size / 2 {
                 slots_to_add += 1;
             }
         }
 
         // Compute Data uploaded to the ledger last epoch
         // TODO: need a block index to do this
-        if new_epoch_block.height >= NUM_BLOCKS_IN_EPOCH {
+        if new_epoch_block.height >= self.config.num_blocks_in_epoch {
             // let last_epoch_block =
             //     block_index.get(new_new_epoch_block.height - NUM_BLOCKS_IN_EPOCH);
             // let data_added: u64 = ledger_size - last_epoch_block.ledger_size;
@@ -457,7 +494,8 @@ mod tests {
 
         // Create epoch service with random miner address
         let miner_address = Address::random();
-        let mut epoch_service = EpochServiceActor::new(miner_address);
+        let config = EpochServiceConfig::default();
+        let mut epoch_service = EpochServiceActor::new(miner_address, Some(config.clone()));
 
         // Process genesis message directly instead of through actor system
         // This allows us to inspect the actor's state after processing
@@ -478,11 +516,11 @@ mod tests {
 
             assert_eq!(
                 pub_slots[0].partitions.len() as u64,
-                NUM_PARTITIONS_PER_SLOT
+                config.num_partitions_per_slot
             );
             assert_eq!(
                 sub_slots[0].partitions.len() as u64,
-                NUM_PARTITIONS_PER_SLOT
+                config.num_partitions_per_slot
             );
 
             let pub_ledger_num = Ledger::Publish as u64;
@@ -506,7 +544,10 @@ mod tests {
                         }
                     );
                 }
-                assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
+                assert_eq!(
+                    slot.partitions.len(),
+                    config.num_partitions_per_slot as usize
+                );
             }
 
             // Verify data partition assignments match _SUBMIT_ledger slots
@@ -527,14 +568,17 @@ mod tests {
                         }
                     );
                 }
-                assert_eq!(slot.partitions.len(), NUM_PARTITIONS_PER_SLOT as usize);
+                assert_eq!(
+                    slot.partitions.len(),
+                    config.num_partitions_per_slot as usize
+                );
             }
         }
 
         // Verify the correct number of genesis partitions have been activated
         let data_partition_count = epoch_service.data_partitions.len() as u64;
         let expected_partitions = data_partition_count
-            + EpochServiceActor::get_num_capacity_partitions(data_partition_count, CAPACITY_SCALAR);
+            + EpochServiceActor::get_num_capacity_partitions(data_partition_count, &config);
         assert_eq!(
             epoch_service.all_active_partitions.len(),
             expected_partitions as usize
@@ -575,7 +619,8 @@ mod tests {
 
         // Create epoch service with random miner address
         let miner_address = Address::random();
-        let mut epoch_service = EpochServiceActor::new(miner_address);
+        let config = EpochServiceConfig::default();
+        let mut epoch_service = EpochServiceActor::new(miner_address, Some(config));
 
         // Process genesis message directly instead of through actor system
         // This allows us to inspect the actor's state after processing
@@ -625,12 +670,11 @@ mod tests {
     #[actix::test]
     async fn capacity_projection_tests() {
         let max_data_parts = 1000;
+        let config = EpochServiceConfig::default();
         for i in (0..max_data_parts).step_by(10) {
             let data_partition_count = i;
-            let capacity_count = EpochServiceActor::get_num_capacity_partitions(
-                data_partition_count,
-                CAPACITY_SCALAR,
-            );
+            let capacity_count =
+                EpochServiceActor::get_num_capacity_partitions(data_partition_count, &config);
             let total = data_partition_count + capacity_count;
             println!(
                 "data:{}, capacity:{}, total:{}",
