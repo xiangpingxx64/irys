@@ -124,25 +124,24 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     Err(_) => panic!("Failed to perform genesis epoch tasks"),
                 }
 
-                // DMEO: How you read partition assignments
-                let ledgers = epoch_service_actor_addr
+                // Retrieve ledger assignments
+                let ledgers_guard = epoch_service_actor_addr
                     .send(GetLedgersMessage)
                     .await
                     .unwrap()
                     .unwrap(); // I don't like this double unwrap but I haven't figured out how to avoid it.
-                println!("{:?}", ledgers.read());
 
-                let mut part_actors = Vec::new();
+                let ledgers = ledgers_guard.read();
 
                 let block_producer_actor = BlockProducerActor::new(
                     db.clone(),
                     mempool_actor_addr.clone(),
                     block_index_actor_addr.clone(),
                     reth_node.clone(),
-                    // &block_index,
                 );
                 let block_producer_addr = block_producer_actor.start();
 
+                let mut part_actors = Vec::new();
                 let mut partition_storage_providers =
                     HashMap::<PartitionId, PartitionStorageProvider>::new();
 

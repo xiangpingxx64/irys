@@ -80,6 +80,7 @@ impl IrysNodeConfig {
         self
     }
 }
+
 /// get a set of preconfigured partitions and storage modules
 pub fn get_default_partitions_and_storage_providers(
     storage_module_dir: PathBuf,
