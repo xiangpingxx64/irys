@@ -35,8 +35,6 @@ pub struct StorageModule {
     /// capacity (in chunks) allocated to this storage module
     pub capacity: u32,
     /// TODO @JesseTheRobot - implement segment locking
-    /// Map of fixed width (200MIB) segments to their corresponding rwlock
-    // pub lock_map: NoditMap<u32, Interval<u32>, RwLock<()>>,
     /// Saved last configuration
     pub config: StorageModuleConfig,
 }
@@ -67,11 +65,6 @@ impl StorageModule {
 
     /// creates a new storage module if it can't load it from disk
     pub fn new_or_load_from_disk(config: StorageModuleConfig) -> eyre::Result<Self> {
-        // let StorageModuleConfig {
-        //     directory_path: path,
-        //     size_bytes,
-        //     chunks_per_lock_segment: chunks_per_lock,
-        // } = config;
         if config.directory_path.join(SM_STATE_FILE).exists() {
             // TODO: resize the SM based on the provided size
             return StorageModule::load_from_disk(config.directory_path);
@@ -109,15 +102,12 @@ impl StorageModule {
                 .unwrap();
             file.write_all(&[0]).unwrap();
         }
-        // create the lock tree, one interval for every N MB
-        // let lock_map: NoditMap<u32, Interval<u32>, RwLock<()>> = NoditMap::new();
 
         let sm = StorageModule {
             path: directory_path,
             interval_map: RwLock::new(map),
             capacity: capacity_chunks,
             config,
-            // lock_map,
         };
 
         sm.save_to_disk()?;
@@ -185,6 +175,7 @@ impl StorageModule {
     }
 
     /// Writes some chunks to an interval, and tags the written interval with new state
+    /// TODO: coalesce writes to reduce disk fragmentation
     pub fn write_chunks(
         &self,
         chunks: Vec<ChunkBin>,
