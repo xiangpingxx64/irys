@@ -86,7 +86,11 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await.unwrap()));
                 let db = DatabaseProvider(reth_node.provider.database.db.clone());
 
-                let mempool_actor = MempoolActor::new(db.clone());
+                let mempool_actor = MempoolActor::new(
+                    db.clone(),
+                    reth_node.task_executor.clone(),
+                    node_config.mining_signer.clone(),
+                );
                 let mempool_actor_addr = mempool_actor.start();
 
                 // Initialize the epoch_service actor to handle partition ledger assignments
@@ -197,7 +201,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
         })?;
 
     // wait for the full handle to be send over by the actix thread
-    return Ok(irys_node_handle_receiver.await?);
+    Ok(irys_node_handle_receiver.await?)
 }
 
 async fn start_reth_node<T: HasName + HasTableType>(
