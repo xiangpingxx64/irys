@@ -63,6 +63,7 @@ alloy-sol-macro = { workspace = true, features = ["json"] }
 alloy-sol-types.workspace = true
 alloy-contract.workspace = true
 alloy-provider.workspace = true
+irys-testing-utils.workspace = true
 [[bin]]
 name = "irys"
 path = "src/main.rs"
