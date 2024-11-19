@@ -344,7 +344,7 @@ mod tests {
 
     use assert_matches::assert_matches;
     use database::{config::get_data_dir, open_or_create_db, tables::Tables};
-    use irys_testing_utils::utils::enables_tracing_and_temp_setup;
+    use irys_testing_utils::utils::setup_tracing_and_temp_dir;
     use irys_types::{irys::IrysSigner, Base64, MAX_CHUNK_SIZE};
     use rand::Rng;
     use tokio::time::{sleep, timeout};
@@ -355,7 +355,7 @@ mod tests {
 
     #[actix::test]
     async fn post_transaction_and_chunks() -> eyre::Result<()> {
-        let tmpdir = enables_tracing_and_temp_setup();
+        let tmpdir = setup_tracing_and_temp_dir();
 
         let db = open_or_create_db(tmpdir).unwrap();
         let arc_db1 = DatabaseProvider(Arc::new(db));

@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 use tracing_subscriber::{util::SubscriberInitExt, FmtSubscriber};
 
-pub fn enables_tracing_and_temp_setup() -> PathBuf {
+pub fn setup_tracing_and_temp_dir() -> PathBuf {
+    // tracing-subscriber is so the tracing log macros (i.e info!) work
     FmtSubscriber::new().init();
 
     temporary_directory()
