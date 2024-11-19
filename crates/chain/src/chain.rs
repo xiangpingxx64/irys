@@ -35,8 +35,17 @@ use tokio::{
 };
 
 use crate::vdf::run_vdf;
+use irys_testing_utils::utils::setup_tracing_and_temp_dir;
 
 pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
+    start_irys_node(config).await
+}
+
+pub async fn start_for_testing_default() -> eyre::Result<IrysNodeCtx> {
+    let config = IrysNodeConfig {
+        base_directory: setup_tracing_and_temp_dir(),
+        ..Default::default()
+    };
     start_irys_node(config).await
 }
 

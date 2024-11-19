@@ -344,10 +344,10 @@ mod tests {
 
     use assert_matches::assert_matches;
     use database::{config::get_data_dir, open_or_create_db, tables::Tables};
+    use irys_testing_utils::utils::setup_tracing_and_temp_dir;
     use irys_types::{irys::IrysSigner, Base64, MAX_CHUNK_SIZE};
     use rand::Rng;
     use tokio::time::{sleep, timeout};
-    use tracing_subscriber::util::SubscriberInitExt as _;
 
     use super::*;
 
@@ -355,16 +355,7 @@ mod tests {
 
     #[actix::test]
     async fn post_transaction_and_chunks() -> eyre::Result<()> {
-        // tracing-subscriber is so the tracing log macros (i.e info!) work
-        tracing_subscriber::FmtSubscriber::new().init();
-
-        let builder = tempfile::Builder::new()
-            .prefix("irys-test-")
-            .rand_bytes(8)
-            .tempdir();
-        let tmpdir = builder
-            .expect("Not able to create a temporary directory.")
-            .into_path();
+        let tmpdir = setup_tracing_and_temp_dir();
 
         let db = open_or_create_db(tmpdir).unwrap();
         let arc_db1 = DatabaseProvider(Arc::new(db));

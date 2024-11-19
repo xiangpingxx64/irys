@@ -2179,6 +2179,7 @@ dependencies = [
  "irys-config",
  "irys-reth-node-bridge",
  "irys-storage",
+ "irys-testing-utils",
  "irys-types",
  "jsonrpsee",
  "k256",
@@ -5379,6 +5380,19 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "irys-testing-utils"
+version = "0.1.0"
+dependencies = [
+ "eyre",
+ "irys-storage",
+ "irys-types",
+ "rand",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
 ]
@@ -11174,16 +11188,6 @@ dependencies = [
  "serde",
  "sha1",
  "test-fuzz-internal",
-]
-
-[[package]]
-name = "testing-utils"
-version = "0.1.0"
-dependencies = [
- "eyre",
- "irys-storage",
- "irys-types",
- "rand",
 ]
 
 [[package]]

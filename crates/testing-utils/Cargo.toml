@@ -1,5 +1,5 @@
 [package]
-name = "testing-utils"
+name = "irys-testing-utils"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,9 @@ irys-storage.workspace = true
 eyre.workspace = true
 irys-types.workspace = true
 rand.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
