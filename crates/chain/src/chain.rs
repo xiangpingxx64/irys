@@ -14,7 +14,7 @@ use irys_config::IrysNodeConfig;
 pub use irys_reth_node_bridge::node::{
     RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
 };
-use irys_storage::{partition_provider::PartitionStorageProvider, StorageProvider};
+
 use irys_types::{app_state::DatabaseProvider, block_production::PartitionId, H256};
 use reth::{
     builder::FullNode,
@@ -52,7 +52,6 @@ pub async fn start_for_testing_default() -> eyre::Result<IrysNodeCtx> {
 #[derive(Debug, Clone)]
 pub struct IrysNodeCtx {
     pub reth_handle: RethNodeProvider,
-    pub storage_provider: StorageProvider,
     pub actor_addresses: ActorAddresses,
     pub db: DatabaseProvider,
     pub config: Arc<IrysNodeConfig>,
@@ -142,45 +141,44 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let block_producer_addr = block_producer_actor.start();
 
                 let mut part_actors = Vec::new();
-                let mut partition_storage_providers =
-                    HashMap::<PartitionId, PartitionStorageProvider>::new();
+                // let mut partition_storage_providers =
+                //     HashMap::<PartitionId, PartitionStorageProvider>::new();
 
-                for (part, storage_provider_config) in node_config.sm_partition_config.clone() {
-                    let storage_provider =
-                        PartitionStorageProvider::from_config(storage_provider_config).unwrap();
-                    partition_storage_providers.insert(part.id, storage_provider.clone());
+                // for (part, storage_provider_config) in node_config.sm_partition_config.clone() {
+                //     let storage_provider =
+                //         PartitionStorageProvider::from_config(storage_provider_config).unwrap();
+                //     partition_storage_providers.insert(part.id, storage_provider.clone());
 
-                    let partition_mining_actor = PartitionMiningActor::new(
-                        part,
-                        db.clone(),
-                        block_producer_addr.clone(),
-                        storage_provider,
-                        false, // do not start mining automatically
-                    );
-                    part_actors.push(partition_mining_actor.start());
-                }
+                //     let partition_mining_actor = PartitionMiningActor::new(
+                //         part,
+                //         db.clone(),
+                //         block_producer_addr.clone(),
+                //         storage_provider,
+                //         false, // do not start mining automatically
+                //     );
+                //     part_actors.push(partition_mining_actor.start());
+                // }
 
-                let storage_provider = StorageProvider::new(Some(partition_storage_providers));
+                // let storage_provider = StorageProvider::new(Some(partition_storage_providers));
 
                 let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
 
                 let part_actors_clone = part_actors.clone();
                 std::thread::spawn(move || run_vdf(H256::random(), new_seed_rx, part_actors));
 
-                let packing_actor_addr =
-                    PackingActor::new(Handle::current(), storage_provider.clone()).start();
+                // let packing_actor_addr =
+                //     PackingActor::new(Handle::current(), storage_provider.clone()).start();
 
                 let actor_addresses = ActorAddresses {
                     partitions: part_actors_clone,
                     block_producer: block_producer_addr,
-                    packing: packing_actor_addr,
+                    // packing: packing_actor_addr,
                     mempool: mempool_actor_addr,
                     block_index: block_index_actor_addr,
                     epoch_service: epoch_service_actor_addr,
                 };
 
                 let _ = irys_node_handle_sender.send(IrysNodeCtx {
-                    storage_provider,
                     actor_addresses: actor_addresses.clone(),
                     reth_handle: reth_node,
                     db: db.clone(),

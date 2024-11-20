@@ -450,6 +450,12 @@ impl EpochServiceActor {
     pub fn get_genesis_storage_module_configs(
         &self,
     ) -> eyre::Result<Vec<(PartHash, PartitionStorageProviderConfig)>> {
+        let ranges = vec![
+            (ii(0, 4), "hdd0-4TB"),  // 0 to 4 inclusive
+            (ii(5, 9), "hdd1-4TB"),  // 5 to 9 inclusive
+            (ii(10, 19), "hdd-8TB"), // 10 to 19 inclusive
+        ];
+
         let ledgers = self.ledgers.read().unwrap();
         let mut configs = Vec::new();
 

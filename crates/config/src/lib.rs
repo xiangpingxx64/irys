@@ -6,7 +6,7 @@ use std::{
 
 use chain::chainspec::IrysChainSpecBuilder;
 use irys_primitives::GenesisAccount;
-use irys_storage::{ii, partition_provider::PartitionStorageProvider};
+use irys_storage::ii;
 use irys_types::{
     block_production::Partition, irys::IrysSigner, Address, PartitionStorageProviderConfig,
     StorageModuleConfig, CHUNK_SIZE,
