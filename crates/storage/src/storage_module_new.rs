@@ -1,6 +1,6 @@
 use eyre::Result;
 use irys_types::CHUNK_SIZE;
-use nodit::{interval::ie, InclusiveInterval, Interval, NoditMap, NoditSet};
+use nodit::{interval::ii, InclusiveInterval, Interval, NoditMap, NoditSet};
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
@@ -75,7 +75,7 @@ impl StorageModule {
     /// Initializes a new StorageModule
     pub fn new(
         base_path: &str,
-        ranges: Vec<(Range<u32>, &str)>,
+        ranges: Vec<(Interval<u32>, &str)>,
         config: Option<StorageModuleConfig>,
     ) -> Self {
         // Use the provided config or Default
@@ -87,7 +87,7 @@ impl StorageModule {
         let mut map = NoditMap::new();
         let mut intervals = StorageIntervals::new();
 
-        for (range, dir) in ranges {
+        for (interval, dir) in ranges {
             let path = Path::new(base_path).join(dir).join("data.dat");
             println!("{:?}", path);
             let file = Arc::new(Mutex::new(
@@ -99,12 +99,15 @@ impl StorageModule {
                     .unwrap_or_else(|_| panic!("Failed to open: {}", path.display())),
             ));
             // Convert Range to an inclusive-exclusive interval and insert into the map
-            let ie = ie(range.start, range.end);
-            map.insert_strict(
-                ie.clone(), // Inclusive-exclusive interval
-                StorageSubmodule { file },
-            )
-            .unwrap_or_else(|_| panic!("Failed to insert interval: {}-{}", range.start, range.end));
+            let ie = interval;
+            map.insert_strict(ie.clone(), StorageSubmodule { file })
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to insert interval: {}-{}",
+                        interval.start(),
+                        interval.end()
+                    )
+                });
 
             let _ = intervals.insert_merge_touching_if_values_equal(ie, ChunkType::Uninitialized);
         }
@@ -162,7 +165,7 @@ impl StorageModule {
 
                 // update the storage intervals
                 {
-                    let ie = ie(chunk_offset, chunk_offset + 1);
+                    let ie = ii(chunk_offset, chunk_offset);
                     let mut intervals = self.intervals.write().unwrap();
                     let _ = intervals.insert_overwrite(ie, chunk_type);
                 }
@@ -177,11 +180,11 @@ impl StorageModule {
     /// Takes a range [start, end) of partition-relative offsets (end exclusive).
     /// Returns a map of chunk offsets to their data and type, excluding uninitialized chunks.
     /// Chunks are read from physical storage for initialized intervals that overlap the range.
-    pub fn read_chunks(&self, chunk_range: Range<u32>) -> eyre::Result<ChunkMap> {
+    pub fn read_chunks(&self, chunk_range: Interval<u32>) -> eyre::Result<ChunkMap> {
         let mut chunk_map = ChunkMap::new();
         // Query overlapping intervals from storage map
         let intervals = self.intervals.read().unwrap();
-        let iter = intervals.overlapping(ie(chunk_range.start, chunk_range.end));
+        let iter = intervals.overlapping(chunk_range);
         for (interval, chunk_type) in iter {
             if *chunk_type != ChunkType::Uninitialized {
                 // For each chunk in the interval
@@ -293,7 +296,7 @@ impl StorageModule {
 
         // If successful, update the StorageModules interval state
         let mut intervals = self.intervals.write().unwrap();
-        let chunk_interval = ie(chunk_offset, chunk_offset + 1);
+        let chunk_interval = ii(chunk_offset, chunk_offset);
         let _ = intervals
             .insert_merge_touching_if_values_equal(chunk_interval, chunk_type.clone())
             .unwrap_or_else(|_| {
@@ -304,7 +307,15 @@ impl StorageModule {
     }
 }
 
-fn initialize_storage_files(base: &str, ranges: &Vec<(Range<u32>, &str)>) -> Result<()> {
+/// Creates required storage directory structure and empty data files
+///
+/// Creates:
+/// - Base directory
+/// - Subdirectories for each range
+/// - Empty data.dat files in each subdirectory
+///
+/// Used primarily for testing storage initialization
+fn initialize_storage_files(base: &str, ranges: &Vec<(Interval<u32>, &str)>) -> Result<()> {
     println!("base: {:?}", base);
     let base_path = Path::new(base);
     // Create base storage directory if it doesn't exist
@@ -337,9 +348,9 @@ mod tests {
     #[test]
     fn test() {
         let ranges = vec![
-            (0..5, "hdd0-4TB"),  // 0 to 4 inclusive
-            (5..10, "hdd1-4TB"), // 5 to 9 inclusive
-            (10..20, "hdd-8TB"), // 10 to 19 inclusive
+            (ii(0, 4), "hdd0-4TB"),  // 0 to 4 inclusive
+            (ii(5, 9), "hdd1-4TB"),  // 5 to 9 inclusive
+            (ii(10, 19), "hdd-8TB"), // 10 to 19 inclusive
         ];
 
         // TODO: Update this to use ernesto's temp path
@@ -357,7 +368,7 @@ mod tests {
 
         // Verify the entire storage module range is uninitialized
         let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
-        assert_eq!(unpacked, [ie(0u32, 20u32)]);
+        assert_eq!(unpacked, [ii(0, 19)]);
 
         // Create a test (fake) entropy chunk
         let entropy_chunk = vec![0xff; 32]; // All bytes set to 0xff
@@ -368,19 +379,19 @@ mod tests {
 
         // Validate the uninitialized intervals have been updated to reflect the new chunk
         let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
-        assert_eq!(unpacked, [ie(0u32, 1u32), ie(2u32, 20u32)]);
+        assert_eq!(unpacked, [ii(0, 0), ii(2, 19)]);
 
         // Validate the Entropy (Packed/unsynced) intervals have been updated
         let packed = storage_module.get_intervals(ChunkType::Entropy);
-        assert_eq!(packed, [ie(1u32, 2u32)]);
+        assert_eq!(packed, [ii(1, 1)]);
 
         // Validate entropy chunk can be read after writing
-        let chunks = storage_module.read_chunks(1..2).unwrap();
+        let chunks = storage_module.read_chunks(ii(1, 1)).unwrap();
         let chunk = chunks.get(&1).unwrap();
         assert_eq!(*chunk, (entropy_chunk.clone(), ChunkType::Entropy));
 
         // Validate that uninitialized chunks are not returned by read_chunks
-        let chunks = storage_module.read_chunks(1..3).unwrap();
+        let chunks = storage_module.read_chunks(ii(1, 2)).unwrap();
         assert_eq!(chunks.len(), 1);
         assert_eq!(*chunk, (entropy_chunk.clone(), ChunkType::Entropy));
 
@@ -403,14 +414,15 @@ mod tests {
 
         // Validate the data intervals
         let data = storage_module.get_intervals(ChunkType::Data);
-        assert_eq!(data, [ie(4u32, 6u32)]);
+        assert_eq!(data, [ii(42, 5)]);
 
         // Validate the unpacked intervals are updated
         let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
-        assert_eq!(unpacked, [ii(0u32, 0u32), ii(2u32, 3u32), ii(6u32, 19u32)]);
+        assert_eq!(unpacked, [ii(0, 0), ii(2, 3), ii(6, 19)]);
+        println!("{:?}", unpacked);
 
         // Validate a read_chunks operation across submodule boundaries
-        let chunks = storage_module.read_chunks(4..6).unwrap();
+        let chunks = storage_module.read_chunks(ii(4, 5)).unwrap();
         assert_eq!(chunks.len(), 2);
         assert_eq!(
             chunks.into_iter().collect::<Vec<_>>(),
@@ -421,7 +433,7 @@ mod tests {
         );
 
         // Query past the range of the StorageModule
-        let chunks = storage_module.read_chunks(0..25).unwrap();
+        let chunks = storage_module.read_chunks(ii(0, 25)).unwrap();
 
         // Verify only initialized chunks are returned
         assert_eq!(
