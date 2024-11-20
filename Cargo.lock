@@ -295,6 +295,7 @@ dependencies = [
  "irys-primitives",
  "irys-reth-node-bridge",
  "irys-storage",
+ "irys-testing-utils",
  "irys-types",
  "openssl",
  "packing",
