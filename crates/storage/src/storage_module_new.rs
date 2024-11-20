@@ -1,15 +1,14 @@
-use eyre::Result;
+use eyre::{eyre, Result};
 use irys_types::CHUNK_SIZE;
 use nodit::{interval::ii, InclusiveInterval, Interval, NoditMap, NoditSet};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs::{self, File, OpenOptions},
-    io::{Read, Seek, SeekFrom, Write},
-    ops::Range,
+    io::{self, Read, Seek, SeekFrom, Write},
     path::Path,
     sync::{Arc, Mutex, RwLock},
 };
-
 type ChunkOffset = u32;
 type ChunkBytes = Vec<u8>;
 
@@ -33,6 +32,8 @@ pub struct StorageModule {
     submodules: SubmoduleMap,
     /// Runtime configuration parameters
     config: StorageModuleConfig,
+    /// Persistent file handle
+    intervals_file: Arc<Mutex<File>>,
 }
 
 /// Per-module configuration for tuning storage behavior
@@ -61,7 +62,7 @@ struct StorageSubmodule {
 }
 
 /// Defines how chunk data is processed and stored
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ChunkType {
     /// Chunk containing matrix-packed entropy only
     Entropy,
@@ -88,9 +89,9 @@ impl StorageModule {
         let mut intervals = StorageIntervals::new();
 
         for (interval, dir) in ranges {
-            let path = Path::new(base_path).join(dir).join("data.dat");
+            let path = Path::new(base_path).join(dir).join("chunks.dat");
             println!("{:?}", path);
-            let file = Arc::new(Mutex::new(
+            let chunks_file = Arc::new(Mutex::new(
                 OpenOptions::new()
                     .read(true)
                     .write(true)
@@ -98,9 +99,10 @@ impl StorageModule {
                     .open(&path)
                     .unwrap_or_else(|_| panic!("Failed to open: {}", path.display())),
             ));
+
             // Convert Range to an inclusive-exclusive interval and insert into the map
             let ie = interval;
-            map.insert_strict(ie.clone(), StorageSubmodule { file })
+            map.insert_strict(ie.clone(), StorageSubmodule { file: chunks_file })
                 .unwrap_or_else(|_| {
                     panic!(
                         "Failed to insert interval: {}-{}",
@@ -114,11 +116,27 @@ impl StorageModule {
 
         println!("intervals:{:?}", intervals);
 
+        let path = Path::new(base_path).join("intervals.json");
+        let intervals_file = Arc::new(Mutex::new(
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .create(true) // Optional: creates file if it doesn't exist
+                .open(&path)
+                .unwrap_or_else(|_| panic!("Failed to open: {}", path.display())),
+        ));
+
+        // Attempt to restore intervals from the intervals file.
+        if let Ok(ints) = read_intervals_file(intervals_file.clone()) {
+            intervals = ints;
+        }
+
         StorageModule {
             pending_writes: Arc::new(RwLock::new(ChunkMap::new())),
             intervals: Arc::new(RwLock::new(intervals)),
             submodules: map,
             config,
+            intervals_file,
         }
     }
 
@@ -169,6 +187,15 @@ impl StorageModule {
                     let mut intervals = self.intervals.write().unwrap();
                     let _ = intervals.insert_overwrite(ie, chunk_type);
                 }
+            }
+
+            {
+                // Save the updated intervals
+                let mut file = self.intervals_file.lock().unwrap();
+                let intervals = self.intervals.read().unwrap();
+                file.set_len(0)?;
+                file.seek(SeekFrom::Start(0))?;
+                file.write_all(serde_json::to_string(&*intervals)?.as_bytes())?;
             }
         }
 
@@ -337,6 +364,25 @@ fn initialize_storage_files(base: &str, ranges: &Vec<(Interval<u32>, &str)>) -> 
     Ok(())
 }
 
+/// Reads and deserializes intervals from storage state file
+///
+/// Loads the stored interval mapping that tracks chunk states.
+/// Expects a JSON-formatted file containing StorageIntervals.
+pub fn read_intervals_file(intervals_file: Arc<Mutex<File>>) -> eyre::Result<StorageIntervals> {
+    let mut file = intervals_file.lock().unwrap();
+    let size = file.metadata().unwrap().len() as usize;
+
+    if size == 0 {
+        return Err(eyre!("Intervals file is empty"));
+    }
+
+    let mut contents = String::with_capacity(size);
+    file.seek(SeekFrom::Start(0))?;
+    file.read_to_string(&mut contents).unwrap();
+    let intervals = serde_json::from_str(&contents)?;
+    Ok(intervals)
+}
+
 //==============================================================================
 // Tests
 //------------------------------------------------------------------------------
@@ -363,10 +409,17 @@ mod tests {
             chunk_size: 32,
         };
 
+        // For our test, rest any prior submodule state
+        let path = format!("{}intervals.json", base_path);
+        let path = Path::new(&path);
+        if path.exists() {
+            fs::remove_file(path).unwrap();
+        }
+
         // Create a StorageModule with the specified submodules and config
         let mut storage_module = StorageModule::new(base_path, ranges, Some(config));
 
-        // Verify the entire storage module range is uninitialized
+        // Verify the entire storage module range is unisnitialized
         let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
         assert_eq!(unpacked, [ii(0, 19)]);
 
@@ -414,12 +467,11 @@ mod tests {
 
         // Validate the data intervals
         let data = storage_module.get_intervals(ChunkType::Data);
-        assert_eq!(data, [ii(42, 5)]);
+        assert_eq!(data, [ii(4, 5)]);
 
         // Validate the unpacked intervals are updated
         let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
         assert_eq!(unpacked, [ii(0, 0), ii(2, 3), ii(6, 19)]);
-        println!("{:?}", unpacked);
 
         // Validate a read_chunks operation across submodule boundaries
         let chunks = storage_module.read_chunks(ii(4, 5)).unwrap();
@@ -444,5 +496,13 @@ mod tests {
                 (5, (data2_chunk.clone(), ChunkType::Data))
             ]
         );
+
+        // Load up the intervals from file
+        let intervals = read_intervals_file(storage_module.intervals_file.clone()).unwrap();
+
+        let file_intervals = intervals.into_iter().collect::<Vec<_>>();
+        let ints = storage_module.intervals.read().unwrap();
+        let module_intervals = ints.clone().into_iter().collect::<Vec<_>>();
+        assert_eq!(file_intervals, module_intervals);
     }
 }
