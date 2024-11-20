@@ -3,9 +3,9 @@ use database::data_ledger::*;
 use eyre::{Error, Result};
 use irys_storage::ii;
 use irys_types::{
-    storage, Address, IrysBlockHeader, PartitionStorageProviderConfig, StorageModuleConfig,
-    CAPACITY_SCALAR, CHUNK_SIZE, H256, NUM_BLOCKS_IN_EPOCH, NUM_OF_CHUNKS_IN_PARTITION,
-    NUM_PARTITIONS_PER_SLOT, PARTITION_SIZE,
+    Address, IrysBlockHeader, PartitionStorageProviderConfig, StorageModuleConfig, CAPACITY_SCALAR,
+    CHUNK_SIZE, H256, NUM_BLOCKS_IN_EPOCH, NUM_OF_CHUNKS_IN_PARTITION, NUM_PARTITIONS_PER_SLOT,
+    PARTITION_SIZE,
 };
 use openssl::sha;
 use std::{
