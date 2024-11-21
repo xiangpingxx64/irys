@@ -5390,7 +5390,6 @@ name = "irys-testing-utils"
 version = "0.1.0"
 dependencies = [
  "eyre",
- "irys-storage",
  "irys-types",
  "rand",
  "tempfile",
