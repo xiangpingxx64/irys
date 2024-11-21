@@ -10,7 +10,8 @@ use eyre::eyre;
 use irys_config::IrysNodeConfig;
 use irys_reth_node_bridge::adapter::{node::RethNodeContext, transaction::TransactionTestContext};
 use irys_types::{
-    block_production::SolutionContext, irys::IrysSigner, Address, IrysTransaction, IRYS_CHAIN_ID,
+    block_production::SolutionContext, irys::IrysSigner, Address, IrysTransaction, H256,
+    IRYS_CHAIN_ID,
 };
 use k256::ecdsa::SigningKey;
 use reth::{providers::BlockReader, rpc::types::TransactionRequest};
