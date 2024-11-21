@@ -98,7 +98,7 @@ async fn test_basic_blockprod_extern_tx_src() -> eyre::Result<()> {
             .block_producer
             .send(SolutionContext {
                 partition_id: 0,
-                chunk_index: 0,
+                chunk_offset: 0,
                 mining_address: Address::random(),
             })
             .await?

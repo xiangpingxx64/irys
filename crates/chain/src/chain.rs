@@ -3,7 +3,10 @@ use actix::Actor;
 use actors::{
     block_index::BlockIndexActor,
     block_producer::{BlockConfirmedMessage, BlockProducerActor},
-    epoch_service::{EpochServiceActor, EpochServiceConfig, GetLedgersMessage, NewEpochMessage},
+    epoch_service::{
+        EpochServiceActor, EpochServiceConfig, GetGenesisStorageModulesMessage, GetLedgersMessage,
+        NewEpochMessage,
+    },
     mempool::MempoolActor,
     mining::PartitionMiningActor,
     packing::PackingActor,
@@ -15,6 +18,7 @@ pub use irys_reth_node_bridge::node::{
     RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
 };
 
+use irys_storage::{initialize_storage_files, StorageModule};
 use irys_types::{app_state::DatabaseProvider, block_production::PartitionId, H256};
 use reth::{
     builder::FullNode,
@@ -25,6 +29,7 @@ use reth::{
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c};
 use reth_db::{HasName, HasTableType};
 use std::{
+    cmp::min,
     collections::HashMap,
     sync::{mpsc, Arc, RwLock},
 };
@@ -64,6 +69,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
     let irys_genesis = node_config.chainspec_builder.genesis();
     let arc_genesis = Arc::new(irys_genesis);
     let arc_config = Arc::new(node_config);
+    let mut storage_modules: Vec<Arc<StorageModule>> = Vec::new();
     let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new(
         BlockIndex::default()
             .reset(&arc_config.clone())?
@@ -130,7 +136,10 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     .unwrap()
                     .unwrap(); // I don't like this double unwrap but I haven't figured out how to avoid it.
 
-                let ledgers = ledgers_guard.read();
+                {
+                    let ledgers = ledgers_guard.read();
+                    println!("ledgers: {:?}", ledgers);
+                }
 
                 let block_producer_actor = BlockProducerActor::new(
                     db.clone(),
@@ -141,25 +150,30 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let block_producer_addr = block_producer_actor.start();
 
                 let mut part_actors = Vec::new();
-                // let mut partition_storage_providers =
-                //     HashMap::<PartitionId, PartitionStorageProvider>::new();
 
-                // for (part, storage_provider_config) in node_config.sm_partition_config.clone() {
-                //     let storage_provider =
-                //         PartitionStorageProvider::from_config(storage_provider_config).unwrap();
-                //     partition_storage_providers.insert(part.id, storage_provider.clone());
+                // Get the genesis storage modules and their assigned partitions
+                let storage_module_infos = epoch_service_actor_addr
+                    .send(GetGenesisStorageModulesMessage)
+                    .await
+                    .unwrap()
+                    .unwrap();
 
-                //     let partition_mining_actor = PartitionMiningActor::new(
-                //         part,
-                //         db.clone(),
-                //         block_producer_addr.clone(),
-                //         storage_provider,
-                //         false, // do not start mining automatically
-                //     );
-                //     part_actors.push(partition_mining_actor.start());
-                // }
+                // For Genesis we create the storage_modules and their files
+                initialize_storage_files("./storage_modules/", &storage_module_infos).unwrap();
 
-                // let storage_provider = StorageProvider::new(Some(partition_storage_providers));
+                for info in storage_module_infos {
+                    let arc_module =
+                        Arc::new(StorageModule::new("./storage_modules/", &info, None));
+                    storage_modules.push(arc_module.clone());
+                    let partition_mining_actor = PartitionMiningActor::new(
+                        miner_address,
+                        db.clone(),
+                        block_producer_addr.clone(),
+                        arc_module.clone(),
+                        false, // do not start mining automatically
+                    );
+                    part_actors.push(partition_mining_actor.start());
+                }
 
                 let (new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
 

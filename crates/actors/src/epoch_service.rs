@@ -1,16 +1,14 @@
 use actix::{Actor, Context, Handler, Message};
 use database::data_ledger::*;
 use eyre::{Error, Result};
-use irys_storage::ii;
+use irys_storage::{ii, StorageModuleInfo};
 use irys_types::{
-    Address, IrysBlockHeader, PartitionStorageProviderConfig, StorageModuleConfig, CAPACITY_SCALAR,
-    CHUNK_SIZE, H256, NUM_BLOCKS_IN_EPOCH, NUM_OF_CHUNKS_IN_PARTITION, NUM_PARTITIONS_PER_SLOT,
-    PARTITION_SIZE,
+    Address, IrysBlockHeader, CAPACITY_SCALAR, H256, NUM_BLOCKS_IN_EPOCH, NUM_CHUNKS_IN_PARTITION,
+    NUM_PARTITIONS_PER_SLOT, PARTITION_SIZE,
 };
 use openssl::sha;
 use std::{
     collections::HashMap,
-    path::PathBuf,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
@@ -27,12 +25,8 @@ pub struct EpochServiceConfig {
     num_partitions_per_slot: u64,
     /// Size (in bytes) of each partition
     partition_size: u64,
-    /// Base directory for storage modules
-    storage_module_dir: PathBuf,
     /// Number of chunks in a partition
     num_chunks_in_partition: u64,
-    /// Chunk size in bytes
-    chunk_size: u64,
 }
 
 impl Default for EpochServiceConfig {
@@ -42,9 +36,7 @@ impl Default for EpochServiceConfig {
             num_blocks_in_epoch: NUM_BLOCKS_IN_EPOCH,
             num_partitions_per_slot: NUM_PARTITIONS_PER_SLOT,
             partition_size: PARTITION_SIZE,
-            storage_module_dir: Default::default(),
-            num_chunks_in_partition: NUM_OF_CHUNKS_IN_PARTITION,
-            chunk_size: CHUNK_SIZE,
+            num_chunks_in_partition: NUM_CHUNKS_IN_PARTITION,
         }
     }
 }
@@ -121,6 +113,23 @@ impl Handler<GetLedgersMessage> for EpochServiceActor {
         // Create a LedgersReadGuard, encapsulating read-only access to ledgers
         let ledgers_guard = LedgersReadGuard::new(Arc::clone(&self.ledgers));
         Ok(ledgers_guard)
+    }
+}
+
+/// Retrieve a read only reference to the ledger partition assignments
+#[derive(Message, Debug)]
+#[rtype(result = "Result<Vec<StorageModuleInfo>, EpochServiceError>")]
+pub struct GetGenesisStorageModulesMessage;
+
+impl Handler<GetGenesisStorageModulesMessage> for EpochServiceActor {
+    type Result = Result<Vec<StorageModuleInfo>, EpochServiceError>;
+
+    fn handle(
+        &mut self,
+        _msg: GetGenesisStorageModulesMessage,
+        _ctx: &mut Self::Context,
+    ) -> Self::Result {
+        Ok(self.get_genesis_storage_module_infos())
     }
 }
 
@@ -447,70 +456,57 @@ impl EpochServiceActor {
     }
 
     /// Configure storage modules for genesis partition assignments
-    pub fn get_genesis_storage_module_configs(
-        &self,
-    ) -> eyre::Result<Vec<(PartHash, PartitionStorageProviderConfig)>> {
-        let ranges = vec![
-            (ii(0, 4), "hdd0-4TB"),  // 0 to 4 inclusive
-            (ii(5, 9), "hdd1-4TB"),  // 5 to 9 inclusive
-            (ii(10, 19), "hdd-8TB"), // 10 to 19 inclusive
-        ];
-
+    pub fn get_genesis_storage_module_infos(&self) -> Vec<StorageModuleInfo> {
         let ledgers = self.ledgers.read().unwrap();
-        let mut configs = Vec::new();
+        let num_part_chunks = self.config.num_chunks_in_partition as u32;
 
         // Configure publish ledger storage
-        let publish_configs = self.map_sm_configs(ledgers.get_slots(Ledger::Publish));
-        configs.extend(publish_configs);
+        let mut module_infos = ledgers
+            .get_slots(Ledger::Publish)
+            .iter()
+            .flat_map(|slot| &slot.partitions)
+            .enumerate()
+            .map(|(idx, partition)| StorageModuleInfo {
+                module_num: idx,
+                partition_hash: Some(partition.clone()),
+                submodules: vec![(ii(0, num_part_chunks), format!("submodule_{}", idx))],
+            })
+            .collect::<Vec<_>>();
+
+        let idx_start = module_infos.len();
 
         // Configure submit ledger storage
-        let submit_configs = self.map_sm_configs(ledgers.get_slots(Ledger::Submit));
-        configs.extend(submit_configs);
+        let submit_infos = ledgers
+            .get_slots(Ledger::Submit)
+            .iter()
+            .flat_map(|slot| &slot.partitions)
+            .enumerate()
+            .map(|(idx, partition)| StorageModuleInfo {
+                module_num: idx_start + idx,
+                partition_hash: Some(partition.clone()),
+                submodules: vec![(
+                    ii(0, num_part_chunks),
+                    format!("submodule_{}", idx_start + idx),
+                )],
+            })
+            .collect::<Vec<_>>();
+
+        module_infos.extend(submit_infos);
 
         // Sort the active capacity partitions by hash
         let capacity_partitions: Vec<H256> = self.capacity_partitions.keys().copied().collect();
 
         // Add initial capacity partition config
         let cap_part = capacity_partitions.first().unwrap();
-        let idx = configs.len();
-        let config = &self.config;
-        let cap_config = PartitionStorageProviderConfig {
-            sm_paths_offsets: vec![(
-                ii(0, config.num_chunks_in_partition as u32),
-                StorageModuleConfig {
-                    directory_path: format!("p{}/sm{}", idx, idx).into(),
-                    size_bytes: config.num_chunks_in_partition * config.chunk_size,
-                },
-            )],
+        let idx = module_infos.len();
+        let cap_info = StorageModuleInfo {
+            module_num: idx,
+            partition_hash: Some(cap_part.clone()),
+            submodules: vec![(ii(0, num_part_chunks), format!("submodule_{}", idx))],
         };
-        configs.push((*cap_part, cap_config));
 
-        Ok(configs)
-    }
-
-    fn map_sm_configs(
-        &self,
-        slots: &Vec<LedgerSlot>,
-    ) -> Vec<(PartHash, PartitionStorageProviderConfig)> {
-        let config = &self.config;
-
-        slots
-            .iter()
-            .flat_map(|slot| &slot.partitions)
-            .enumerate()
-            .map(|(idx, partition)| {
-                let sm_config = PartitionStorageProviderConfig {
-                    sm_paths_offsets: vec![(
-                        ii(0, config.num_chunks_in_partition as u32),
-                        StorageModuleConfig {
-                            directory_path: format!("p{}/sm{}", idx, idx).into(),
-                            size_bytes: config.num_chunks_in_partition * config.chunk_size,
-                        },
-                    )],
-                };
-                (*partition, sm_config)
-            })
-            .collect::<Vec<_>>()
+        module_infos.push(cap_info);
+        module_infos
     }
 }
 
@@ -562,7 +558,6 @@ impl SimpleRNG {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use assert_matches::assert_matches;
 
     #[actix::test]
     async fn genesis_test() {
@@ -687,6 +682,9 @@ mod tests {
             .unwrap();
 
         println!("{:?}", ledgers.read());
+
+        let infos = epoch_service.get_genesis_storage_module_infos();
+        println!("{:#?}", infos);
     }
 
     #[actix::test]
