@@ -5251,6 +5251,7 @@ dependencies = [
  "irys-testing-utils",
  "irys-types",
  "modular-bitfield",
+ "rand",
  "reth",
  "reth-codecs",
  "reth-db",

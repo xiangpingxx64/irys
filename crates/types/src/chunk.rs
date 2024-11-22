@@ -45,6 +45,9 @@ pub type TxRelativeChunkIndex = u32;
 
 pub type DataChunks = Vec<Vec<u8>>;
 
+/// the Block relative chunk offset
+pub type BlockRelativeChunkOffset = u64;
+
 pub type ChunkOffset = u32;
 
 /// A transaction's data path
