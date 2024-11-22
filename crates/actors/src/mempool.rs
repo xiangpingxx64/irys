@@ -357,7 +357,7 @@ mod tests {
     async fn post_transaction_and_chunks() -> eyre::Result<()> {
         let tmpdir = setup_tracing_and_temp_dir();
 
-        let db = open_or_create_db(tmpdir).unwrap();
+        let db = open_or_create_db(tmpdir, Tables::ALL, None).unwrap();
         let arc_db1 = DatabaseProvider(Arc::new(db));
         let arc_db2 = DatabaseProvider(Arc::clone(&arc_db1));
 

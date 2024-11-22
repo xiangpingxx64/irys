@@ -297,7 +297,7 @@ mod tests {
 
         let mut tx = IrysTransactionHeader::default();
         tx.id.0[0] = 2;
-        let db = open_or_create_db(path, Tables::ALL).unwrap();
+        let db = open_or_create_db(path, Tables::ALL, None).unwrap();
 
         // // Write a Tx
         // {

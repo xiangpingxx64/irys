@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn block_relative_tx_path_index() -> eyre::Result<()> {
         let tmp_dir = temporary_directory();
-        let db = open_or_create_db(tmp_dir)?.with_metrics_and_tables(Tables::ALL);
+        let db = open_or_create_db(tmp_dir, Tables::ALL, None)?;
 
         let data_size = 2000; // max key size is 2022
         let mut data_bytes = vec![0u8; data_size];

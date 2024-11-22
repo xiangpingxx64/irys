@@ -33,7 +33,7 @@ fn test_offset_range_queries() -> eyre::Result<()> {
 
     let temp_dir = setup_tracing_and_temp_dir();
 
-    let db = open_or_create_db(temp_dir, Tables::ALL).unwrap();
+    let db = open_or_create_db(temp_dir, Tables::ALL, None).unwrap();
 
     let write_tx = db.tx_mut()?;
 
