@@ -673,9 +673,7 @@ mod tests {
         // println!("Data Partitions: {:#?}", epoch_service.capacity_partitions);
         println!("Ledger State: {:#?}", epoch_service.ledgers);
 
-        let ledgers = epoch_service
-            .handle(GetLedgersMessage, &mut Context::new())
-            .unwrap();
+        let ledgers = epoch_service.handle(GetLedgersMessage, &mut Context::new());
 
         println!("{:?}", ledgers.read());
 
