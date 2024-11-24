@@ -634,10 +634,10 @@ mod tests {
                 (ii(0, 4), "hdd0-4TB".to_string()), // 0 to 4 inclusive
             ],
         }];
-
-        let tmp_dir = setup_tracing_and_temp_dir();
-        let base_path = PathBuf::from(tmp_dir.to_str().unwrap());
-        initialize_storage_files(&base_path, &infos)?;
+      
+        let tmp_dir = setup_tracing_and_temp_dir(Some("data_path_test"), false);
+        let base_path = tmp_dir.path().to_str().unwrap();
+        initialize_storage_files(base_path, &infos)?;
 
         let config = StorageModuleConfig {
             min_writes_before_sync: 1,
