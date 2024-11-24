@@ -136,8 +136,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let ledgers_guard = epoch_service_actor_addr
                     .send(GetLedgersMessage)
                     .await
-                    .unwrap()
-                    .unwrap(); // I don't like this double unwrap but I haven't figured out how to avoid it.
+                    .unwrap();
 
                 {
                     let ledgers = ledgers_guard.read();
@@ -158,7 +157,6 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let storage_module_infos = epoch_service_actor_addr
                     .send(GetGenesisStorageModulesMessage)
                     .await
-                    .unwrap()
                     .unwrap();
 
                 // For Genesis we create the storage_modules and their files

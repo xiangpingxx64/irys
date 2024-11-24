@@ -1,4 +1,4 @@
-use actix::{Actor, Context, Handler, Message};
+use actix::{Actor, Context, Handler, Message, MessageResponse};
 use eyre::{Error, Result};
 use irys_database::data_ledger::*;
 use irys_storage::{ii, StorageModuleInfo};
@@ -11,6 +11,7 @@ use std::{
     collections::HashMap,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
+use tracing::info;
 
 /// Allows for overriding of the consensus parameters for ledgers and partitions
 #[derive(Debug, Clone)]
@@ -80,8 +81,17 @@ impl Handler<NewEpochMessage> for EpochServiceActor {
     }
 }
 
-/// Wraps the internal Arc<RwLock<>> to make the reference readonly
+/// Reasons why the epoch service actors epoch tasks might fail
 #[derive(Debug)]
+pub enum EpochServiceError {
+    /// Catchall error until more detailed errors are added
+    InternalError,
+    /// Attempted to do epoch tasks on a block that was not an epoch block
+    NotAnEpochBlock,
+}
+
+/// Wraps the internal Arc<RwLock<>> to make the reference readonly
+#[derive(Debug, MessageResponse)]
 pub struct LedgersReadGuard {
     ledgers: Arc<RwLock<Ledgers>>,
 }
@@ -100,43 +110,32 @@ impl LedgersReadGuard {
 
 /// Retrieve a read only reference to the ledger partition assignments
 #[derive(Message, Debug)]
-#[rtype(result = "Result<LedgersReadGuard, EpochServiceError>")]
+#[rtype(result = "LedgersReadGuard")] // Remove MessageResult wrapper since type implements MessageResponse
 pub struct GetLedgersMessage;
 
 impl Handler<GetLedgersMessage> for EpochServiceActor {
-    type Result = Result<LedgersReadGuard, EpochServiceError>;
+    type Result = LedgersReadGuard; // Return guard directly
 
     fn handle(&mut self, _msg: GetLedgersMessage, _ctx: &mut Self::Context) -> Self::Result {
-        // Create a LedgersReadGuard, encapsulating read-only access to ledgers
-        let ledgers_guard = LedgersReadGuard::new(Arc::clone(&self.ledgers));
-        Ok(ledgers_guard)
+        LedgersReadGuard::new(Arc::clone(&self.ledgers))
     }
 }
 
 /// Retrieve a read only reference to the ledger partition assignments
 #[derive(Message, Debug)]
-#[rtype(result = "Result<Vec<StorageModuleInfo>, EpochServiceError>")]
+#[rtype(result = "Vec<StorageModuleInfo>")]
 pub struct GetGenesisStorageModulesMessage;
 
 impl Handler<GetGenesisStorageModulesMessage> for EpochServiceActor {
-    type Result = Result<Vec<StorageModuleInfo>, EpochServiceError>;
+    type Result = Vec<StorageModuleInfo>;
 
     fn handle(
         &mut self,
         _msg: GetGenesisStorageModulesMessage,
         _ctx: &mut Self::Context,
     ) -> Self::Result {
-        Ok(self.get_genesis_storage_module_infos())
+        self.get_genesis_storage_module_infos()
     }
-}
-
-/// Reasons why the epoch service actors epoch tasks might fail
-#[derive(Debug)]
-pub enum EpochServiceError {
-    /// Catchall error until more detailed errors are added
-    InternalError,
-    /// Attempted to do epoch tasks on a block that was not an epoch block
-    NotAnEpochBlock,
 }
 
 /// Temporary struct tracking partition assignments to miners - will be moved to database
