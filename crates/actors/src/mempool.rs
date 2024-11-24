@@ -22,6 +22,8 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::info;
+
+use crate::block_producer::BlockConfirmedMessage;
 /// The Mempool oversees pending transactions and validation of incoming tx.
 #[derive(Debug)]
 pub struct MempoolActor {
@@ -249,18 +251,24 @@ impl Handler<GetBestMempoolTxs> for MempoolActor {
     }
 }
 
-// Message for getting txs for block building
-#[derive(Message, Debug)]
-#[rtype(result = "()")]
-pub struct RemoveConfirmedTxs(pub Vec<H256>);
-
-impl Handler<RemoveConfirmedTxs> for MempoolActor {
+impl Handler<BlockConfirmedMessage> for MempoolActor {
     type Result = ();
+    fn handle(&mut self, msg: BlockConfirmedMessage, _ctx: &mut Context<Self>) -> Self::Result {
+        // Access the block header through msg.0
+        let block = &msg.0;
+        let data_tx = &msg.1;
 
-    fn handle(&mut self, msg: RemoveConfirmedTxs, ctx: &mut Self::Context) -> Self::Result {
-        for tx_id in msg.0 {
-            self.valid_tx.remove(&tx_id);
+        // Loop through the storage tx in each ledger
+        for tx in data_tx.iter() {
+            // Remove them from the pending valid_tx pool
+            self.valid_tx.remove(&tx.id);
         }
+
+        info!(
+            "Removing confirmed tx - Block height: {} num tx: {}",
+            block.height,
+            data_tx.len()
+        );
     }
 }
 

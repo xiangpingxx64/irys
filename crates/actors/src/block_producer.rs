@@ -18,7 +18,7 @@ use tracing::info;
 
 use crate::{
     block_index::{BlockIndexActor, GetBlockHeightMessage},
-    mempool::{GetBestMempoolTxs, MempoolActor, RemoveConfirmedTxs},
+    mempool::{GetBestMempoolTxs, MempoolActor},
 };
 
 pub struct BlockProducerActor {
@@ -177,33 +177,6 @@ impl Handler<SolutionContext> for BlockProducerActor {
 
                 // TODO: Irys block header building logic
 
-                /*
-
-                // Calculate storage requirements for new transactions
-                let mut total_chunks = 0;
-                for data_tx in data_txs {
-                    // Convert data size to required number of 256KB chunks, rounding up
-                    let num_chunks = (data_tx.data_size + CHUNK_SIZE - 1) / CHUNK_SIZE;
-                    total_chunks += num_chunks;
-                }
-
-                // Calculate total bytes needed in submit ledger
-                let bytes_added = total_chunks * CHUNK_SIZE;
-
-                // Update submit ledger size with new data
-                let prev_block = self.block_index.get_item(self.last_height).unwrap();
-                let submit_ledger_size = prev_block.ledgers[Ledger::Submit as usize].ledger_size;
-                let new_submit_ledger_size = submit_ledger_size + u128::from(bytes_added);
-
-                */
-
-                // TODO: Commit block
-
-                let _ = mempool_addr
-                    .send(RemoveConfirmedTxs(data_tx_ids))
-                    .await
-                    .unwrap();
-
                 // TODO: Commit block to DB and send to networking layer
 
                 // make the built evm payload canonical
@@ -223,6 +196,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 // We can clone messages because it only contains references to the data
                 self_addr.do_send(block_confirm_message.clone());
                 block_index_addr.do_send(block_confirm_message.clone());
+                mempool_addr.do_send(block_confirm_message.clone());
 
                 Some((block.clone(), exec_payload))
             }
