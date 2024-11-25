@@ -8,7 +8,7 @@ pub struct Chunk {
     /// transaction header. Having this present makes it easier to do cached
     /// chunk lookups by data_root on the ingress node.
     pub data_root: DataRoot,
-    /// Total size of the data this chunk belongs to. Helps identify if this
+    /// Total size of the data stored in this chunk. Helps identify if this
     /// is the last chunk in the transactions data, or one that comes before it.
     /// Only the last chunk can be smaller than CHUNK_SIZE.
     pub data_size: u64,
