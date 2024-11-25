@@ -2,16 +2,15 @@
 //!
 //! This module implements a single location where these types are managed,
 //! making them easy to reference and maintain.
-
-use crate::U256;
 use std::{fmt, str::FromStr};
 
 use crate::{
-    option_u64_stringify, u128_stringify, Arbitrary, Base64, Compact, H256List, IrysSignature,
-    Signature, H256,
+    generate_data_root, generate_leaves_from_data_roots, option_u64_stringify, resolve_proofs,
+    u128_stringify, validate_path, Arbitrary, Base64, Compact, DataRootLeave, H256List,
+    IrysSignature, IrysTransactionHeader, Proof, Signature, H256, U256,
 };
-use alloy_primitives::{Address, B256};
 
+use alloy_primitives::{Address, B256};
 use serde::{Deserialize, Serialize};
 
 pub type BlockHash = H256;
@@ -145,6 +144,28 @@ pub struct TransactionLedger {
     pub expires: Option<u64>,
 }
 
+impl TransactionLedger {
+    /// Computes the tx_root and tx_paths. The TX Root is composed of taking the data_roots of each of the storage transactions included, in order, and building a merkle tree out of them. The root of this tree is the tx_root.
+    pub fn merklize_tx_root(data_txs: &Vec<IrysTransactionHeader>) -> (H256, Vec<Proof>) {
+        let mut txs_data_roots = data_txs
+            .iter()
+            .map(|h| DataRootLeave {
+                data_root: h.data_root,
+                tx_size: h.data_size as usize, // TODO: check this
+            })
+            .collect::<Vec<DataRootLeave>>();
+        //txs_data_roots.push(&[]); // TODO: check this ? mimics merkle::generate_leaves's push as last chunk has max. capacity 32
+        let data_root_leaves = generate_leaves_from_data_roots(&txs_data_roots).unwrap();
+        let root = generate_data_root(data_root_leaves.clone()).unwrap();
+        let root_id = root.id.clone();
+        let proofs = resolve_proofs(root, None).unwrap();
+        (H256(root_id), proofs)
+    }
+
+    // tx_path = proof ?
+    // tx_path/proof verification
+}
+
 /// Stores the `nonce_limiter_info` in the [`ArweaveBlockHeader`]
 #[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize, Compact)]
 pub struct NonceLimiterInfo {
@@ -255,5 +276,21 @@ mod tests {
 
         // Assert that the deserialized object is equal to the original
         assert_eq!(header, deserialized);
+    }
+
+    #[test]
+    fn test_validate_tx_path() {
+        let mut txs: Vec<IrysTransactionHeader> = vec![IrysTransactionHeader::default(); 10];
+        for tx in txs.iter_mut() {
+            tx.data_root = H256::from([3u8; 32]);
+            tx.data_size = 64
+        }
+
+        let (tx_root, proofs) = TransactionLedger::merklize_tx_root(&txs);
+
+        for proof in proofs {
+            let encoded_proof = Base64(proof.proof.to_vec());
+            validate_path(tx_root.0, &encoded_proof, proof.offset as u128).unwrap();
+        }
     }
 }
