@@ -5,12 +5,9 @@ use crate::db_cache::{
     CachedDataRoot,
 };
 use crate::tables::{
-    BlockRelativeTxPathIndex, CachedChunks, CachedChunksIndex, CachedDataRoots, IrysBlockHeaders,
-    IrysTables, IrysTxHeaders,
+    CachedChunks, CachedChunksIndex, CachedDataRoots, IrysBlockHeaders, IrysTables, IrysTxHeaders,
 };
-use crate::tx_path::{
-    BlockRelativeTxPathIndexEntry, BlockRelativeTxPathIndexKey, BlockRelativeTxPathIndexMeta,
-};
+
 use crate::Ledger;
 use irys_types::{
     hash_sha256, BlockHash, BlockRelativeChunkOffset, Chunk, ChunkPathHash, DataRoot,
@@ -156,7 +153,7 @@ type IsDuplicate = bool;
 /// Caches a chunk - returns `true` if the chunk was a duplicate and was not inserted
 pub fn cache_chunk(db: &DatabaseEnv, chunk: Chunk) -> eyre::Result<IsDuplicate> {
     let chunk_index = chunk_offset_to_index(chunk.offset)?;
-    let chunk_path_hash: ChunkPathHash = hash_sha256(&chunk.data_path.0).unwrap().into();
+    let chunk_path_hash: ChunkPathHash = chunk.chunk_path_hash();
     if cached_chunk_by_chunk_key(db, chunk_path_hash)?.is_some() {
         warn!(
             "Chunk {} of {} is already cached, skipping..",
@@ -241,47 +238,6 @@ pub fn cached_chunk_by_chunk_key(
 ) -> Result<Option<CachedChunk>, DatabaseError> {
     let result = db.view(|tx| tx.get::<CachedChunks>(key).expect(ERROR_GET))?;
     Ok(result)
-}
-
-/// get the associated tx path for a block & ledger relative offset
-/// NOTE: this function ASSUMES that the index is VALID, specifically that it has no missing entries - as it "rounds up" the offset to the nearest entry to fufill the range component
-pub fn get_tx_path_by_block_ledger_offset(
-    db: &DatabaseEnv,
-    block_hash: BlockHash,
-    ledger: Ledger,
-    // offset is inclusive
-    chunk_offset: BlockRelativeChunkOffset,
-) -> Result<Option<TxPath>, DatabaseError> {
-    let tx = db.tx()?;
-    let mut cursor = tx.cursor_dup_read::<BlockRelativeTxPathIndex>()?;
-
-    Ok(cursor
-        .seek_by_key_subkey(
-            BlockRelativeTxPathIndexKey { block_hash, ledger },
-            chunk_offset,
-        )?
-        .map(|e| e.meta.tx_path))
-}
-
-/// Stores the provided tx path under a compound key of block_hash + ledger, with a ranged subkey of end_offset
-pub fn store_tx_path_by_block_offset(
-    db: &DatabaseEnv,
-    block_hash: BlockHash,
-    ledger: Ledger,
-    // this should be the offset of the *last* chunk for this tx path, inclusive.
-    end_chunk_offset: BlockRelativeChunkOffset,
-    tx_path: TxPath,
-) -> Result<(), DatabaseError> {
-    let key = BlockRelativeTxPathIndexKey { block_hash, ledger };
-    let subkey = BlockRelativeTxPathIndexEntry {
-        end_offset: end_chunk_offset,
-        meta: BlockRelativeTxPathIndexMeta { tx_path },
-    };
-    let write_tx = db.tx_mut()?;
-    write_tx.put::<BlockRelativeTxPathIndex>(key, subkey)?;
-    write_tx.commit()?;
-
-    Ok(())
 }
 
 #[cfg(test)]
