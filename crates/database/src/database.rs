@@ -287,7 +287,7 @@ mod tests {
 
         // Read a Block
         {
-            let result = block_by_hash(&db, block_header.block_hash);
+            let result = block_by_hash(&db, &block_header.block_hash);
             assert_eq!(result, Ok(Some(block_header)));
             println!("result: {:?}", result.unwrap().unwrap());
         }
