@@ -8,8 +8,7 @@ use irys_types::{
     app_state::DatabaseProvider,
     partition::{PartitionAssignment, PartitionHash},
     Chunk, ChunkBytes, ChunkDataPath, ChunkPathHash, DataRoot, LedgerChunkOffset, LedgerChunkRange,
-    PartitionChunkOffset, PartitionChunkRange, TxPath, TxPathHash, CHUNK_SIZE,
-    NUM_CHUNKS_IN_PARTITION,
+    PartitionChunkOffset, PartitionChunkRange, StorageConfig, TxPath, TxPathHash,
 };
 use nodit::{interval::ii, InclusiveInterval, Interval, NoditMap, NoditSet};
 use reth_db::{Database, DatabaseEnv};
@@ -47,7 +46,7 @@ pub struct StorageModule {
     /// Physical storage locations indexed by chunk ranges
     submodules: SubmoduleMap,
     /// Runtime configuration parameters
-    config: StorageModuleConfig,
+    config: StorageConfig,
     /// Persistent file handle
     intervals_file: Arc<Mutex<File>>,
 }
@@ -61,27 +60,6 @@ pub struct StorageModuleInfo {
     pub partition_assignment: Option<PartitionAssignment>,
     /// Range of chunk offsets and path for each submodule
     pub submodules: Vec<(Interval<u32>, SubmodulePath)>,
-}
-
-/// Per-module configuration for tuning storage behavior
-#[derive(Debug)]
-pub struct StorageModuleConfig {
-    /// Minimum chunks to accumulate before disk sync
-    pub min_writes_before_sync: usize,
-    /// Size of each chunk in bytes
-    pub chunk_size: u64,
-    /// The number of chunks a module must span
-    pub num_chunks_in_partition: u64,
-}
-
-impl Default for StorageModuleConfig {
-    fn default() -> Self {
-        Self {
-            min_writes_before_sync: 1,
-            chunk_size: CHUNK_SIZE,
-            num_chunks_in_partition: NUM_CHUNKS_IN_PARTITION,
-        }
-    }
 }
 
 /// Manages chunk storage on a single physical drive
@@ -109,12 +87,12 @@ impl StorageModule {
     pub fn new(
         base_path: &PathBuf,
         storage_module_info: &StorageModuleInfo,
-        config: Option<StorageModuleConfig>,
+        config: Option<StorageConfig>,
     ) -> Self {
         // Use the provided config or Default
         let config = match config {
             Some(cfg) => cfg,
-            None => StorageModuleConfig::default(),
+            None => StorageConfig::default(),
         };
 
         let mut map = NoditMap::new();
@@ -226,7 +204,7 @@ impl StorageModule {
                         .map(|(offset, state)| (*offset, state.clone()))
                         .collect();
 
-                    if submodule_writes.len() >= threshold {
+                    if submodule_writes.len() as u64 >= threshold {
                         submodule_writes
                     } else {
                         Vec::new()
@@ -696,10 +674,9 @@ mod tests {
         assert_eq!(file_infos, infos[0]);
 
         // Override the default StorageModule config for testing
-        let config = StorageModuleConfig {
+        let config = StorageConfig {
             min_writes_before_sync: 1,
-            chunk_size: 32,
-            num_chunks_in_partition: 20,
+            ..Default::default()
         };
 
         // Create a StorageModule with the specified submodules and config
@@ -807,10 +784,10 @@ mod tests {
         let base_path = tmp_dir.path().to_path_buf();
         initialize_storage_files(&base_path, &infos)?;
 
-        let config = StorageModuleConfig {
+        // Override the default StorageModule config for testing
+        let config = StorageConfig {
             min_writes_before_sync: 1,
-            chunk_size: 32,
-            num_chunks_in_partition: 20,
+            ..Default::default()
         };
 
         // Create a StorageModule with the specified submodules and config

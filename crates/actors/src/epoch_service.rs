@@ -1,11 +1,10 @@
 use actix::{Actor, Context, Handler, Message, MessageResponse};
 use eyre::{Error, Result};
-use irys_config::chain::StorageConfig;
 use irys_database::data_ledger::*;
 use irys_storage::{ii, InclusiveInterval, StorageModuleInfo};
 use irys_types::{
     partition::{PartitionAssignment, PartitionHash},
-    IrysBlockHeader, LedgerChunkRange, CAPACITY_SCALAR, H256, NUM_BLOCKS_IN_EPOCH,
+    IrysBlockHeader, LedgerChunkRange, StorageConfig, CAPACITY_SCALAR, H256, NUM_BLOCKS_IN_EPOCH,
 };
 use openssl::sha;
 use std::{
@@ -750,6 +749,7 @@ mod tests {
             num_chunks_in_recall_range: 2,
             num_partitions_in_slot: 1,
             miner_address: Address::random(),
+            min_writes_before_sync: 1,
         };
         let num_chunks_in_partition = storage_config.num_chunks_in_partition;
 

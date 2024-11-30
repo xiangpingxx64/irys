@@ -13,13 +13,13 @@ use irys_actors::{
     ActorAddresses,
 };
 use irys_api_server::{run_server, ApiState};
-use irys_config::{chain::StorageConfig, IrysNodeConfig};
+use irys_config::IrysNodeConfig;
 pub use irys_reth_node_bridge::node::{
     RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
 };
 
 use irys_storage::{initialize_storage_files, StorageModule};
-use irys_types::{app_state::DatabaseProvider, block_production::PartitionId, H256};
+use irys_types::{app_state::DatabaseProvider, block_production::PartitionId, StorageConfig, H256};
 use reth::{
     builder::FullNode,
     chainspec::ChainSpec,
@@ -78,6 +78,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
         num_chunks_in_recall_range: 2,
         num_partitions_in_slot: 1,
         miner_address: arc_config.mining_signer.address(),
+        min_writes_before_sync: 1,
     };
     let arc_storage_config = Arc::new(storage_config_for_testing);
     let mut storage_modules: Vec<Arc<StorageModule>> = Vec::new();

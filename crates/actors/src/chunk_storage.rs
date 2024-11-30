@@ -1,12 +1,12 @@
 use actix::prelude::*;
-use irys_config::chain::StorageConfig;
 use irys_database::{
     cached_chunk_by_offset, submodule::add_full_tx_path, BlockIndex, Initialized, Ledger,
 };
 use irys_storage::{ii, InclusiveInterval, StorageModule};
 use irys_types::{
     app_state::DatabaseProvider, Address, Chunk, DataRoot, Interval, IrysBlockHeader,
-    IrysTransactionHeader, LedgerChunkOffset, LedgerChunkRange, Proof, TransactionLedger, H256,
+    IrysTransactionHeader, LedgerChunkOffset, LedgerChunkRange, Proof, StorageConfig,
+    TransactionLedger, H256,
 };
 use openssl::sha;
 use std::{
