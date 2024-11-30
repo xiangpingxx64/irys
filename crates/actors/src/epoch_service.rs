@@ -2,14 +2,14 @@ use actix::{Actor, Context, Handler, Message, MessageResponse};
 use eyre::{Error, Result};
 use irys_config::chain::StorageConfig;
 use irys_database::data_ledger::*;
-use irys_storage::{ii, StorageModuleInfo};
+use irys_storage::{ii, InclusiveInterval, StorageModuleInfo};
 use irys_types::{
     partition::{PartitionAssignment, PartitionHash},
-    Address, IrysBlockHeader, CAPACITY_SCALAR, H256, NUM_BLOCKS_IN_EPOCH,
+    IrysBlockHeader, LedgerChunkRange, CAPACITY_SCALAR, H256, NUM_BLOCKS_IN_EPOCH,
 };
 use openssl::sha;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 use tracing::info;
@@ -131,7 +131,7 @@ impl Handler<GetGenesisStorageModulesMessage> for EpochServiceActor {
     }
 }
 
-/// Retrieve partition assignemt (ledger and its relative offet) for a partition
+/// Retrieve partition assignment (ledger and its relative offset) for a partition
 #[derive(Message, Debug)]
 #[rtype(result = "Option<PartitionAssignment>")]
 pub struct GetPartitionAssignmentMessage(pub PartitionHash);
@@ -148,6 +148,61 @@ impl Handler<GetPartitionAssignmentMessage> for EpochServiceActor {
             .get(&msg.0)
             .copied()
             .or(self.capacity_partitions.get(&msg.0).copied())
+    }
+}
+
+/// Returns a vec of PartitionAssignments that overlap the provided chunk_range
+#[derive(Message, Debug)]
+#[rtype(result = "Vec<PartitionAssignment>")]
+pub struct GetOverlappingPartitionsMessage {
+    /// The ledger (Submit/Publish) being inspected
+    pub ledger: Ledger,
+    /// The ledger relative chunk range for the query
+    pub chunk_range: LedgerChunkRange,
+}
+
+impl Handler<GetOverlappingPartitionsMessage> for EpochServiceActor {
+    type Result = Vec<PartitionAssignment>;
+
+    fn handle(
+        &mut self,
+        msg: GetOverlappingPartitionsMessage,
+        _ctx: &mut Self::Context,
+    ) -> Self::Result {
+        let ledger = msg.ledger;
+        let chunk_range = msg.chunk_range;
+
+        // Cache config and get read lock on ledgers
+        let num_chunks_in_partition = self.config.storage_config.num_chunks_in_partition;
+        let ledgers = self.ledgers.read().unwrap();
+        let ledger_slots = ledgers[ledger].get_slots();
+
+        // Enumerate the leger slots and find any that overlap the chunk_range
+        let slots: Vec<_> = ledger_slots
+            .iter()
+            .enumerate()
+            .filter(|(idx, _)| {
+                let slot_start = *idx as u64 * num_chunks_in_partition;
+                let slot_end = slot_start + num_chunks_in_partition;
+                chunk_range.overlaps(&ii(slot_start, slot_end))
+            })
+            .map(|(_, slot)| slot)
+            .collect();
+
+        // Get all the partition hashes from the overlapping slots
+        let unique_slot_partition_hashes: HashSet<H256> = slots
+            .iter()
+            .flat_map(|slot| &slot.partitions)
+            .copied()
+            .collect();
+
+        // Finally retrieve the PartitionAssignments for those partition hashes
+        let matching_assignments: Vec<_> = unique_slot_partition_hashes
+            .iter()
+            .filter_map(|hash| self.data_partitions.get(hash).cloned())
+            .collect();
+
+        matching_assignments
     }
 }
 
@@ -552,6 +607,8 @@ impl SimpleRNG {
 //------------------------------------------------------------------------------
 #[cfg(test)]
 mod tests {
+    use irys_types::Address;
+
     use super::*;
 
     #[actix::test]
