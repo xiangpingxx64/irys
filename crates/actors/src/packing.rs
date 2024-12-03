@@ -9,7 +9,9 @@ use actix::{Actor, Context, Handler, Message};
 use irys_packing::capacity_pack_range_with_data;
 use irys_primitives::IrysTxId;
 use irys_storage::StorageModule;
-use irys_types::{irys::IrysSigner, Address, ChunkState, Interval, IntervalState, U256};
+use irys_types::{
+    irys::IrysSigner, Address, ChunkState, Interval, IntervalState, CHUNK_SIZE, U256,
+};
 use tokio::runtime::Handle;
 
 #[derive(Debug, Message, Clone)]
@@ -40,6 +42,8 @@ impl PackingActor {
     }
 
     async fn poll_chunks(chunks: AtomicChunkRange, storage_module: Arc<RwLock<StorageModule>>) {
+        let chunk_size = storage_module.read().unwrap().config.chunk_size;
+
         // Loop which runs all jobs every 1 second (defined in CHUNK_POLL_TIME_MS)
         loop {
             if let Some(next_range) = chunks.read().unwrap().front() {
@@ -50,22 +54,20 @@ impl PackingActor {
 
                 let f = fs::File::open(filename.clone()).unwrap();
 
-                let data_in_range = match fs::read(filename) {
+                let mut data_in_range = match fs::read(filename) {
                     Ok(r) => cast_vec_u8_to_vec_u8_array(r),
                     Err(_) => continue,
                 };
 
-                // TODO: Pack range
-                let range = match capacity_pack_range_with_data(
-                    data_in_range,
+                // Packs data_in_range
+                capacity_pack_range_with_data(
+                    &mut data_in_range,
                     mining_addr,
                     next_range.chunk_interval.start() as u64,
                     IrysTxId::random(),
                     None,
-                ) {
-                    Ok(r) => r,
-                    Err(_) => continue,
-                };
+                    chunk_size as usize,
+                );
 
                 // TODO: Write to disk correctly
 
@@ -79,18 +81,13 @@ impl PackingActor {
 }
 
 fn cast_vec_u8_to_vec_u8_array<const N: usize>(input: Vec<u8>) -> Vec<[u8; N]> {
-    assert!(
-        input.len() % N != 0,
-        "Input vector must have a length of {}",
-        N
-    );
+    assert!(input.len() % N == 0, "wrong input N {}", N);
     let length = input.len() / N;
+    let ptr = input.as_ptr() as *const [u8; N];
+    std::mem::forget(input); // So input never drops
 
-    unsafe {
-        let ptr = input.as_ptr() as *const [u8; N];
-        let result = Vec::from_raw_parts(ptr as *mut [u8; N], length, length);
-        result
-    }
+    // safety: we've asserted that `input` length is divisible by N
+    unsafe { Vec::from_raw_parts(ptr as *mut [u8; N], length, length) }
 }
 
 struct PartitionInfo {
@@ -129,4 +126,19 @@ impl Handler<PackingRequestRange> for PackingActor {
     fn handle(&mut self, msg: PackingRequestRange, ctx: &mut Self::Context) -> Self::Result {
         self.chunks.write().unwrap().push_back(msg);
     }
+}
+
+#[test]
+fn test_casting() {
+    let v: Vec<u8> = (1..=9).collect();
+    let c2 = cast_vec_u8_to_vec_u8_array::<3>(v);
+
+    assert_eq!(c2, vec![[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+}
+
+#[test]
+#[should_panic(expected = "wrong input N 3")]
+fn test_casting_error() {
+    let v: Vec<u8> = (1..=10).collect();
+    let c2 = cast_vec_u8_to_vec_u8_array::<3>(v);
 }
