@@ -707,6 +707,7 @@ mod tests {
         // Override the default StorageModule config for testing
         let config = StorageConfig {
             min_writes_before_sync: 1,
+            chunk_size: 32,
             ..Default::default()
         };
 
