@@ -6,6 +6,7 @@ use irys_database::submodule::{
     create_or_open_submodule_db, get_data_path_by_offset, get_start_offsets_by_data_root,
     tables::RelativeStartOffsets, write_chunk_data_path,
 };
+use irys_packing::xor_vec_u8_arrays_in_place;
 use irys_types::{
     app_state::DatabaseProvider,
     partition::{PartitionAssignment, PartitionHash},
@@ -457,7 +458,12 @@ impl StorageModule {
     /// Writes chunk data and its data_path to relevant storage locations
     pub fn write_data_chunk(&self, chunk: Chunk) -> eyre::Result<()> {
         let start_offsets = self.collect_start_offsets(chunk.data_root)?;
-        let chunk_offset = (chunk.offset as u64 / self.config.chunk_size) - 1;
+
+        if start_offsets.0.len() == 0 {
+            return Err(eyre::eyre!("Chunks data_root not found in storage module"));
+        }
+
+        let chunk_offset = (chunk.offset as u64 / self.config.chunk_size).max(1) - 1;
         let data_path = chunk.data_path.0.clone();
         let data_path_hash = Chunk::hash_data_path(&data_path);
 
@@ -466,11 +472,28 @@ impl StorageModule {
                 .try_into()
                 .map_err(|_| eyre::eyre!("Invalid negative offset: {}", start_offset))?;
 
-            self.write_chunk(
-                partition_offset,
-                chunk.bytes.clone().into(),
-                ChunkType::Data,
-            );
+            {
+                // read the metadata in a block so the read guard expires quickly
+                let intervals = self.intervals.read().unwrap();
+                let chunk_state = intervals.get_at_point(partition_offset);
+                if !chunk_state.is_some_and(|s| *s == ChunkType::Entropy) {
+                    // invalid chunk state - either it's not in the map (!!) or it's not entropy
+                    // we should not be writing to this spot regardless.
+                    return Err(eyre!(
+                        "Invalid chunk state {:?} for offset {} - expected this to be an Entropy chunk",
+                        &chunk_state,
+                        &partition_offset
+                    ));
+                }
+            };
+
+            // read entropy from the storage module
+            let entropy = self.read_chunk_internal(partition_offset)?;
+            // xor
+            let mut data = chunk.bytes.0.clone();
+            xor_vec_u8_arrays_in_place(&mut data, &entropy);
+
+            self.write_chunk(partition_offset, data, ChunkType::Data);
             self.add_data_path_to_index(data_path_hash, data_path.clone(), partition_offset)?;
         }
 
@@ -613,6 +636,15 @@ impl StorageModule {
         }
         Ok(local_offset.try_into()?)
     }
+
+    /// Test utility function to mark a StorageModule as packed
+    pub fn pack_with_zeros(&self) {
+        let entropy_bytes = vec![0u8; self.config.chunk_size as usize];
+        for chunk_offset in 0..self.config.num_chunks_in_partition as u32 {
+            self.write_chunk(chunk_offset, entropy_bytes.clone(), ChunkType::Entropy);
+            self.sync_pending_chunks().unwrap();
+        }
+    }
 }
 
 /// Creates required storage directory structure and empty data files
@@ -720,7 +752,7 @@ fn hash_sha256(message: &[u8]) -> Result<[u8; 32], eyre::Error> {
 mod tests {
     use super::*;
     use irys_testing_utils::utils::setup_tracing_and_temp_dir;
-    use irys_types::H256;
+    use irys_types::{storage, H256};
     use nodit::interval::ii;
     use openssl::sha;
     #[test]
@@ -858,6 +890,7 @@ mod tests {
         // Override the default StorageModule config for testing
         let config = StorageConfig {
             min_writes_before_sync: 1,
+            chunk_size: 5,
             ..Default::default()
         };
 
@@ -867,6 +900,14 @@ mod tests {
         let offset = 0;
         let chunk_data = vec![0, 1, 2, 3, 4];
         let data_path = vec![4, 3, 2, 1];
+        let tx_path = vec![5, 6, 7, 8];
+        let data_root = H256::zero();
+
+        // Pack the storage module
+        storage_module.pack_with_zeros();
+
+        let _ =
+            storage_module.index_transaction_data(tx_path, data_root, LedgerChunkRange(ii(0, 0)));
 
         let chunk = Chunk {
             data_root: H256::zero(),
@@ -876,7 +917,7 @@ mod tests {
             offset,
         };
 
-        storage_module.write_data_chunk(chunk, 0)?;
+        storage_module.write_data_chunk(chunk)?;
 
         let ret_path = storage_module.read_data_path(0)?;
         assert_eq!(ret_path, Some(data_path));
