@@ -154,7 +154,7 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         // Check to see if we have a cached data_root for this chunk
         let result = self
             .db
-            .update_eyre(|tx| irys_database::cached_data_root_by_data_root(tx, chunk.data_root));
+            .view_eyre(|tx| irys_database::cached_data_root_by_data_root(tx, chunk.data_root));
 
         let cached_data_root = result
             .map_err(|_| ChunkIngressError::DatabaseError)? // Convert DatabaseError to ChunkIngressError
@@ -459,6 +459,9 @@ mod tests {
             assert_matches!(result, Ok(()));
 
             // Verify the chunk is added to the ChunksCache
+            // use a new read tx so we can see the writes
+            let db_tx = arc_db2.tx()?;
+
             let (meta, chunk) =
                 irys_database::cached_chunk_by_offset(&db_tx, data_root, offset, chunk_size)
                     .unwrap()
