@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::block_producer::BlockConfirmedMessage;
 /// The Mempool oversees pending transactions and validation of incoming tx.
@@ -190,6 +190,10 @@ impl Handler<ChunkIngressMessage> for MempoolActor {
         // Validate that the data_size for this chunk matches the data_size
         // recorded in the transaction header.
         if cached_data_root.data_size != chunk.data_size {
+            println!(
+                "InvalidChunkSize: expected: {} got:{}",
+                cached_data_root.data_size, chunk.data_size
+            );
             return Err(ChunkIngressError::InvalidChunkSize);
         }
 
