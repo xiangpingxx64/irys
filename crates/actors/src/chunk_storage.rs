@@ -25,9 +25,9 @@ use crate::block_producer::BlockFinalizedMessage;
 /// - Manages storage state transitions
 #[derive(Debug)]
 pub struct ChunkStorageActor {
-    /// Tracks block boundaries and offsets for coordinating chunk placement
+    /// Tracks block boundaries and offsets for locating chunks in ledgersgi
     pub block_index: Arc<RwLock<BlockIndex<Initialized>>>,
-    /// Configuration parameters for storage system behavior
+    /// Configuration parameters for storage system
     pub storage_config: StorageConfig,
     /// Collection of storage modules for distributing chunk data
     pub storage_modules: Vec<Arc<StorageModule>>,
