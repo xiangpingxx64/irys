@@ -6,6 +6,7 @@ use std::{
 
 use actix::prelude::*;
 use alloy_rpc_types_engine::{ExecutionPayloadEnvelopeV1Irys, PayloadAttributes};
+use irys_database::{block_header_by_hash, tx_header_by_txid, Ledger};
 use irys_primitives::{DataShadow, IrysTxId, ShadowTx, ShadowTxType, Shadows};
 use irys_reth_node_bridge::{adapter::node::RethNodeContext, node::RethNodeProvider};
 use irys_types::{
@@ -13,32 +14,45 @@ use irys_types::{
     IrysBlockHeader, IrysSignature, IrysTransactionHeader, PoaData, Signature, TransactionLedger,
     H256, U256,
 };
+use openssl::sha;
 use reth::revm::primitives::B256;
 use reth_db::Database;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::{
-    block_index::{BlockIndexActor, GetBlockHeightMessage},
+    block_index::{BlockIndexActor, GetLatestBlockIndexMessage},
+    chunk_storage::ChunkStorageActor,
     mempool::{GetBestMempoolTxs, MempoolActor},
 };
 
+/// BlockProducerActor creates blocks from mining solutions
+#[derive(Debug)]
 pub struct BlockProducerActor {
+    /// Reference to the global database
     pub db: DatabaseProvider,
+    /// Address of the mempool actor
     pub mempool_addr: Addr<MempoolActor>,
+    /// Address of the chunk storage actor
+    pub chunk_storage_addr: Addr<ChunkStorageActor>,
+    /// Address of the bock_index actor
     pub block_index_addr: Addr<BlockIndexActor>,
+    /// Reference to the VM node
     pub reth_provider: RethNodeProvider,
 }
 
 impl BlockProducerActor {
+    /// Initializes a new BlockProducerActor
     pub fn new(
         db: DatabaseProvider,
         mempool_addr: Addr<MempoolActor>,
+        chunk_storage_addr: Addr<ChunkStorageActor>,
         block_index_addr: Addr<BlockIndexActor>,
         reth_provider: RethNodeProvider,
     ) -> Self {
         Self {
             db,
             mempool_addr,
+            chunk_storage_addr,
             block_index_addr,
             reth_provider,
         }
@@ -49,17 +63,24 @@ impl Actor for BlockProducerActor {
     type Context = Context<Self>;
 }
 
-impl Handler<SolutionContext> for BlockProducerActor {
+#[derive(Message, Debug)]
+#[rtype(result = "Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>")]
+/// Announce to the node a mining solution has been found.
+pub struct SolutionFoundMessage(pub SolutionContext);
+
+impl Handler<SolutionFoundMessage> for BlockProducerActor {
     type Result =
         AtomicResponse<Self, Option<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>>;
 
-    fn handle(&mut self, msg: SolutionContext, ctx: &mut Self::Context) -> Self::Result {
-        info!("BlockProducerActor solution received {:?}", &msg);
+    fn handle(&mut self, msg: SolutionFoundMessage, ctx: &mut Self::Context) -> Self::Result {
+        let solution = msg.0;
+        info!("BlockProducerActor solution received {:?}", &solution);
 
         let mempool_addr = self.mempool_addr.clone();
         let block_index_addr = self.block_index_addr.clone();
+        let chunk_storage_addr = self.chunk_storage_addr.clone();
         info!("After");
-        let current_height = 0;
+
         let reth = self.reth_provider.clone();
         let db = self.db.clone();
         let self_addr = ctx.address();
@@ -68,11 +89,32 @@ impl Handler<SolutionContext> for BlockProducerActor {
             async move {
                 // Acquire lock and check that the height hasn't changed identifying a race condition
                 // TEMP: This demonstrates how to get the block height from the block_index_actor
-                let bh = block_index_addr
-                    .send(GetBlockHeightMessage {})
+                let latest_block = block_index_addr
+                    .send(GetLatestBlockIndexMessage {})
                     .await
                     .unwrap();
-                info!("block_height: {:?}", bh);
+
+                let prev_block_header: Option<IrysBlockHeader>;
+                let prev_block_hash: H256;
+
+                if let Some(block_item) = latest_block {
+                    prev_block_hash = block_item.block_hash;
+                    prev_block_header = db
+                        .view_eyre(|tx| block_header_by_hash(tx, &prev_block_hash))
+                        .unwrap();
+                } else {
+                    prev_block_hash = H256::default();
+                    prev_block_header = None;
+                }
+
+                let height: u64;
+                if let Some(prev_block) = &prev_block_header {
+                    info!("{}", prev_block);
+                    height = prev_block.height + 1;
+                } else {
+                    // Genesis block config
+                    height = 0;
+                }
 
                 let data_txs: Vec<IrysTransactionHeader> =
                     mempool_addr.send(GetBestMempoolTxs).await.unwrap();
@@ -80,7 +122,15 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 let data_tx_ids = data_txs.iter().map(|h| h.id.clone()).collect::<Vec<H256>>();
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
+                // TODO: Hash the block signature to create a block_hash
+                // Generate a very stupid block_hash right now which is just
+                // the hash of the timestamp
+                let timestamp = now.as_millis() as u64;
+                let block_hash = hash_sha256(&timestamp.to_le_bytes());
+
                 let mut irys_block = IrysBlockHeader {
+                    block_hash,
+                    height,
                     diff: U256::from(1000),
                     cumulative_diff: U256::from(5000),
                     last_retarget: 1622543200,
@@ -88,9 +138,7 @@ impl Handler<SolutionContext> for BlockProducerActor {
                     previous_solution_hash: H256::zero(),
                     last_epoch_hash: H256::random(),
                     chunk_hash: H256::zero(),
-                    height: bh,
-                    block_hash: H256::zero(),
-                    previous_block_hash: H256::zero(),
+                    previous_block_hash: prev_block_hash,
                     previous_cumulative_diff: U256::from(4000),
                     poa: PoaData {
                         tx_path: Base64::from_str("").unwrap(),
@@ -102,19 +150,19 @@ impl Handler<SolutionContext> for BlockProducerActor {
                     signature: IrysSignature {
                         reth_signature: Signature::test_signature(),
                     },
-                    timestamp: now.as_millis() as u64,
+                    timestamp,
                     ledgers: vec![
                         // Permanent Publish Ledger
                         TransactionLedger {
-                            tx_root: TransactionLedger::merklize_tx_root(&data_txs).0,
-                            txids: H256List(data_tx_ids.clone()),
+                            tx_root: H256::zero(),
+                            txids: H256List::new(),
                             max_chunk_offset: 0,
                             expires: None,
                         },
                         // Term Submit Ledger
                         TransactionLedger {
-                            tx_root: TransactionLedger::merklize_tx_root(&vec![]).0,
-                            txids: H256List::new(),
+                            tx_root: TransactionLedger::merklize_tx_root(&data_txs).0,
+                            txids: H256List(data_tx_ids.clone()),
                             max_chunk_offset: 0,
                             expires: Some(1622543200),
                         },
@@ -195,20 +243,51 @@ impl Handler<SolutionContext> for BlockProducerActor {
                 let block_confirm_message =
                     BlockConfirmedMessage(Arc::clone(&block), Arc::clone(&txs));
 
-                // We can clone messages because it only contains references to the data
+                // Broadcast BLockConfirmedMessage
                 self_addr.do_send(block_confirm_message.clone());
                 block_index_addr.do_send(block_confirm_message.clone());
                 mempool_addr.do_send(block_confirm_message.clone());
+
+                // Retrieve all the transaction headers for the previous block
+                let prev_block_header = match prev_block_header {
+                    Some(header) => header,
+                    None => {
+                        error!("No previous block header found for height {}", height);
+                        return None;
+                    }
+                };
+
+                // Get all the transactions for the previous block, error if not found
+                let txs = match prev_block_header.ledgers[Ledger::Submit]
+                    .txids
+                    .iter()
+                    .map(|txid| {
+                        db.view_eyre(|tx| tx_header_by_txid(tx, txid))
+                            .and_then(|opt| {
+                                opt.ok_or_else(|| {
+                                    eyre::eyre!("No tx header found for txid {}", txid)
+                                })
+                            })
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                {
+                    Ok(txs) => txs,
+                    Err(e) => {
+                        error!("Failed to collect tx headers: {}", e);
+                        return None;
+                    }
+                };
+
+                chunk_storage_addr.do_send(BlockFinalizedMessage {
+                    block_header: Arc::new(prev_block_header),
+                    txs: Arc::new(txs),
+                });
 
                 Some((block.clone(), exec_payload))
             }
             .into_actor(self),
         ));
     }
-}
-
-fn get_current_block_height() -> u64 {
-    0
 }
 
 /// When a block is confirmed, this message broadcasts the block header and the
@@ -244,4 +323,11 @@ impl Handler<BlockConfirmedMessage> for BlockProducerActor {
 pub struct BlockFinalizedMessage {
     pub block_header: Arc<IrysBlockHeader>,
     pub txs: Arc<Vec<IrysTransactionHeader>>,
+}
+
+/// SHA256 hash the message parameter
+fn hash_sha256(message: &[u8]) -> H256 {
+    let mut hasher = sha::Sha256::new();
+    hasher.update(message);
+    H256::from(hasher.finish())
 }
