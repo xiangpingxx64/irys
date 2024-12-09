@@ -22,6 +22,7 @@ use tracing::{error, info};
 use crate::{
     block_index::{BlockIndexActor, GetLatestBlockIndexMessage},
     chunk_storage::ChunkStorageActor,
+    epoch_service::{EpochServiceActor, GetPartitionAssignmentMessage},
     mempool::{GetBestMempoolTxs, MempoolActor},
 };
 
@@ -36,6 +37,7 @@ pub struct BlockProducerActor {
     pub chunk_storage_addr: Addr<ChunkStorageActor>,
     /// Address of the bock_index actor
     pub block_index_addr: Addr<BlockIndexActor>,
+    pub epoch_service: Addr<EpochServiceActor>,
     /// Reference to the VM node
     pub reth_provider: RethNodeProvider,
 }
@@ -47,6 +49,7 @@ impl BlockProducerActor {
         mempool_addr: Addr<MempoolActor>,
         chunk_storage_addr: Addr<ChunkStorageActor>,
         block_index_addr: Addr<BlockIndexActor>,
+        epoch_service: Addr<EpochServiceActor>,
         reth_provider: RethNodeProvider,
     ) -> Self {
         Self {
@@ -54,6 +57,7 @@ impl BlockProducerActor {
             mempool_addr,
             chunk_storage_addr,
             block_index_addr,
+            epoch_service,
             reth_provider,
         }
     }
@@ -78,6 +82,9 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
 
         let mempool_addr = self.mempool_addr.clone();
         let block_index_addr = self.block_index_addr.clone();
+
+        let epoch_service_addr = self.epoch_service.clone();
+
         let chunk_storage_addr = self.chunk_storage_addr.clone();
         info!("After");
 
@@ -85,7 +92,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
         let db = self.db.clone();
         let self_addr = ctx.address();
 
-        return AtomicResponse::new(Box::pin(
+        AtomicResponse::new(Box::pin(
             async move {
                 // Acquire lock and check that the height hasn't changed identifying a race condition
                 // TEMP: This demonstrates how to get the block height from the block_index_actor
@@ -116,6 +123,14 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     height = 0;
                 }
 
+                // Translate partition hash, chunk offset -> ledger, ledger chunk offset
+                let pa = epoch_service_addr
+                    .send(GetPartitionAssignmentMessage(solution.partition_hash))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                info!("parittion assignment: {:?}", pa);
+
                 let data_txs: Vec<IrysTransactionHeader> =
                     mempool_addr.send(GetBestMempoolTxs).await.unwrap();
 
@@ -141,9 +156,12 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     previous_block_hash: prev_block_hash,
                     previous_cumulative_diff: U256::from(4000),
                     poa: PoaData {
-                        tx_path: Base64::from_str("").unwrap(),
-                        data_path: Base64::from_str("").unwrap(),
-                        chunk: Base64::from_str("").unwrap(),
+                        tx_path: Base64(solution.tx_path.unwrap_or(Vec::new())),
+                        data_path: Base64(solution.data_path.unwrap_or(Vec::new())),
+                        chunk: Base64(solution.chunk),
+                        ledger_num: pa.ledger_num.unwrap() as u64,
+                        partition_chunk_offset: solution.chunk_offset as u64,
+                        partition_hash: solution.partition_hash,
                     },
                     reward_address: Address::ZERO,
                     reward_key: Base64::from_str("").unwrap(),
@@ -286,7 +304,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 Some((block.clone(), exec_payload))
             }
             .into_actor(self),
-        ));
+        ))
     }
 }
 
