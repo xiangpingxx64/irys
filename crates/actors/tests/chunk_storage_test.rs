@@ -197,10 +197,10 @@ async fn finalize_block_test() -> eyre::Result<()> {
         previous_block_hash: H256::zero(),
         previous_cumulative_diff: U256::from(4000),
         poa: PoaData {
-            tx_path: Base64::from_str("").unwrap(),
-            data_path: Base64::from_str("").unwrap(),
+            tx_path: None,
+            data_path: None,
             chunk: Base64::from_str("").unwrap(),
-            ledger_num: 0,
+            ledger_num: None,
             partition_chunk_offset: 0,
             partition_hash: PartitionHash::zero(),
         },
