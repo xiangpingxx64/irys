@@ -37,6 +37,7 @@ pub struct BlockProducerActor {
     pub chunk_storage_addr: Addr<ChunkStorageActor>,
     /// Address of the bock_index actor
     pub block_index_addr: Addr<BlockIndexActor>,
+    /// Tracks the global state of partition assignments on the protocol
     pub epoch_service: Addr<EpochServiceActor>,
     /// Reference to the VM node
     pub reth_provider: RethNodeProvider,
@@ -78,7 +79,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
 
     fn handle(&mut self, msg: SolutionFoundMessage, ctx: &mut Self::Context) -> Self::Result {
         let solution = msg.0;
-        info!("BlockProducerActor solution received {:?}", &solution);
+        // info!("BlockProducerActor solution received {:?}", &solution);
 
         let mempool_addr = self.mempool_addr.clone();
         let block_index_addr = self.block_index_addr.clone();
@@ -116,7 +117,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
 
                 let height: u64;
                 if let Some(prev_block) = &prev_block_header {
-                    info!("{}", prev_block);
+                    // info!("{}", prev_block);
                     height = prev_block.height + 1;
                 } else {
                     // Genesis block config
