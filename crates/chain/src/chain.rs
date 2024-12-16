@@ -87,8 +87,8 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
     };
     let storage_config_for_testing = StorageConfig {
         chunk_size: 32,
-        num_chunks_in_partition: 40,
-        num_chunks_in_recall_range: 8,
+        num_chunks_in_partition: 400,
+        num_chunks_in_recall_range: 80,
         num_partitions_in_slot: 1,
         miner_address: arc_config.mining_signer.address(),
         min_writes_before_sync: 1,
@@ -150,7 +150,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let epoch_service = EpochServiceActor::new(Some(config));
                 let epoch_service_actor_addr = epoch_service.start();
 
-                // Initialize the block index actor and tell it about the genesis block
+                // Initialize the block_index actor and tell it about the genesis block
                 let block_index_actor = BlockIndexActor::new(block_index.clone());
                 let block_index_actor_addr = block_index_actor.start();
                 let msg = BlockConfirmedMessage(arc_genesis.clone(), Arc::new(vec![]));
@@ -161,7 +161,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     Err(_) => panic!("Failed to index genesis block"),
                 }
 
-                // Tell the epoch service to initialize the ledgers
+                // Tell the epoch_service to initialize the ledgers
                 let msg = NewEpochMessage(arc_genesis.clone());
                 match epoch_service_actor_addr.send(msg).await {
                     Ok(_) => info!("Genesis Epoch tasks complete."),
@@ -185,15 +185,18 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     .await
                     .unwrap();
 
+                println!("{:#?}", storage_module_infos);
+
                 // For Genesis we create the storage_modules and their files
                 initialize_storage_files(&arc_config.storage_module_dir(), &storage_module_infos)
                     .unwrap();
 
+                // Create a list of storage modules wrapping the storage files
                 for info in storage_module_infos {
                     let arc_module = Arc::new(StorageModule::new(
                         &arc_config.storage_module_dir(),
                         &info,
-                        None,
+                        Some((*arc_storage_config).clone()),
                     ));
                     storage_modules.push(arc_module.clone());
                     arc_module.pack_with_zeros();

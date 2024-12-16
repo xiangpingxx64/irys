@@ -159,8 +159,8 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 let current_timestamp = now.as_millis();
                 let mut last_diff_timestamp = prev_block_header.last_diff_timestamp;
                 let current_difficulty = prev_block_header.diff;
-                let block_height = prev_block_header.height + 1;
                 let mut is_difficulty_updated = false;
+                let block_height = prev_block_header.height + 1;
 
                 let (diff, stats) = calculate_difficulty(block_height, last_diff_timestamp, current_timestamp, current_difficulty, &difficulty_config);
 
@@ -184,7 +184,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 let mut irys_block = IrysBlockHeader {
                     block_hash,
                     height: block_height,
-                    diff: current_difficulty,
+                    diff: diff,
                     cumulative_diff: U256::from(5000),
                     last_diff_timestamp: last_diff_timestamp,
                     solution_hash: H256::zero(),

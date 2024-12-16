@@ -1,16 +1,14 @@
-use crate::block_producer::{BlockProducerActor, SolutionFoundMessage};
+use crate::block_producer::SolutionFoundMessage;
 use crate::mining_broadcaster::{
-    self, BroadcastDifficultyUpdate, BroadcastMiningSeed, MiningBroadcaster, Subscribe, Unsubscribe,
+    BroadcastDifficultyUpdate, BroadcastMiningSeed, MiningBroadcaster, Subscribe, Unsubscribe,
 };
 use actix::prelude::*;
 use actix::{Actor, Addr, Context, Handler, Message};
 use irys_storage::{ie, StorageModule};
 use irys_types::app_state::DatabaseProvider;
-use irys_types::Address;
 use irys_types::{block_production::SolutionContext, H256, U256};
+use irys_types::{Address, PartitionChunkOffset, SimpleRNG};
 use openssl::sha;
-use rand::{RngCore, SeedableRng};
-use rand_chacha::ChaCha20Rng;
 use std::sync::Arc;
 use tracing::{debug, error, info};
 
@@ -44,23 +42,32 @@ impl PartitionMiningActor {
         }
     }
 
-    fn mine_partition_with_seed(&mut self, seed: H256) -> eyre::Result<Option<SolutionContext>> {
+    fn mine_partition_with_seed(
+        &mut self,
+        mining_seed: H256,
+    ) -> eyre::Result<Option<SolutionContext>> {
         let partition_hash = match self.storage_module.partition_hash() {
             Some(p) => p,
             None => return Ok(None),
         };
 
-        let mut rng = ChaCha20Rng::from_seed(seed.into());
+        // XOR together the last 4 bytes (u32) of the mining seed and partition hash
+        // to create a partition relative deterministic random
+        let rng_seed = u32::from_be_bytes(partition_hash[28..32].try_into().unwrap())
+            ^ u32::from_be_bytes(mining_seed[28..32].try_into().unwrap());
+        let mut rng = SimpleRNG::new(rng_seed);
 
         let config = &self.storage_module.config;
 
         // TODO: add a partition_state that keeps track of efficient sampling
         // For now, Pick a random recall range in the partition
+        let num_chunks_in_partition = config.num_chunks_in_partition as u32;
+        let num_chunks_in_recall_range = config.num_chunks_in_recall_range as u32;
         let recall_range_index =
-            rng.next_u64() % (config.num_chunks_in_partition / config.num_chunks_in_recall_range);
+            rng.next() % (num_chunks_in_partition / num_chunks_in_recall_range);
 
         // Starting chunk index within partition
-        let start_chunk_index = (recall_range_index * config.num_chunks_in_recall_range) as usize;
+        let start_chunk_index = (recall_range_index * num_chunks_in_recall_range) as usize;
 
         debug!(
             "Recall range index {} start chunk index {}",
@@ -75,22 +82,31 @@ impl PartitionMiningActor {
 
         for (index, (chunk_offset, (chunk_bytes, _chunk_type))) in chunks.iter().enumerate() {
             // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
-            let solution_chunk_offset = (start_chunk_index + index) as u32;
+            let partition_chunk_offset = (start_chunk_index + index) as PartitionChunkOffset;
             let (tx_path, data_path) = self
                 .storage_module
-                .read_tx_data_path(solution_chunk_offset as u64)?;
+                .read_tx_data_path(partition_chunk_offset as u64)?;
 
             let mut hasher = sha::Sha256::new();
             hasher.update(chunk_bytes);
-            hasher.update(&chunk_offset.to_le_bytes());
-            hasher.update(seed.as_bytes());
+            hasher.update(&partition_chunk_offset.to_le_bytes());
+            hasher.update(mining_seed.as_bytes());
             let test_solution = hash_to_number(&hasher.finish());
-            //println!("mined: {}", test_solution);
+
             if test_solution >= self.difficulty {
                 debug!("SOLUTION FOUND!!!!!!!!!");
+
+                println!(
+                    "Mining Solution Found for: part_id: {}, ledger_offset: {}, range_offset: {}/{}",
+                    self.storage_module.id,
+                    partition_chunk_offset,
+                    index,
+                    chunks.len()
+                );
+
                 let solution = SolutionContext {
                     partition_hash,
-                    chunk_offset: solution_chunk_offset,
+                    chunk_offset: partition_chunk_offset,
                     mining_address: self.mining_address,
                     tx_path, // capacity partitions have no tx_path nor data_path
                     data_path,
