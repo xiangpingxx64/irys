@@ -22,8 +22,8 @@ pub use irys_reth_node_bridge::node::{
 
 use irys_storage::{initialize_storage_files, ChunkType, StorageModule, StorageModuleVec};
 use irys_types::{
-    app_state::DatabaseProvider, calculate_initial_difficulty, DifficultyAdjustmentConfig,
-    StorageConfig, H256, PACKING_SHA_1_5_S, U256,
+    app_state::DatabaseProvider, calculate_initial_difficulty, storage_config,
+    DifficultyAdjustmentConfig, StorageConfig, H256, PACKING_SHA_1_5_S, U256,
 };
 use reth::{
     builder::FullNode,
@@ -78,8 +78,8 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
     let mut irys_genesis = node_config.chainspec_builder.genesis();
     let arc_config = Arc::new(node_config);
     let mut difficulty_adjustment_config = DifficultyAdjustmentConfig {
-        target_block_time: 1,        // 5 seconds
-        adjustment_interval: 10,     // every X blocks
+        target_block_time: 1,        // 1->5 seconds
+        adjustment_interval: 20,     // every X blocks
         max_adjustment_factor: 4,    // No more than 4x or 1/4th with each adjustment
         min_adjustment_factor: 0.25, // a minimum 25% adjustment threshold
         min_difficulty: U256::one(),
@@ -108,7 +108,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
     irys_genesis.last_diff_timestamp = irys_genesis.timestamp;
     let arc_genesis = Arc::new(irys_genesis);
 
-    let arc_storage_config = Arc::new(storage_config_for_testing);
+    let arc_storage_config = Arc::new(storage_config_for_testing.clone());
     let mut storage_modules: StorageModuleVec = Vec::new();
     let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new(
         BlockIndex::default()
@@ -151,7 +151,8 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                 let epoch_service_actor_addr = epoch_service.start();
 
                 // Initialize the block_index actor and tell it about the genesis block
-                let block_index_actor = BlockIndexActor::new(block_index.clone());
+                let block_index_actor =
+                    BlockIndexActor::new(block_index.clone(), storage_config_for_testing.clone());
                 let block_index_actor_addr = block_index_actor.start();
                 let msg = BlockConfirmedMessage(arc_genesis.clone(), Arc::new(vec![]));
                 db.update_eyre(|tx| irys_database::insert_block_header(tx, &arc_genesis))

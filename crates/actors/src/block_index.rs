@@ -5,7 +5,7 @@ use std::{
 
 use actix::prelude::*;
 use irys_database::{BlockIndex, BlockIndexItem, Initialized, Ledger, LedgerIndexItem};
-use irys_types::{IrysBlockHeader, IrysTransactionHeader, CHUNK_SIZE, H256, U256};
+use irys_types::{IrysBlockHeader, IrysTransactionHeader, StorageConfig, H256, U256};
 
 use crate::block_producer::BlockConfirmedMessage;
 
@@ -14,6 +14,8 @@ use crate::block_producer::BlockConfirmedMessage;
 pub struct BlockIndexActor {
     block_index: Arc<RwLock<BlockIndex<Initialized>>>,
     block_log: Vec<BlockLogEntry>,
+    num_blocks: u64,
+    storage_config: StorageConfig,
 }
 
 #[derive(Debug)]
@@ -31,10 +33,15 @@ impl Actor for BlockIndexActor {
 impl BlockIndexActor {
     /// Create a new instance of the mempool actor passing in a reference
     /// counted reference to a DatabaseEnv
-    pub fn new(block_index: Arc<RwLock<BlockIndex<Initialized>>>) -> Self {
+    pub fn new(
+        block_index: Arc<RwLock<BlockIndex<Initialized>>>,
+        storage_config: StorageConfig,
+    ) -> Self {
         Self {
             block_index,
             block_log: Vec::new(),
+            num_blocks: 0,
+            storage_config,
         }
     }
 
@@ -44,15 +51,17 @@ impl BlockIndexActor {
         irys_block_header: &Arc<IrysBlockHeader>,
         data_txs: &Arc<Vec<IrysTransactionHeader>>,
     ) {
-        // Calculate total bytes needed, rounding each tx up to nearest chunk size
-        // Example: data_size 300KB with 256KB chunks:
+        let chunk_size = self.storage_config.chunk_size;
+
+        // Calculate total bytes needed, rounding each tx up to nearest chunk_size
+        // Example: data_size 300KB with 256KiB chunks:
         // (300KB + 256KB - 1) / 256KB = 2 chunks -> 2 * 256KB = 512KB total
         let bytes_added = data_txs
             .iter()
-            .map(|tx| ((tx.data_size + CHUNK_SIZE - 1) / CHUNK_SIZE) * CHUNK_SIZE)
+            .map(|tx| ((tx.data_size + chunk_size - 1) / chunk_size) * chunk_size)
             .sum::<u64>();
 
-        let chunks_added = bytes_added / CHUNK_SIZE;
+        let chunks_added = bytes_added / chunk_size;
 
         let mut index = self.block_index.write().unwrap();
 
@@ -93,7 +102,14 @@ impl BlockIndexActor {
             difficulty: irys_block_header.diff,
         });
 
-        if self.block_log.len() % 10 == 0 {
+        // Remove oldest entries if we exceed 20
+        if self.block_log.len() > 20 {
+            self.block_log.drain(0..self.block_log.len() - 20);
+        }
+
+        self.num_blocks += 1;
+
+        if self.num_blocks % 10 == 0 {
             let mut prev_entry: Option<&BlockLogEntry> = None;
             println!("block_height, block_time(ms), difficulty");
             for entry in &self.block_log {

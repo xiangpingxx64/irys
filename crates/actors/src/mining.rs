@@ -51,10 +51,11 @@ impl PartitionMiningActor {
             None => return Ok(None),
         };
 
-        // XOR together the last 4 bytes (u32) of the mining seed and partition hash
-        // to create a partition relative deterministic random
-        let rng_seed = u32::from_be_bytes(partition_hash[28..32].try_into().unwrap())
-            ^ u32::from_be_bytes(mining_seed[28..32].try_into().unwrap());
+        // Hash together the mining_seed and partition to get randomness for the rng
+        let mut hasher = sha::Sha256::new();
+        hasher.update(&mining_seed.0);
+        hasher.update(&partition_hash.0);
+        let rng_seed: u32 = u32::from_be_bytes(hasher.finish()[28..32].try_into().unwrap());
         let mut rng = SimpleRNG::new(rng_seed);
 
         let config = &self.storage_module.config;
@@ -97,9 +98,10 @@ impl PartitionMiningActor {
                 debug!("SOLUTION FOUND!!!!!!!!!");
 
                 println!(
-                    "Mining Solution Found for: part_id: {}, ledger_offset: {}, range_offset: {}/{}",
+                    "Solution Found - partition_id: {}, ledger_offset: {}/{}, range_offset: {}/{}",
                     self.storage_module.id,
                     partition_chunk_offset,
+                    num_chunks_in_partition,
                     index,
                     chunks.len()
                 );

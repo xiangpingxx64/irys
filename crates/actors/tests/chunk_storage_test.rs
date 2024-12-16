@@ -171,7 +171,7 @@ async fn finalize_block_test() -> eyre::Result<()> {
     }
 
     // Create a block_index actor
-    let block_index_actor = BlockIndexActor::new(block_index.clone());
+    let block_index_actor = BlockIndexActor::new(block_index.clone(), storage_config.clone());
     let block_index_addr = block_index_actor.start();
 
     let height: u64;
