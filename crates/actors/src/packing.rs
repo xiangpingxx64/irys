@@ -127,6 +127,7 @@ impl PackingActor {
                 let storage_module = storage_module.clone();
                 // wait for the permit before spawning the thread
                 let permit = semaphore.acquire_owned().await.unwrap();
+                debug!(target: "irys::packing", "Packing chunk {} for SM {}", &i, &storage_module.id);
                 self.task_executor.spawn_blocking(async move {
                     let mut out = Vec::with_capacity(chunk_size.try_into().unwrap());
                     compute_entropy_chunk(
@@ -216,7 +217,7 @@ pub async fn wait_for_packing(
     timeout: Option<Duration>,
 ) -> eyre::Result<()> {
     let internals = packing_addr.send(GetInternals()).await?;
-    tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(5)), async {
+    tokio::time::timeout(timeout.unwrap_or(Duration::from_secs(10)), async {
         loop {
             if internals.pending_jobs.read().unwrap().len() == 0 {
                 // try to get all the semaphore permits - this is how we know that the packing is done
@@ -237,11 +238,13 @@ pub async fn wait_for_packing(
 
 #[actix::test]
 async fn test_packing_actor() -> eyre::Result<()> {
+    let mining_address = Address::random();
+    let partition_hash = PartitionHash::zero();
     let infos = vec![StorageModuleInfo {
         id: 0,
         partition_assignment: Some(PartitionAssignment {
-            partition_hash: PartitionHash::zero(),
-            miner_address: Address::random(),
+            partition_hash,
+            miner_address: mining_address,
             ledger_num: None,
             slot_index: None,
         }),
@@ -255,14 +258,19 @@ async fn test_packing_actor() -> eyre::Result<()> {
     initialize_storage_files(&base_path, &infos)?;
 
     // Override the default StorageModule config for testing
-    let config = StorageConfig {
+    let storage_config = StorageConfig {
         min_writes_before_sync: 1,
         ..Default::default()
     };
 
     // Create a StorageModule with the specified submodules and config
     let storage_module_info = &infos[0];
-    let storage_module = Arc::new(StorageModule::new(&base_path, storage_module_info, config));
+    let storage_module = Arc::new(StorageModule::new(
+        &base_path,
+        storage_module_info,
+        storage_config.clone(),
+    ));
+
     let request = PackingRequest {
         storage_module: storage_module.clone(),
         chunk_range: ii(0, 3).into(),
@@ -281,8 +289,21 @@ async fn test_packing_actor() -> eyre::Result<()> {
     storage_module.sync_pending_chunks()?;
     // check that the chunks are marked as packed
     let intervals = storage_module.get_intervals(ChunkType::Entropy);
-
     assert_eq!(intervals, vec![ii(0, 3)]);
+    let stored_entropy = storage_module.read_chunks(ii(0, 3))?;
+    // verify the packing
+    let chunk = stored_entropy.get(&0).unwrap();
+
+    let mut out = Vec::with_capacity(storage_config.chunk_size.try_into().unwrap());
+    compute_entropy_chunk(
+        mining_address,
+        0 as u64,
+        partition_hash.0,
+        storage_config.entropy_packing_iterations,
+        storage_config.chunk_size.try_into().unwrap(),
+        &mut out,
+    );
+    assert_eq!(chunk.0, out);
 
     Ok(())
 }
