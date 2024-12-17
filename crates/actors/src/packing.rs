@@ -143,6 +143,7 @@ impl PackingActor {
                     // write the chunk
                     debug!(target: "irys::packing", "Writing chunk range {} to SM {}", &i, &storage_module.id);
                     storage_module.write_chunk(i, out, ChunkType::Entropy);
+                    let _ = storage_module.sync_pending_chunks();
                 });
             }
 
