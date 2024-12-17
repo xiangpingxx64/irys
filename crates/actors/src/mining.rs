@@ -81,6 +81,13 @@ impl PartitionMiningActor {
             start_chunk_index as u32 + config.num_chunks_in_recall_range as u32,
         ))?;
 
+        if chunks.len() == 0 {
+            println!(
+                "No chunks found - storage_module_id:{}",
+                self.storage_module.id
+            );
+        }
+
         for (index, (chunk_offset, (chunk_bytes, _chunk_type))) in chunks.iter().enumerate() {
             // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
             let partition_chunk_offset = (start_chunk_index + index) as PartitionChunkOffset;
@@ -96,6 +103,8 @@ impl PartitionMiningActor {
 
             if test_solution >= self.difficulty {
                 debug!("SOLUTION FOUND!!!!!!!!!");
+
+                println!("{:?}", chunk_bytes);
 
                 println!(
                     "Solution Found - partition_id: {}, ledger_offset: {}/{}, range_offset: {}/{}",

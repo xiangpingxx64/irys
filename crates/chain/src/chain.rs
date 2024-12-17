@@ -186,8 +186,6 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     .await
                     .unwrap();
 
-                println!("{:#?}", storage_module_infos);
-
                 // For Genesis we create the storage_modules and their files
                 initialize_storage_files(&arc_config.storage_module_dir(), &storage_module_infos)
                     .unwrap();
