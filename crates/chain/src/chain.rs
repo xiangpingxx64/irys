@@ -197,7 +197,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     let arc_module = Arc::new(StorageModule::new(
                         &arc_config.storage_module_dir(),
                         &info,
-                        Some((*arc_storage_config).clone()),
+                        (*arc_storage_config).clone(),
                     ));
                     storage_modules.push(arc_module.clone());
                     arc_module.pack_with_zeros();

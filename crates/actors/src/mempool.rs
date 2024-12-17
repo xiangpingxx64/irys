@@ -479,11 +479,7 @@ mod tests {
             ..Default::default()
         };
 
-        let storage_module = Arc::new(StorageModule::new(
-            &base_path,
-            &storage_module_info,
-            Some(config),
-        ));
+        let storage_module = Arc::new(StorageModule::new(&base_path, &storage_module_info, config));
 
         storage_module.pack_with_zeros();
 

@@ -86,7 +86,7 @@ async fn finalize_block_test() -> eyre::Result<()> {
         let arc_module = Arc::new(StorageModule::new(
             &base_path,
             &info,
-            Some(storage_config.clone()),
+            storage_config.clone(),
         ));
         storage_modules.push(arc_module.clone());
         arc_module.pack_with_zeros();

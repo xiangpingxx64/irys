@@ -58,7 +58,7 @@ impl PartitionMiningActor {
         let rng_seed: u32 = u32::from_be_bytes(hasher.finish()[28..32].try_into().unwrap());
         let mut rng = SimpleRNG::new(rng_seed);
 
-        let config = &self.storage_module.config;
+        let config = &self.storage_module.storage_config;
 
         // TODO: add a partition_state that keeps track of efficient sampling
         // For now, Pick a random recall range in the partition
@@ -227,11 +227,13 @@ mod tests {
     use crate::mining_broadcaster::{self, BroadcastMiningSeed, MiningBroadcaster};
 
     use actix::{Actor, Addr, Recipient};
+    use alloy_rpc_types_engine::ExecutionPayloadEnvelopeV1Irys;
     use irys_database::{open_or_create_db, tables::IrysTables};
     use irys_storage::{
         ie, initialize_storage_files, read_info_file, StorageModule, StorageModuleInfo,
     };
     use irys_testing_utils::utils::{setup_tracing_and_temp_dir, temporary_directory};
+    use irys_types::IrysBlockHeader;
     use irys_types::{
         app_state::DatabaseProvider, block_production::SolutionContext, chunk::Chunk,
         partition::PartitionAssignment, storage::LedgerChunkRange, Address, StorageConfig, H256,
@@ -259,7 +261,7 @@ mod tests {
             );
             assert!(
                 solution.chunk_offset < chunks_number * 2,
-                "Not expected oftset"
+                "Not expected offset"
             );
             assert_eq!(
                 mining_address, solution.mining_address,
@@ -275,7 +277,9 @@ mod tests {
                 solution.data_path,
                 "Not expected partition"
             );
-            Box::new(())
+
+            // Return None or Some(...) depending on your test needs
+            Box::new(None::<(Arc<IrysBlockHeader>, ExecutionPayloadEnvelopeV1Irys)>)
         }));
 
         let block_producer_actor_addr: Addr<BlockProducerMockActor> = mocked_block_producer.start();
@@ -321,7 +325,7 @@ mod tests {
         let mut storage_module = Arc::new(StorageModule::new(
             &base_path,
             storage_module_info,
-            Some(storage_config),
+            storage_config,
         ));
 
         // Pack the storage module

@@ -114,7 +114,7 @@ impl PackingActor {
                 chunk_size,
                 entropy_packing_iterations,
                 ..
-            } = storage_module.config;
+            } = storage_module.storage_config;
 
             for i in chunk_range.start()..=chunk_range.end() {
                 // each semaphore permit corresponds to a single chunk to be packed, as we assume it'll use an entire CPU thread's worth of compute.
@@ -262,11 +262,7 @@ async fn test_packing_actor() -> eyre::Result<()> {
 
     // Create a StorageModule with the specified submodules and config
     let storage_module_info = &infos[0];
-    let storage_module = Arc::new(StorageModule::new(
-        &base_path,
-        storage_module_info,
-        Some(config),
-    ));
+    let storage_module = Arc::new(StorageModule::new(&base_path, storage_module_info, config));
     let request = PackingRequest {
         storage_module: storage_module.clone(),
         chunk_range: ii(0, 3).into(),

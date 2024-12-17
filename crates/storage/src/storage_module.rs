@@ -56,7 +56,7 @@ pub struct StorageModule {
     /// Physical storage locations indexed by chunk ranges
     submodules: SubmoduleMap,
     /// Runtime configuration parameters
-    pub config: StorageConfig,
+    pub storage_config: StorageConfig,
     /// Persistent file handle
     intervals_file: Arc<Mutex<File>>,
 }
@@ -120,14 +120,8 @@ impl StorageModule {
     pub fn new(
         base_path: &PathBuf,
         storage_module_info: &StorageModuleInfo,
-        config: Option<StorageConfig>,
+        storage_config: StorageConfig,
     ) -> Self {
-        // Use the provided config or Default
-        let config = match config {
-            Some(cfg) => cfg,
-            None => StorageConfig::default(),
-        };
-
         let mut map = NoditMap::new();
         let mut intervals = StorageIntervals::new();
 
@@ -198,7 +192,7 @@ impl StorageModule {
             pending_writes: Arc::new(RwLock::new(ChunkMap::new())),
             intervals: Arc::new(RwLock::new(intervals)),
             submodules: map,
-            config,
+            storage_config,
             intervals_file,
         }
     }
@@ -217,8 +211,8 @@ impl StorageModule {
         self.partition_assignment
             .and_then(|part| part.slot_index)
             .map(|slot_index| {
-                let start_offset = slot_index as u64 * self.config.num_chunks_in_partition;
-                let end_offset = start_offset + self.config.num_chunks_in_partition;
+                let start_offset = slot_index as u64 * self.storage_config.num_chunks_in_partition;
+                let end_offset = start_offset + self.storage_config.num_chunks_in_partition;
                 (start_offset..end_offset).contains(&chunk_offset)
             })
             .unwrap_or(false)
@@ -243,7 +237,7 @@ impl StorageModule {
     /// The sync threshold is configured via `min_writes_before_sync` to optimize
     /// disk writes and minimize fragmentation.
     pub fn sync_pending_chunks(&self) -> eyre::Result<()> {
-        let threshold = self.config.min_writes_before_sync;
+        let threshold = self.storage_config.min_writes_before_sync;
         let arc = self.pending_writes.clone();
 
         // First use read lock to check if we have work to do
@@ -339,7 +333,7 @@ impl StorageModule {
             .unwrap();
 
         // Calculate file offset and prepare buffer
-        let chunk_size = self.config.chunk_size as u32;
+        let chunk_size = self.storage_config.chunk_size as u32;
         let file_offset = (chunk_offset - interval.start()) * chunk_size;
         let mut buf = vec![0u8; chunk_size as usize];
 
@@ -566,7 +560,7 @@ impl StorageModule {
         bytes: Vec<u8>,
         chunk_type: ChunkType,
     ) -> eyre::Result<()> {
-        let chunk_size = self.config.chunk_size;
+        let chunk_size = self.storage_config.chunk_size;
         // Get the correct submodule reference based on chunk_offset
         let (interval, submodule) = self
             .submodules
@@ -606,8 +600,8 @@ impl StorageModule {
     pub fn get_storage_module_range(&self) -> eyre::Result<LedgerChunkRange> {
         if let Some(part_assign) = self.partition_assignment {
             if let Some(slot_index) = part_assign.slot_index {
-                let start = slot_index as u64 * self.config.num_chunks_in_partition;
-                let end = start + self.config.num_chunks_in_partition;
+                let start = slot_index as u64 * self.storage_config.num_chunks_in_partition;
+                let end = start + self.storage_config.num_chunks_in_partition;
                 return Ok(LedgerChunkRange(ie(start, end)));
             } else {
                 return Err(eyre::eyre!("Ledger slot not assigned!"));
@@ -659,8 +653,8 @@ impl StorageModule {
 
     /// Test utility function to mark a StorageModule as packed
     pub fn pack_with_zeros(&self) {
-        let entropy_bytes = vec![0u8; self.config.chunk_size as usize];
-        for chunk_offset in 0..self.config.num_chunks_in_partition as u32 {
+        let entropy_bytes = vec![0u8; self.storage_config.chunk_size as usize];
+        for chunk_offset in 0..self.storage_config.num_chunks_in_partition as u32 {
             self.write_chunk(chunk_offset, entropy_bytes.clone(), ChunkType::Entropy);
             self.sync_pending_chunks().unwrap();
         }
@@ -804,7 +798,7 @@ mod tests {
 
         // Create a StorageModule with the specified submodules and config
         let storage_module_info = &infos[0];
-        let storage_module = StorageModule::new(&base_path, storage_module_info, Some(config));
+        let storage_module = StorageModule::new(&base_path, storage_module_info, config);
 
         // Verify the entire storage module range is uninitialized
         let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
@@ -916,7 +910,7 @@ mod tests {
 
         // Create a StorageModule with the specified submodules and config
         let storage_module_info = &infos[0];
-        let mut storage_module = StorageModule::new(&base_path, storage_module_info, Some(config));
+        let mut storage_module = StorageModule::new(&base_path, storage_module_info, config);
         let chunk_data = vec![0, 1, 2, 3, 4];
         let data_path = vec![4, 3, 2, 1];
         let tx_path = vec![5, 6, 7, 8];

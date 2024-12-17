@@ -88,7 +88,7 @@ fn tx_path_overlap_tests() {
         let arc_module = Arc::new(StorageModule::new(
             &base_path,
             &info,
-            Some(storage_config.clone()),
+            storage_config.clone(),
         ));
         storage_modules.push(arc_module.clone());
         arc_module.pack_with_zeros();
