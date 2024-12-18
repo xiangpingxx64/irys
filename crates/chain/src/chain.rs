@@ -24,8 +24,10 @@ use irys_storage::{
     initialize_storage_files, ChunkProvider, ChunkType, StorageModule, StorageModuleVec,
 };
 use irys_types::{
-    app_state::DatabaseProvider, calculate_initial_difficulty, storage_config,
-    DifficultyAdjustmentConfig, StorageConfig, H256, PACKING_SHA_1_5_S, U256,
+    app_state::DatabaseProvider, block_production::PartitionId, calculate_initial_difficulty,
+    difficulty_adjustment_config, partition::PartitionHash, storage_config,
+    vdf_config::VDFStepsConfig, DifficultyAdjustmentConfig, StorageConfig, H256, PACKING_SHA_1_5_S,
+    U256,
 };
 use reth::{
     builder::FullNode,
@@ -46,7 +48,7 @@ use tokio::{
     sync::oneshot::{self},
 };
 
-use crate::vdf::{run_vdf, VDFStepsConfig};
+use crate::vdf::run_vdf;
 use irys_testing_utils::utils::setup_tracing_and_temp_dir;
 
 pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
@@ -237,6 +239,7 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
                     reth_node.clone(),
                     storage_config.clone(),
                     difficulty_adjustment_config.clone(),
+                    VDFStepsConfig::default(),
                 );
                 let block_producer_addr = block_producer_actor.start();
 

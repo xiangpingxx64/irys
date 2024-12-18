@@ -48,7 +48,10 @@ impl PartitionMiningActor {
     ) -> eyre::Result<Option<SolutionContext>> {
         let partition_hash = match self.storage_module.partition_hash() {
             Some(p) => p,
-            None => return Ok(None),
+            None => {
+                info!("No parittion assigned !");
+                return Ok(None);
+            }
         };
 
         // Hash together the mining_seed and partition to get randomness for the rng
@@ -70,10 +73,10 @@ impl PartitionMiningActor {
         // Starting chunk index within partition
         let start_chunk_index = (recall_range_index * num_chunks_in_recall_range) as usize;
 
-        debug!(
-            "Recall range index {} start chunk index {}",
-            recall_range_index, start_chunk_index
-        );
+        // info!(
+        //     "Recall range index {} start chunk index {}",
+        //     recall_range_index, start_chunk_index
+        // );
 
         let read_range = ie(
             start_chunk_index as u32,
@@ -82,11 +85,11 @@ impl PartitionMiningActor {
 
         // haven't tested this, but it looks correct
         let chunks = self.storage_module.read_chunks(read_range)?;
-        debug!(
-            "Got chunks {} from read range {:?}",
-            &chunks.len(),
-            &read_range
-        );
+        // debug!(
+        //     "Got chunks {} from read range {:?}",
+        //     &chunks.len(),
+        //     &read_range
+        // );
 
         if chunks.len() == 0 {
             warn!(
@@ -102,6 +105,11 @@ impl PartitionMiningActor {
                 .storage_module
                 .read_tx_data_path(partition_chunk_offset as u64)?;
 
+            // info!(
+            //     "partition_hash: {}, chunk offset: {}",
+            //     partition_hash, chunk_offset
+            // );
+
             let mut hasher = sha::Sha256::new();
             hasher.update(chunk_bytes);
             hasher.update(&partition_chunk_offset.to_le_bytes());
@@ -109,11 +117,11 @@ impl PartitionMiningActor {
             let test_solution = hash_to_number(&hasher.finish());
 
             if test_solution >= self.difficulty {
-                debug!("SOLUTION FOUND!!!!!!!!!");
+                //info!("SOLUTION FOUND!!!!!!!!!");
 
-                println!("{:?}", chunk_bytes);
+                //info!("{:?}", chunk_bytes);
 
-                println!(
+                info!(
                     "Solution Found - partition_id: {}, ledger_offset: {}/{}, range_offset: {}/{}",
                     self.storage_module.id,
                     partition_chunk_offset,
@@ -135,6 +143,8 @@ impl PartitionMiningActor {
 
                 // Once solution is sent stop mining and let all other partitions know
                 return Ok(Some(solution));
+            } else {
+              //  info!("NO SOLUTION!!!!")
             }
         }
 
@@ -185,13 +195,13 @@ impl Handler<BroadcastMiningSeed> for PartitionMiningActor {
         match self.mine_partition_with_seed(seed.into_inner()) {
             Ok(Some(s)) => match self.block_producer_actor.try_send(SolutionFoundMessage(s)) {
                 Ok(_) => {
-                    debug!("Solution sent!");
+                   // debug!("Solution sent!");
                 }
                 Err(err) => error!("Error submitting solution to block producer {:?}", err),
             },
 
             Ok(None) => {
-                debug!("No solution sent!");
+                //debug!("No solution sent!");
             }
             Err(err) => error!("Error in hanling mining solution {:?}", err),
         };
