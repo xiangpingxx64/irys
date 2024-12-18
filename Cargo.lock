@@ -5144,6 +5144,7 @@ dependencies = [
  "irys-actors",
  "irys-database",
  "irys-reth-node-bridge",
+ "irys-storage",
  "irys-types",
  "log",
  "rand",
