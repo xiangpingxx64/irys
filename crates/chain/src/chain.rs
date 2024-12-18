@@ -97,6 +97,8 @@ pub async fn start_irys_node(node_config: IrysNodeConfig) -> eyre::Result<IrysNo
         entropy_packing_iterations: 1_000,
     };
 
+    // TODO: Hard coding 3 for storage module count isn't great here,
+    // eventually we'll want to relate this to the genesis config
     irys_genesis.diff =
         calculate_initial_difficulty(&difficulty_adjustment_config, &storage_config, 3).unwrap();
 
