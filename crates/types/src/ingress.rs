@@ -54,16 +54,7 @@ pub fn generate_ingress_proof(
     hasher.update(&data_root.0);
     let prehash = hasher.finish();
 
-    let mut signature: Signature = signer.signer.sign_prehash_recoverable(&prehash)?.into();
-    signature = signature.with_chain_id(IRYS_CHAIN_ID);
-
-    println!(
-        "\naddr: {}\nsig: {:?}\ndata_root: {}\nproof: {:?}",
-        signer.address(),
-        signature,
-        data_root,
-        root.id
-    );
+    let signature: Signature = signer.signer.sign_prehash_recoverable(&prehash)?.into();
 
     Ok(IngressProof {
         signature: signature.into(),
