@@ -350,9 +350,7 @@ mod tests {
             poa: poa.clone(),
             reward_address: Address::ZERO,
             reward_key: Base64::from_str("").unwrap(),
-            signature: IrysSignature {
-                reth_signature: Signature::test_signature(),
-            },
+            signature: Signature::test_signature().into(),
             timestamp: 1000,
             ledgers: vec![
                 // Permanent Publish Ledger
