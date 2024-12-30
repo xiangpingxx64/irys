@@ -238,8 +238,8 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     previous_block_hash: prev_block_hash,
                     previous_cumulative_diff: U256::from(4000),
                     poa,
-                    reward_address: solution.mining_address,
-                    reward_key: Base64::from_str("").unwrap(),
+                    reward_address:  Address::ZERO ,
+                    miner_address: solution.mining_address,
                     signature: Signature::test_signature().into(),
                     timestamp: current_timestamp,
                     ledgers: vec![
