@@ -1,10 +1,7 @@
 use crate::{block_index::BlockIndexReadGuard, epoch_service::PartitionAssignmentsReadGuard};
 use irys_database::Ledger;
 use irys_packing::{capacity_single::compute_entropy_chunk, xor_vec_u8_arrays_in_place};
-use irys_types::{
-    storage_config::StorageConfig, validate_path, vdf_config::VDFStepsConfig, Address,
-    IrysBlockHeader, PoaData, VDFLimiterInfo, H256,
-};
+use irys_types::{storage_config::StorageConfig, validate_path, Address, IrysBlockHeader, PoaData};
 use openssl::sha;
 
 /// Full pre-validation steps for a block
@@ -169,7 +166,7 @@ mod tests {
     use irys_database::{BlockIndex, Initialized};
     use irys_types::{
         irys::IrysSigner, Address, Arbitrary, Base64, H256List, IrysSignature, IrysTransaction,
-        IrysTransactionHeader, Signature, TransactionLedger, PACKING_SHA_1_5_S, U256,
+        IrysTransactionHeader, Signature, TransactionLedger, H256, PACKING_SHA_1_5_S, U256,
     };
     use reth::revm::primitives::B256;
     use std::str::FromStr;
@@ -391,7 +388,7 @@ mod tests {
         // Create a block from the tx
         let irys_block = IrysBlockHeader {
             height,
-            reward_address: Address::ZERO,
+            reward_address: miner_address.clone(),
             poa: poa.clone(),
             block_hash: H256::zero(),
             previous_block_hash: H256::zero(),
@@ -406,6 +403,7 @@ mod tests {
                     txids: H256List(Vec::new()),
                     max_chunk_offset: 0,
                     expires: None,
+                    proofs: None,
                 },
                 // Term Submit Ledger
                 TransactionLedger {
@@ -413,6 +411,7 @@ mod tests {
                     txids: H256List(data_tx_ids.clone()),
                     max_chunk_offset: 9,
                     expires: Some(1622543200),
+                    proofs: None,
                 },
             ],
             ..IrysBlockHeader::default()
