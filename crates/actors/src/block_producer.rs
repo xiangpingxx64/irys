@@ -15,10 +15,17 @@ use openssl::sha;
 use reth::revm::primitives::B256;
 use reth_db::Database;
 use reth_db::cursor::*;
-use tracing::{error, info};
+use tracing::{error, info, warn};
+use nodit::interval::ii;
 
 use crate::{
-    block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor}, block_index::{BlockIndexActor, GetLatestBlockIndexMessage}, chunk_migration::ChunkMigrationActor, epoch_service::{EpochServiceActor, GetPartitionAssignmentMessage}, mempool::{GetBestMempoolTxs, MempoolActor}, broadcast_mining_service::{BroadcastDifficultyUpdate, BroadcastMiningService}
+    block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor},
+    block_index::{BlockIndexActor, GetLatestBlockIndexMessage},
+    broadcast_mining_service::{BroadcastDifficultyUpdate, BroadcastMiningService},
+    chunk_migration::ChunkMigrationActor,
+    epoch_service::{EpochServiceActor, GetPartitionAssignmentMessage},
+    mempool::{GetBestMempoolTxs, MempoolActor},
+    vdf::VdfStepsReadGuard,
 };
 
 /// Used to mock up a BlockProducerActor
@@ -29,7 +36,7 @@ pub type BlockProducerMockActor = Mocker<BlockProducerActor>;
 pub struct MockedBlockProducerAddr(pub Recipient<SolutionFoundMessage>);
 
 /// BlockProducerActor creates blocks from mining solutions
-#[derive(Debug,)]
+#[derive(Debug)]
 pub struct BlockProducerActor {
     /// Reference to the global database
     pub db: DatabaseProvider,
@@ -45,12 +52,14 @@ pub struct BlockProducerActor {
     pub epoch_service: Addr<EpochServiceActor>,
     /// Reference to the VM node
     pub reth_provider: RethNodeProvider,
-    /// Storage config 
+    /// Storage config
     pub storage_config: StorageConfig,
     /// Difficulty adjustment parameters for the Irys Protocol
     pub difficulty_config: DifficultyAdjustmentConfig,
     /// VDF configuration parameters
     pub vdf_config: VDFStepsConfig,
+    /// Store last VDF Steps
+    pub vdf_steps_guard: VdfStepsReadGuard,
 }
 
 /// Actors can handle this message to learn about the block_producer actor at startup
@@ -71,6 +80,7 @@ impl BlockProducerActor {
         storage_config: StorageConfig,
         difficulty_config: DifficultyAdjustmentConfig,
         vdf_config: VDFStepsConfig,
+        vdf_steps_guard: VdfStepsReadGuard,
     ) -> Self {
         Self {
             db,
@@ -83,6 +93,7 @@ impl BlockProducerActor {
             storage_config,
             difficulty_config,
             vdf_config,
+            vdf_steps_guard,
         }
     }
 }
@@ -120,7 +131,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
         let epoch_service_addr = self.epoch_service.clone();
         let chunk_migration_addr = self.chunk_migration_addr.clone();
         let mining_broadcaster_addr = BroadcastMiningService::from_registry();
-        
+
         let reth = self.reth_provider.clone();
         let db = self.db.clone();
         let difficulty_config = self.difficulty_config.clone();
@@ -129,6 +140,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
         // let self_addr = ctx.address();
         // let storage_config = self.storage_config.clone();
         // let vdf_config = self.vdf_config.clone();
+        let vdf_steps = self.vdf_steps_guard.clone();
 
         AtomicResponse::new(Box::pin( async move {
             // Acquire lock and check that the height hasn't changed identifying a race condition
@@ -160,6 +172,11 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 return None;
             }
 
+            if !(solution.vdf_step > prev_block_header.vdf_limiter_info.global_step_number) {
+                warn!("Solution for old step number {}, previous block step number {}", solution.vdf_step, prev_block_header.vdf_limiter_info.global_step_number);
+                return None;
+            }
+            
             // Get all the ingress proofs for data promotion
             let mut promotions: Vec<IrysTransactionHeader> = Vec::new();
             let mut proofs: Vec<TxIngressProof> = Vec::new();
@@ -288,6 +305,19 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 partition_hash: solution.partition_hash,
             };
 
+            let mut checkpoints = if prev_block_header.vdf_limiter_info.global_step_number + 1 > solution.vdf_step - 1 {
+                H256List::new()
+            } else {
+                match vdf_steps.read().get_steps(ii(prev_block_header.vdf_limiter_info.global_step_number + 1, solution.vdf_step - 1)) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        error!("Error in requested vdf steps while producing block in step:{} error: {}", solution.vdf_step, e);
+                        return None
+                    }
+                }
+            };
+            checkpoints.push(solution.seed.0);
+
             let mut irys_block = IrysBlockHeader {
                 block_hash,
                 height: block_height,
@@ -297,7 +327,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 solution_hash: H256::zero(),
                 previous_solution_hash: H256::zero(),
                 last_epoch_hash: H256::random(),
-                chunk_hash: H256::zero(),
+                chunk_hash: H256(sha::sha256(&poa.chunk.0)),
                 previous_block_hash: prev_block_hash,
                 previous_cumulative_diff: U256::from(4000),
                 poa,
@@ -324,7 +354,15 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     },
                 ],
                 evm_block_hash: B256::ZERO,
-                vdf_limiter_info: VDFLimiterInfo::default(),
+                vdf_limiter_info: VDFLimiterInfo {
+                    global_step_number: solution.vdf_step,
+                    output: solution.seed.into_inner(),
+                    last_step_checkpoints: solution.checkpoints,
+                    prev_output: prev_block_header.vdf_limiter_info.output,
+                    seed: prev_block_header.vdf_limiter_info.seed,
+                    checkpoints,
+                    ..Default::default()
+                },
             };
 
             // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
