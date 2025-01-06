@@ -301,7 +301,7 @@ async fn verify_published_chunk<T, B>(
 {
     if let Some(packed_chunk) = get_chunk(&app, Ledger::Publish, chunk_offset).await {
         let unpacked_chunk = unpack(
-            packed_chunk,
+            &packed_chunk,
             storage_config.entropy_packing_iterations,
             storage_config.chunk_size as usize,
         );
