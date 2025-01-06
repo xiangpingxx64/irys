@@ -364,7 +364,10 @@ where
     B: MessageBody,
 {
     let req = test::TestRequest::get()
-        .uri(&format!("/v1/chunk/{}/{}", ledger as usize, chunk_offset))
+        .uri(&format!(
+            "/v1/chunk/ledger/{}/{}",
+            ledger as usize, chunk_offset
+        ))
         .to_request();
 
     let res = test::call_service(&app, req).await;
