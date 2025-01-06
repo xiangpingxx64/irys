@@ -1,5 +1,4 @@
 use actix::prelude::*;
-use base58::ToBase58 as _;
 use irys_database::{
     cached_chunk_by_chunk_offset,
     db_cache::{CachedChunk, CachedChunkIndexMetadata},
@@ -13,7 +12,7 @@ use irys_types::{
 };
 use reth_db::Database;
 use std::sync::{Arc, RwLock};
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::block_producer::BlockFinalizedMessage;
 
