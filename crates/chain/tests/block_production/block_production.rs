@@ -1,15 +1,11 @@
-use std::{collections::HashMap, fs::remove_dir_all, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use alloy_consensus::TxEnvelope;
 use alloy_core::primitives::{Bytes, TxKind, B256, U256};
 use alloy_eips::eip2718::Encodable2718;
 use alloy_signer_local::LocalSigner;
 use eyre::eyre;
-use irys_actors::{
-    block_producer::SolutionFoundMessage,
-    mempool::TxIngressMessage,
-    vdf::{self, GetVdfStateMessage, VdfService, VdfStepsReadGuard},
-};
+use irys_actors::{block_producer::SolutionFoundMessage, mempool::TxIngressMessage};
 use irys_chain::chain::start_for_testing;
 use irys_config::IrysNodeConfig;
 use irys_packing::capacity_single::compute_entropy_chunk;
@@ -171,7 +167,7 @@ async fn mine_ten_blocks() -> eyre::Result<()> {
         info!("waiting block {}", i);
 
         let mut retries = 0;
-        while node.block_index_guard.read().num_blocks() < i + 1 && retries < 10 as u64 {
+        while node.block_index_guard.read().num_blocks() < i + 1 && retries < 10_u64 {
             sleep(Duration::from_millis(1000)).await;
             retries += 1;
         }
@@ -259,14 +255,14 @@ async fn test_blockprod_with_evm_txs() -> eyre::Result<()> {
         (
             account2.address(),
             GenesisAccount {
-                balance: U256::from(420000000000000 as u128),
+                balance: U256::from(420000000000000_u128),
                 ..Default::default()
             },
         ),
         (
             account3.address(),
             GenesisAccount {
-                balance: U256::from(690000000000000 as u128),
+                balance: U256::from(690000000000000_u128),
                 ..Default::default()
             },
         ),
@@ -300,7 +296,6 @@ async fn test_blockprod_with_evm_txs() -> eyre::Result<()> {
                     .inject_tx(signed_tx)
                     .await
                     .expect_err("tx should be rejected");
-                ()
             }
             // 2 is less poor but should still fail
             2 => {
@@ -309,7 +304,6 @@ async fn test_blockprod_with_evm_txs() -> eyre::Result<()> {
                     .inject_tx(signed_tx)
                     .await
                     .expect_err("tx should be rejected");
-                ()
             }
             // should succeed
             3 => {
@@ -318,7 +312,6 @@ async fn test_blockprod_with_evm_txs() -> eyre::Result<()> {
                     .inject_tx(signed_tx)
                     .await
                     .expect("tx should be accepted");
-                ()
             }
             _ => return Err(eyre!("unknown account index")),
         }
@@ -365,7 +358,7 @@ async fn test_blockprod_with_evm_txs() -> eyre::Result<()> {
 
     // height is hardcoded at 42 right now
     // assert_eq!(reth_block.number, block.height);
-    assert!(evm_txs.contains_key(&reth_block.body.transactions.get(0).unwrap().hash()));
+    assert!(evm_txs.contains_key(&reth_block.body.transactions.first().unwrap().hash()));
 
     assert_eq!(
         reth_context
