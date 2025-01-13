@@ -254,8 +254,13 @@ pub async fn start_irys_node(
                 );
                 let chunk_migration_addr = chunk_migration_actor.start();
 
-                let block_tree_actor =
-                    BlockTreeActor::new(block_index_actor_addr.clone(), mempool_actor_addr.clone());
+                let (_new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
+
+                let block_tree_actor = BlockTreeActor::new(
+                    block_index_actor_addr.clone(),
+                    mempool_actor_addr.clone(),
+                    &arc_genesis,
+                );
                 let block_tree = block_tree_actor.start();
 
                 let vdf_service = VdfService::from_registry();
@@ -268,6 +273,7 @@ pub async fn start_irys_node(
                     block_tree: block_tree.clone(),
                     mempool: mempool_actor_addr.clone(),
                     storage_config: storage_config.clone(),
+                    difficulty_config: difficulty_adjustment_config.clone(),
                     db: db.clone(),
                     vdf_config: vdf_config.clone(),
                     vdf_steps_guard: vdf_steps_guard.clone(),

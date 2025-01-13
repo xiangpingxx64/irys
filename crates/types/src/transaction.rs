@@ -2,7 +2,7 @@ use crate::{
     address_base58_stringify, optional_string_u64, string_u64, Address, Arbitrary, Base64, Compact,
     IrysSignature, Node, Proof, Signature, TxIngressProof, H256, IRYS_CHAIN_ID,
 };
-use alloy_primitives::{keccak256, FixedBytes};
+use alloy_primitives::keccak256;
 use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
 use serde::{Deserialize, Serialize};
 
@@ -102,11 +102,11 @@ impl IrysTransactionHeader {
         self.encode(out)
     }
 
-    pub fn signature_hash(&self) -> FixedBytes<32> {
+    pub fn signature_hash(&self) -> [u8; 32] {
         let mut bytes = Vec::new();
         self.encode_for_signing(&mut bytes);
-
-        keccak256(&bytes)
+        let prehash = keccak256(&bytes).0;
+        prehash
     }
 
     /// Validates the transaction signature by:
@@ -133,7 +133,7 @@ pub struct IrysTransaction {
 
 impl IrysTransaction {
     pub fn signature_hash(&self) -> [u8; 32] {
-        self.header.signature_hash().0
+        self.header.signature_hash()
     }
 }
 
