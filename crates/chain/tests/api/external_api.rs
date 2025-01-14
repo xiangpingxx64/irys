@@ -6,8 +6,8 @@ use std::{
 };
 
 use {
-    irys_actors::block_index::BlockIndexActor, irys_actors::block_producer::BlockConfirmedMessage,
-    irys_actors::mempool::MempoolActor,
+    irys_actors::block_index_service::BlockIndexService,
+    irys_actors::block_producer::BlockConfirmedMessage, irys_actors::mempool::MempoolActor,
 };
 
 use actix::prelude::*;
@@ -225,8 +225,9 @@ async fn external_api() -> eyre::Result<()> {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
     // Create a block_index actor
-    let block_index_actor = BlockIndexActor::new(block_index.clone(), storage_config.clone());
-    let block_index_addr = block_index_actor.start();
+    let block_index_actor = BlockIndexService::new(block_index.clone(), storage_config.clone());
+    Registry::set(block_index_actor.start());
+    let block_index_addr = BlockIndexService::from_registry();
 
     let height: u64;
     {
