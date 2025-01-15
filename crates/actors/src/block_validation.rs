@@ -9,7 +9,7 @@ use irys_types::{
     calculate_difficulty, next_cumulative_diff, storage_config::StorageConfig, validate_path,
     Address, DifficultyAdjustmentConfig, IrysBlockHeader, PoaData, VDFStepsConfig, H256,
 };
-use irys_vdf::checkpoints_are_valid;
+use irys_vdf::vdf_steps_are_valid;
 use openssl::sha;
 use tracing::{debug, info};
 
@@ -41,7 +41,7 @@ pub fn block_is_valid(
 
     recall_recall_range_is_valid(block, storage_config, steps_guard)?;
 
-    checkpoints_are_valid(&block.vdf_limiter_info, &vdf_config)?;
+    vdf_steps_are_valid(&block.vdf_limiter_info, &vdf_config)?;
 
     poa_is_valid(
         &block.poa,

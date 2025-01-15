@@ -116,7 +116,7 @@ pub fn vdf_sha_verification(
     checkpoints
 }
 
-/// Validate the checkpoints from the `nonce_info` to see if they are valid.
+/// Validate the steps from the `nonce_info` to see if they are valid.
 /// Verifies each step in parallel across as many cores as are available.
 ///
 /// # Arguments
@@ -125,11 +125,8 @@ pub fn vdf_sha_verification(
 ///
 /// # Returns
 ///
-/// - `bool` - `true` if the checkpoints are valid, false otherwise.
-pub fn checkpoints_are_valid(
-    vdf_info: &VDFLimiterInfo,
-    config: &VDFStepsConfig,
-) -> eyre::Result<()> {
+/// - `bool` - `true` if the steps are valid, false otherwise.
+pub fn vdf_steps_are_valid(vdf_info: &VDFLimiterInfo, config: &VDFStepsConfig) -> eyre::Result<()> {
     info!(
         "Checking seed {:?} reset_seed {:?}",
         vdf_info.prev_output, vdf_info.seed
@@ -210,7 +207,7 @@ pub fn checkpoints_are_valid(
     if !steps_are_valid {
         // Compare the original list with the calculated one
         warn_mismatches(&test, &vdf_info.steps);
-        return Err(eyre::eyre!("VDF checkpoints are invalid!"));
+        return Err(eyre::eyre!("VDF steps are invalid!"));
     }
 
     let last_step_checkpoints_are_valid = last_step_checkpoints

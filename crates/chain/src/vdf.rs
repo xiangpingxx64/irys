@@ -83,7 +83,7 @@ mod tests {
     use actix::*;
     use irys_actors::vdf::{GetVdfStateMessage, VdfStepsReadGuard};
     use irys_types::*;
-    use irys_vdf::{checkpoints_are_valid, vdf_sha_verification};
+    use irys_vdf::{vdf_sha_verification, vdf_steps_are_valid};
     use nodit::interval::ii;
     use std::{sync::mpsc, time::Duration};
     use tracing::{debug, level_filters::LevelFilter};
@@ -210,7 +210,7 @@ mod tests {
         };
 
         assert!(
-            checkpoints_are_valid(&vdf_info, &vdf_config).is_ok(),
+            vdf_steps_are_valid(&vdf_info, &vdf_config).is_ok(),
             "Invalid VDF"
         );
 
