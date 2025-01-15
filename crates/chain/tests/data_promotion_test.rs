@@ -77,8 +77,8 @@ async fn data_promotion_test() {
 
     // Create a bunch of TX chunks
     let data_chunks = [
-        vec![[10; 32], [20; 32], [30; 32]], // Fill most of one Partition
-        vec![[40; 32], [50; 32], [50; 32]], // Overlap the next Partition
+        vec![[10; 32], [20; 32], [30; 32]],
+        vec![[40; 32], [50; 32], [50; 32]],
         vec![[70; 32], [80; 32], [90; 32]],
     ];
 

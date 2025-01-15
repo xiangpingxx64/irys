@@ -121,13 +121,21 @@ impl PartitionMiningActor {
             );
         }
 
-        for (index, (_chunk_offset, (chunk_bytes, _chunk_type))) in chunks.iter().enumerate() {
+        for (index, (_chunk_offset, (chunk_bytes, chunk_type))) in chunks.iter().enumerate() {
             // TODO: check if difficulty higher now. Will look in DB for latest difficulty info and update difficulty
             let partition_chunk_offset =
                 (start_chunk_offset + index as u32) as PartitionChunkOffset;
-            let (tx_path, data_path) = self
-                .storage_module
-                .read_tx_data_path(partition_chunk_offset as u64)?;
+
+            // Only include the tx_path and data_path for chunks that contain data
+            let (tx_path, data_path) = match chunk_type {
+                irys_storage::ChunkType::Entropy => (None, None),
+                irys_storage::ChunkType::Data => self
+                    .storage_module
+                    .read_tx_data_path(partition_chunk_offset as u64)?,
+                irys_storage::ChunkType::Uninitialized => {
+                    return Err(eyre::eyre!("Cannot mine uninitialized chunks"))
+                }
+            };
 
             // info!(
             //     "partition_hash: {}, chunk offset: {}",

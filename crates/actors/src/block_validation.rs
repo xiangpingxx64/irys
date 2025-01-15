@@ -236,7 +236,13 @@ pub fn poa_is_valid(
         let poa_chunk_hash = sha::sha256(poa_chunk_pad_trimmed);
 
         if poa_chunk_hash != data_path_result.leaf_hash {
-            return Err(eyre::eyre!("PoA chunk hash mismatch"));
+            return Err(eyre::eyre!(
+                "PoA chunk hash mismatch\n{:?}\nleaf_hash: {:?}\nledger_num: {}\nledger_chunk_offset: {}",
+                poa_chunk,
+                data_path_result.leaf_hash,
+                ledger_num,
+                ledger_chunk_offset
+            ));
         }
     } else {
         let mut entropy_chunk = Vec::<u8>::with_capacity(config.chunk_size as usize);
