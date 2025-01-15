@@ -252,30 +252,34 @@ async fn data_promotion_test() {
     }
 
     let db = &node_context.db.clone();
-    let block = get_block_parent(txs[0].header.id, Ledger::Publish, db).unwrap();
-    println!("{}", block);
+    let block_tx1 = get_block_parent(txs[0].header.id, Ledger::Publish, db).unwrap();
+    let block_tx2 = get_block_parent(txs[2].header.id, Ledger::Publish, db).unwrap();
 
     let first_tx_index: usize;
     let next_tx_index: usize;
 
-    if block.ledgers[Ledger::Publish].txids.0.len() == 2 {
+    if block_tx1.block_hash == block_tx2.block_hash {
         // Extract the transaction order
-        let txid_1 = block.ledgers[Ledger::Publish].txids.0[0];
-        let txid_2 = block.ledgers[Ledger::Publish].txids.0[1];
+        let txid_1 = block_tx1.ledgers[Ledger::Publish].txids.0[0];
+        let txid_2 = block_tx1.ledgers[Ledger::Publish].txids.0[1];
         first_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
         next_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+        println!("1:{}", block_tx1);
     } else {
-        let txid_1 = block.ledgers[Ledger::Publish].txids.0[0];
-        
-        let block2 = get_block_parent(txs[2].header.id, Ledger::Publish, db).unwrap();
-        let txid_2 = block.ledgers[Ledger::Publish].txids.0[0];
-
-        if block2.height > block.height {
+        if block_tx1.height > block_tx2.height {
+            let txid_1 = block_tx2.ledgers[Ledger::Publish].txids.0[0];
+            let txid_2 = block_tx1.ledgers[Ledger::Publish].txids.0[0];
             first_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
             next_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+            println!("1:{}", block_tx2);
+            println!("2:{}", block_tx1);
         } else {
-            first_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
-            next_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
+            let txid_1 = block_tx1.ledgers[Ledger::Publish].txids.0[0];
+            let txid_2 = block_tx2.ledgers[Ledger::Publish].txids.0[0];
+            first_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
+            next_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+            println!("1:{}", block_tx1);
+            println!("2:{}", block_tx2);
         }
     }
 
