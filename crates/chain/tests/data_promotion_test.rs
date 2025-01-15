@@ -233,10 +233,19 @@ async fn data_promotion_test() {
 
     assert_eq!(unconfirmed_promotions.len(), 0);
 
-    // wait for the first chunk to appear in the publish ledger
+    // wait for the first set of chunks chunk to appear in the publish ledger
     for _attempts in 1..20 {
         if let Some(_packed_chunk) = get_chunk(&app, Ledger::Publish, 0).await {
-            println!("First chunk found!");
+            println!("First set of chunks found!");
+            break;
+        }
+        sleep(delay).await;
+    }
+
+    // wait for the second set of chunks to appear in the publish ledger
+    for _attempts in 1..20 {
+        if let Some(_packed_chunk) = get_chunk(&app, Ledger::Publish, 3).await {
+            println!("Second set of chunks found!");
             break;
         }
         sleep(delay).await;
@@ -246,11 +255,29 @@ async fn data_promotion_test() {
     let block = get_block_parent(txs[0].header.id, Ledger::Publish, db).unwrap();
     println!("{}", block);
 
-    // Extract the transaction order
-    let txid_1 = block.ledgers[Ledger::Publish].txids.0[0];
-    let txid_2 = block.ledgers[Ledger::Publish].txids.0[1];
-    let first_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
-    let next_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+    let first_tx_index: usize;
+    let next_tx_index: usize;
+
+    if block.ledgers[Ledger::Publish].txids.0.len() == 2 {
+        // Extract the transaction order
+        let txid_1 = block.ledgers[Ledger::Publish].txids.0[0];
+        let txid_2 = block.ledgers[Ledger::Publish].txids.0[1];
+        first_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
+        next_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+    } else {
+        let txid_1 = block.ledgers[Ledger::Publish].txids.0[0];
+        
+        let block2 = get_block_parent(txs[2].header.id, Ledger::Publish, db).unwrap();
+        let txid_2 = block.ledgers[Ledger::Publish].txids.0[0];
+
+        if block2.height > block.height {
+            first_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
+            next_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+        } else {
+            first_tx_index = txs.iter().position(|tx| tx.header.id == txid_2).unwrap();
+            next_tx_index = txs.iter().position(|tx| tx.header.id == txid_1).unwrap();
+        }
+    }
 
     // ==============================
     // Verify chunk ordering in publish ledger storage module
