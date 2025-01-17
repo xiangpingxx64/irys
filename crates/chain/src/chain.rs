@@ -28,7 +28,7 @@ use irys_storage::{
 };
 use irys_types::{
     app_state::DatabaseProvider, calculate_initial_difficulty, irys::IrysSigner,
-    vdf_config::VDFStepsConfig, DifficultyAdjustmentConfig, StorageConfig, H256, U256,
+    vdf_config::VDFStepsConfig, StorageConfig, CONFIG, H256,
 };
 use reth::{
     builder::FullNode,
@@ -111,14 +111,7 @@ pub async fn start_irys_node(
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
     let mut irys_genesis = node_config.chainspec_builder.genesis();
     let arc_config = Arc::new(node_config);
-    let mut difficulty_adjustment_config = DifficultyAdjustmentConfig {
-        target_block_time: 1,        // 1->5 seconds
-        adjustment_interval: 20,     // every X blocks
-        max_adjustment_factor: 4,    // No more than 4x or 1/4th with each adjustment
-        min_adjustment_factor: 0.25, // a minimum 25% adjustment threshold
-        min_difficulty: U256::one(),
-        max_difficulty: U256::MAX,
-    };
+    let mut difficulty_adjustment_config = CONFIG.clone().into();
 
     // TODO: Hard coding 3 for storage module count isn't great here,
     // eventually we'll want to relate this to the genesis config
@@ -132,13 +125,13 @@ pub async fn start_irys_node(
     let arc_genesis = Arc::new(irys_genesis);
 
     let mut storage_modules: StorageModuleVec = Vec::new();
-    let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new(
-        BlockIndex::default()
-            .reset(&arc_config.clone())?
-            .init(arc_config.clone())
-            .await
-            .unwrap(),
-    ));
+    let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
+        let mut idx = BlockIndex::default();
+        if !CONFIG.persist_data_on_restart {
+            idx = idx.reset(&arc_config.clone())?
+        }
+        idx.init(arc_config.clone()).await.unwrap()
+    }));
 
     let reth_chainspec = arc_config
         .clone()
@@ -257,7 +250,7 @@ pub async fn start_irys_node(
                 );
                 Registry::set(chunk_migration_service.start());
 
-                let (_new_seed_tx, new_seed_rx) = mpsc::channel::<H256>();
+                let (_new_seed_tx, _new_seed_rx) = mpsc::channel::<H256>();
 
                 let block_tree_actor = BlockTreeService::new(db.clone(), &arc_genesis);
                 Registry::set(block_tree_actor.start());
