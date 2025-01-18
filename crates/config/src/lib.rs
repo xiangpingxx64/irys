@@ -130,3 +130,7 @@ impl IrysNodeConfig {
 //         return self.config;
 //     }
 // }
+
+
+pub const PRICE_PER_CHUNK_PERM: u128 = 10000;
+pub const PRICE_PER_CHUNK_5_EPOCH: u128 = 10;

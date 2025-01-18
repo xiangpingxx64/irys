@@ -218,6 +218,15 @@ impl Ledger {
     pub const fn get_id(&self) -> u32 {
         *self as u32
     }
+
+    // Takes "perm" or some term e.g. "1year"
+    pub fn from_url(s: &str) -> eyre::Result<Ledger> {
+        match s {
+            "perm" => eyre::Result::Ok(Ledger::Publish),
+            "5days" => eyre::Result::Ok(Ledger::Submit),
+            _ => Err(eyre::eyre!("Ledger {} not supported", s))
+        }
+    }
 }
 
 impl TryFrom<u64> for Ledger {
