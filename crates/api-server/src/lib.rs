@@ -47,7 +47,7 @@ pub fn routes() -> impl HttpServiceFactory {
             web::get().to(tx::get_tx_local_start_offset),
         )
         .route("/tx", web::post().to(tx::post_tx))
-        .route("/price/{size}", web::get().to(price::get_price))
+        .route("/price/{ledger}/{size}", web::get().to(price::get_price))
 }
 
 pub async fn run_server(app_state: ApiState) {
