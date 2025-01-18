@@ -10,7 +10,7 @@ use irys_types::{
     app_state::DatabaseProvider, chunk::UnpackedChunk, hash_sha256, validate_path,
     IrysTransactionHeader, H256,
 };
-use irys_types::{DataRoot, StorageConfig};
+use irys_types::{DataRoot, StorageConfig, U256};
 use reth::tasks::TaskExecutor;
 use reth_db::cursor::DbDupCursorRO;
 use reth_db::transaction::DbTx;
@@ -163,6 +163,13 @@ impl Handler<TxIngressMessage> for MempoolService {
             // Skip tx reprocessing if already verified (valid or invalid) to prevent
             // CPU-intensive signature verification spam attacks
             return Err(TxIngressError::Skipped);
+        }
+
+        let db = self.db.clone().unwrap();
+
+        // TODO: Don't unwrap here
+        if irys_database::get_account_balance(&db.tx().unwrap(), tx_msg.0.signer).unwrap() < U256::from(tx_msg.0.total_fee()) {
+            return Err(TxIngressError::Unfunded)
         }
 
         // Validate the transaction signature

@@ -381,12 +381,12 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     .map(|header| ShadowTx {
                         tx_id: IrysTxId::from_slice(header.id.as_bytes()),
                         fee: irys_primitives::U256::from(
-                            header.term_fee + header.perm_fee.unwrap_or(0),
+                            header.total_fee(),
                         ),
                         address: header.signer,
                         tx: ShadowTxType::Data(DataShadow {
                             fee: irys_primitives::U256::from(
-                                header.term_fee + header.perm_fee.unwrap_or(0),
+                                header.total_fee(),
                             ),
                         }),
                     })

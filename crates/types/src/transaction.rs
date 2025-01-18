@@ -116,6 +116,10 @@ impl IrysTransactionHeader {
         self.signature
             .validate_signature(self.signature_hash(), self.signer)
     }
+
+    pub fn total_fee(&self) -> u64 {
+        self.perm_fee.unwrap_or(0) + self.term_fee
+    }
 }
 
 /// Wrapper for the underlying IrysTransactionHeader fields, this wrapper
