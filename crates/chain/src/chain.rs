@@ -59,7 +59,6 @@ pub async fn start(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
         num_chunks_in_partition: CONFIG.num_chunks_in_partition,
         num_chunks_in_recall_range: CONFIG.num_chunks_in_recall_range,
         num_partitions_in_slot: CONFIG.num_partitions_per_slot,
-        // TODO pull from config
         miner_address: config.mining_signer.address(),
         min_writes_before_sync: 1,
         entropy_packing_iterations: CONFIG.entropy_packing_iterations,
@@ -185,7 +184,8 @@ pub async fn start_irys_node(
                 };
 
                 let miner_address = node_config.mining_signer.address();
-                let epoch_service = EpochServiceActor::new(Some(config));
+                let mut epoch_service = EpochServiceActor::new(Some(config));
+                epoch_service.initialize(&db).await;
                 let epoch_service_actor_addr = epoch_service.start();
 
                 // Initialize the block_index actor and tell it about the genesis block
