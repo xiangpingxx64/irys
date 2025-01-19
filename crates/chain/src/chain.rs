@@ -19,6 +19,7 @@ use irys_actors::{
 };
 use irys_api_server::{run_server, ApiState};
 use irys_config::IrysNodeConfig;
+use irys_packing::{PackingType, PACKING_TYPE};
 pub use irys_reth_node_bridge::node::{
     RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
 };
@@ -28,7 +29,7 @@ use irys_storage::{
 };
 use irys_types::{
     app_state::DatabaseProvider, calculate_initial_difficulty, irys::IrysSigner,
-    vdf_config::VDFStepsConfig, StorageConfig, CONFIG, H256,
+    vdf_config::VDFStepsConfig, StorageConfig, CHUNK_SIZE, CONFIG, H256,
 };
 use reth::{
     builder::FullNode,
@@ -42,7 +43,7 @@ use std::{
     sync::{mpsc, Arc, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 use tokio::{
     runtime::Handle,
@@ -106,6 +107,11 @@ pub async fn start_irys_node(
     storage_config: StorageConfig,
 ) -> eyre::Result<IrysNodeCtx> {
     info!("Using directory {:?}", &node_config.base_directory);
+
+    if PACKING_TYPE != PackingType::CPU && storage_config.chunk_size != CHUNK_SIZE {
+        error!("GPU packing only supports chunk size {}!", CHUNK_SIZE)
+    }
+
     let (reth_handle_sender, reth_handle_receiver) =
         oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();

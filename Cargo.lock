@@ -5218,6 +5218,7 @@ dependencies = [
  "env_logger",
  "eyre",
  "irys-actors",
+ "irys-config",
  "irys-database",
  "irys-reth-node-bridge",
  "irys-storage",
