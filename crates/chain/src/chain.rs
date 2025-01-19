@@ -53,6 +53,22 @@ use tokio::{
 use crate::vdf::run_vdf;
 use irys_testing_utils::utils::setup_tracing_and_temp_dir;
 
+pub async fn start(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
+    let storage_config = StorageConfig {
+        chunk_size: CONFIG.chunk_size,
+        num_chunks_in_partition: CONFIG.num_chunks_in_partition,
+        num_chunks_in_recall_range: CONFIG.num_chunks_in_recall_range,
+        num_partitions_in_slot: CONFIG.num_partitions_per_slot,
+        // TODO pull from config
+        miner_address: config.mining_signer.address(),
+        min_writes_before_sync: 1,
+        entropy_packing_iterations: CONFIG.entropy_packing_iterations,
+        num_confirmations_for_finality: CONFIG.num_confirmations_for_finality, // Testnet / single node config
+    };
+
+    start_irys_node(config, storage_config).await
+}
+
 pub async fn start_for_testing(config: IrysNodeConfig) -> eyre::Result<IrysNodeCtx> {
     let storage_config = StorageConfig {
         chunk_size: 32,
