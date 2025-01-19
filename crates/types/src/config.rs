@@ -15,7 +15,7 @@ pub struct Config {
     pub chunk_size: u64,
     pub num_chunks_in_partition: u64,
     pub num_chunks_in_recall_range: u64,
-    pub nonce_limiter_reset_frequency: usize,
+    pub vdf_reset_frequency: usize,
     pub vdf_parallel_verification_thread_limit: usize,
     pub num_checkpoints_in_vdf_step: usize,
     pub vdf_sha_1s: u64,
@@ -54,7 +54,7 @@ pub const CONFIG: Config = load_toml!(
         chunk_size: 256 * 1024,
         num_chunks_in_partition: 10,
         num_chunks_in_recall_range: 2,
-        nonce_limiter_reset_frequency: 10 * 120, // Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
+        vdf_reset_frequency: 10 * 120, // Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
         vdf_parallel_verification_thread_limit: 4,
         num_checkpoints_in_vdf_step: 25, // 25 checkpoints 40 ms each = 1000 ms
         vdf_sha_1s: 530_000,
