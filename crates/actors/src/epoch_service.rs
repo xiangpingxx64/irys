@@ -1,17 +1,20 @@
-use actix::{Actor, Addr, ArbiterService, Context, Handler, Message, MessageResponse, SystemRegistry};
+use actix::{
+    Actor, Addr, ArbiterService, Context, Handler, Message, MessageResponse, SystemRegistry,
+};
 use eyre::{Error, Result};
 use irys_database::{data_ledger::*, database};
 use irys_storage::{ie, StorageModuleInfo};
 use irys_types::{
-    partition::{PartitionAssignment, PartitionHash}, DatabaseProvider, IrysBlockHeader, SimpleRNG, StorageConfig, CONFIG, H256
+    partition::{PartitionAssignment, PartitionHash},
+    DatabaseProvider, IrysBlockHeader, SimpleRNG, StorageConfig, CONFIG, H256,
 };
 use openssl::sha;
 use reth_db::Database;
-use tracing::info;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
+use tracing::info;
 
 use crate::block_index_service::{BlockIndexService, GetBlockIndexGuardMessage};
 
@@ -245,12 +248,11 @@ impl EpochServiceActor {
             all_active_partitions: Vec::new(),
             config,
         }
-
     }
 
     pub async fn initialize(&mut self, db: &DatabaseProvider) {
         let addr = BlockIndexService::from_registry();
-        
+
         let read_guard = addr.send(GetBlockIndexGuardMessage).await.unwrap();
 
         let rg = read_guard.read();
@@ -261,12 +263,17 @@ impl EpochServiceActor {
             let block = rg.get_item(block_index.try_into().unwrap());
 
             match block {
-                Some(b) => { 
-                    let block_header = database::block_header_by_hash(&db.tx().unwrap(), &b.block_hash).unwrap().unwrap();
+                Some(b) => {
+                    let block_header =
+                        database::block_header_by_hash(&db.tx().unwrap(), &b.block_hash)
+                            .unwrap()
+                            .unwrap();
                     self.perform_epoch_tasks(Arc::new(block_header)).unwrap();
                     block_index += self.config.num_blocks_in_epoch;
-                 },
-                None => { break; },
+                }
+                None => {
+                    break;
+                }
             }
         }
     }
@@ -319,7 +326,7 @@ impl EpochServiceActor {
             let num_partitions = num_data_partitions
                 + Self::get_num_capacity_partitions(num_data_partitions, &self.config);
 
-            let num_cap_parts = if CONFIG.num_capacity_partitions == -1 {
+            let num_cap_parts = if CONFIG.num_capacity_partitions == 0 {
                 num_partitions
             } else {
                 CONFIG.num_capacity_partitions

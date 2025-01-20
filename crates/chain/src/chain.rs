@@ -1,4 +1,3 @@
-use irys_database::database;
 use ::irys_database::{tables::IrysTables, BlockIndex, Initialized};
 use actix::{Actor, ArbiterService, Registry};
 use irys_actors::{
@@ -20,13 +19,16 @@ use irys_actors::{
 };
 use irys_api_server::{run_server, ApiState};
 use irys_config::IrysNodeConfig;
+use irys_database::database;
 use irys_packing::{PackingType, PACKING_TYPE};
 pub use irys_reth_node_bridge::node::{
     RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
 };
 
 use irys_storage::{
-    initialize_storage_files, ChunkProvider, ChunkType, StorageModule, StorageModuleVec,
+    initialize_storage_files,
+    reth_provider::{IrysRethProvider, IrysRethProviderInner},
+    ChunkProvider, ChunkType, StorageModule, StorageModuleVec,
 };
 use irys_types::{
     app_state::DatabaseProvider, calculate_initial_difficulty, irys::IrysSigner,
@@ -41,7 +43,7 @@ use reth::{
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c};
 use reth_db::{Database as _, HasName, HasTableType};
 use std::{
-    sync::{mpsc, Arc, RwLock},
+    sync::{mpsc, Arc, OnceLock, RwLock},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tracing::{debug, error, info};
@@ -111,7 +113,7 @@ pub struct IrysNodeCtx {
     pub actor_addresses: ActorAddresses,
     pub db: DatabaseProvider,
     pub config: Arc<IrysNodeConfig>,
-    pub chunk_provider: ChunkProvider,
+    pub chunk_provider: Arc<ChunkProvider>,
     pub block_index_guard: BlockIndexReadGuard,
     pub vdf_steps_guard: VdfStepsReadGuard,
     pub vdf_config: VDFStepsConfig,
@@ -156,7 +158,7 @@ pub async fn start_irys_node(
             debug!("Reseting block index");
             idx = idx.reset(&arc_config.clone())?
         } else {
-            debug!("Not reseting block index");            
+            debug!("Not reseting block index");
         }
         let i = idx.init(arc_config.clone()).await.unwrap();
 
@@ -171,7 +173,6 @@ pub async fn start_irys_node(
         i
     }));
 
-
     let reth_chainspec = arc_config
         .clone()
         .chainspec_builder
@@ -183,6 +184,11 @@ pub async fn start_irys_node(
 
     // Spawn thread and runtime for actors
     let arc_config_copy = arc_config.clone();
+    let irys_provider: IrysRethProvider = Arc::new(OnceLock::new());
+
+    // clone as this gets `move`d into the thread
+    let irys_provider_1 = irys_provider.clone();
+
     std::thread::Builder::new()
         .name("actor-main-thread".to_string())
         .stack_size(32 * 1024 * 1024)
@@ -195,7 +201,11 @@ pub async fn start_irys_node(
                 let db = DatabaseProvider(reth_node.provider.database.db.clone());
                 let vdf_config = VDFStepsConfig::default();
 
-                let latest_block = latest_block_index.map(|b| database::block_header_by_hash(&db.tx().unwrap(), &b.block_hash).unwrap().unwrap());
+                let latest_block = latest_block_index.map(|b| {
+                    database::block_header_by_hash(&db.tx().unwrap(), &b.block_hash)
+                        .unwrap()
+                        .unwrap()
+                });
 
                 // Initialize the epoch_service actor to handle partition ledger assignments
                 let config = EpochServiceConfig {
@@ -208,7 +218,7 @@ pub async fn start_irys_node(
 
                 // Initialize the block_index actor and tell it about the genesis block
                 let block_index_actor =
-                BlockIndexService::new(block_index.clone(), storage_config.clone());
+                    BlockIndexService::new(block_index.clone(), storage_config.clone());
                 Registry::set(block_index_actor.start());
                 let block_index_actor_addr = BlockIndexService::from_registry();
                 if at_genesis {
@@ -218,9 +228,9 @@ pub async fn start_irys_node(
                     match block_index_actor_addr.send(msg).await {
                         Ok(_) => info!("Genesis block indexed"),
                         Err(_) => panic!("Failed to index genesis block"),
-                    } 
+                    }
                 }
-                            
+
                 debug!("AT GENESIS {}", at_genesis);
 
                 let mut epoch_service = EpochServiceActor::new(Some(config));
@@ -233,9 +243,8 @@ pub async fn start_irys_node(
                     match epoch_service_actor_addr.send(msg).await {
                         Ok(_) => info!("Genesis Epoch tasks complete."),
                         Err(_) => panic!("Failed to perform genesis epoch tasks"),
-                    }                    
+                    }
                 }
-
 
                 // Retrieve ledger assignments
                 let ledgers_guard = epoch_service_actor_addr
@@ -266,8 +275,11 @@ pub async fn start_irys_node(
 
                 // For Genesis we create the storage_modules and their files
                 if at_genesis {
-                  initialize_storage_files(&arc_config.storage_module_dir(), &storage_module_infos)
-                    .unwrap();  
+                    initialize_storage_files(
+                        &arc_config.storage_module_dir(),
+                        &storage_module_infos,
+                    )
+                    .unwrap();
                 }
 
                 // Create a list of storage modules wrapping the storage files
@@ -308,15 +320,17 @@ pub async fn start_irys_node(
                 let block_tree_actor = BlockTreeService::new(db.clone(), &arc_genesis);
                 Registry::set(block_tree_actor.start());
 
-                let vdf_step_path = if !CONFIG.persist_data_on_restart { None }
-                    else { Some(node_config.vdf_steps_dir()) };
+                let vdf_step_path = if !CONFIG.persist_data_on_restart {
+                    None
+                } else {
+                    Some(node_config.vdf_steps_dir())
+                };
                 let vdf_service_actor = VdfService::new(1000, vdf_step_path);
                 let vdf_service = vdf_service_actor.start();
                 Registry::set(vdf_service.clone()); // register it as a service
 
                 let vdf_steps_guard: VdfStepsReadGuard =
                     vdf_service.send(GetVdfStateMessage).await.unwrap();
-
 
                 let (global_step_number, seed) = vdf_steps_guard.read().get_last_step_and_seed();
 
@@ -344,7 +358,10 @@ pub async fn start_irys_node(
                 );
                 let block_producer_addr = block_producer_actor.start();
                 let block_tree = BlockTreeService::from_registry();
-                block_tree.send(RegisterBlockProducerMessage(block_producer_addr.clone())).await.unwrap();
+                block_tree
+                    .send(RegisterBlockProducerMessage(block_producer_addr.clone()))
+                    .await
+                    .unwrap();
 
                 let mut part_actors = Vec::new();
 
@@ -386,7 +403,14 @@ pub async fn start_irys_node(
 
                 // Let the partition actors know about the genesis difficulty
                 let broadcast_mining_service = BroadcastMiningService::from_registry();
-                broadcast_mining_service.send(BroadcastDifficultyUpdate(latest_block.map(|b| Arc::new(b)).unwrap_or(arc_genesis.clone()))).await.unwrap();
+                broadcast_mining_service
+                    .send(BroadcastDifficultyUpdate(
+                        latest_block
+                            .map(|b| Arc::new(b))
+                            .unwrap_or(arc_genesis.clone()),
+                    ))
+                    .await
+                    .unwrap();
 
                 let part_actors_clone = part_actors.clone();
 
@@ -426,13 +450,22 @@ pub async fn start_irys_node(
 
                 let chunk_provider =
                     ChunkProvider::new(storage_config.clone(), storage_modules.clone(), db.clone());
+                let arc_chunk_provider = Arc::new(chunk_provider);
+                // this OnceLock is due to the cyclic chain between Reth & the Irys node, where the IrysRethProvider requires both
+                // this is "safe", as the OnceLock is always set before this start function returns
+                irys_provider_1
+                    .set(IrysRethProviderInner {
+                        db: reth_node.provider.database.db.clone(),
+                        chunk_provider: arc_chunk_provider.clone(),
+                    })
+                    .expect("Unable to set IrysRethProvider OnceLock");
 
                 let _ = irys_node_handle_sender.send(IrysNodeCtx {
                     actor_addresses: actor_addresses.clone(),
                     reth_handle: reth_node,
                     db: db.clone(),
                     config: arc_config.clone(),
-                    chunk_provider: chunk_provider.clone(),
+                    chunk_provider: arc_chunk_provider.clone(),
                     block_index_guard: block_index_guard.clone(),
                     vdf_steps_guard: vdf_steps_guard.clone(),
                     vdf_config: vdf_config.clone(),
@@ -441,7 +474,7 @@ pub async fn start_irys_node(
 
                 run_server(ApiState {
                     mempool: mempool_addr,
-                    chunk_provider: Arc::new(chunk_provider),
+                    chunk_provider: arc_chunk_provider.clone(),
                     db,
                 })
                 .await;
@@ -468,7 +501,7 @@ pub async fn start_irys_node(
 
             tokio_runtime.block_on(run_to_completion_or_panic(
                 &mut task_manager,
-                run_until_ctrl_c(start_reth_node(exec, reth_chainspec, node_config, IrysTables::ALL, reth_handle_sender)),
+                run_until_ctrl_c(start_reth_node(exec, reth_chainspec, node_config, IrysTables::ALL, reth_handle_sender, irys_provider)),
             )).unwrap();
         })?;
 
@@ -482,9 +515,16 @@ async fn start_reth_node<T: HasName + HasTableType>(
     irys_config: Arc<IrysNodeConfig>,
     tables: &[T],
     sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
+    irys_provider: IrysRethProvider,
 ) -> eyre::Result<NodeExitReason> {
-    let node_handle =
-        irys_reth_node_bridge::run_node(Arc::new(chainspec), exec, irys_config, tables).await?;
+    let node_handle = irys_reth_node_bridge::run_node(
+        Arc::new(chainspec),
+        exec,
+        irys_config,
+        tables,
+        irys_provider,
+    )
+    .await?;
     sender
         .send(node_handle.node.clone())
         .expect("unable to send reth node handle");

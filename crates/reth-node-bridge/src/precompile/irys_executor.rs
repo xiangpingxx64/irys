@@ -1,5 +1,5 @@
 use alloy_primitives::{Address, Bytes, U256};
-use irys_types::reth_provider::IrysRethProvider;
+use irys_storage::reth_provider::IrysRethProvider;
 use reth::{
     api::NextBlockEnvAttributes,
     builder::{
@@ -28,7 +28,7 @@ use revm_primitives::StatefulPrecompile;
 use std::sync::Arc;
 use tracing::info;
 
-use crate::precompile::programmable_data::PROGRAMMABLE_DATA_PRECOMPILE;
+use crate::precompile::entrypoint::PROGRAMMABLE_DATA_PRECOMPILE;
 
 // TODO: sometimes the EVM is initialized with spec ID CANCUN, and sometimes with MERGE
 // for now it doesn't matter much, but we do want to fix it eventually.
@@ -207,6 +207,7 @@ impl ConfigureEvm for IrysEvmConfig {
     type DefaultExternalContext<'a> = ();
 
     fn evm<DB: Database>(&self, db: DB) -> Evm<'_, Self::DefaultExternalContext<'_>, DB> {
+        // TODO: create a custom `Handler` so we can provide a custom validation handler for gas price estimations
         EvmBuilder::default()
             .with_db(db)
             // add additional precompiles
@@ -288,9 +289,10 @@ where
 
         ctx: &BuilderContext<Node>,
     ) -> eyre::Result<(Self::EVM, Self::Executor)> {
-        let precompile_state_provider = PrecompileStateProvider {
-            provider: ctx.irys_ext.clone().unwrap().provider,
-        };
+        let provider = ctx.irys_ext.clone().unwrap().provider;
+
+        let precompile_state_provider = PrecompileStateProvider { provider: provider };
+
         let evm_config = IrysEvmConfig {
             inner: EthEvmConfig::new(ctx.chain_spec()),
             precompile_state_provider,
@@ -341,24 +343,4 @@ where
 
 pub fn irys_precompiles() -> Precompiles {
     vec![PROGRAMMABLE_DATA_PRECOMPILE]
-}
-
-// reserve space for any future eth precompiles
-const BASE_PRECOMPILE_OFFSET: u64 = 1337;
-
-#[repr(u64)]
-pub enum IrysPrecompileOffsets {
-    ProgrammableData = BASE_PRECOMPILE_OFFSET,
-}
-
-impl IrysPrecompileOffsets {
-    pub const fn to_address(self) -> Address {
-        u64_to_address(self as u64)
-    }
-}
-
-impl From<IrysPrecompileOffsets> for Address {
-    fn from(val: IrysPrecompileOffsets) -> Self {
-        val.to_address()
-    }
 }
