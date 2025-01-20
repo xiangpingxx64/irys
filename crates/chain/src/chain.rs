@@ -420,7 +420,7 @@ pub async fn start_irys_node(
 
                 let vdf_config2 = vdf_config.clone();
                 let seed = seed.map_or(arc_genesis.vdf_limiter_info.output, |seed| seed.0);
-                let vdf_reset_seed = latest_block.map_or(arc_genesis.vdf_limiter_info.seed, |b| b.vdf_limiter_info.seed);
+                let vdf_reset_seed = latest_block.map_or_else(|| arc_genesis.vdf_limiter_info.seed, |b| b.vdf_limiter_info.seed);
 
                 info!(
                     "Starting VDF thread seed {:?} reset_seed {:?}",
