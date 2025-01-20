@@ -319,9 +319,12 @@ impl EpochServiceActor {
             let num_partitions = num_data_partitions
                 + Self::get_num_capacity_partitions(num_data_partitions, &self.config);
 
-            // TODO: put back next line after fixing optionals in toml file
-            //  self.add_capacity_partitions(CONFIG.num_capacity_partitions.unwrap_or(num_partitions));
-            self.add_capacity_partitions(num_partitions);
+            let num_cap_parts = if CONFIG.num_capacity_partitions == -1 {
+                num_partitions
+            } else {
+                CONFIG.num_capacity_partitions
+            };
+            self.add_capacity_partitions(num_cap_parts);
         }
     }
 
