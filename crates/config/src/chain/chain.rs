@@ -7,6 +7,7 @@ use reth_chainspec::EthereumHardfork::{
 };
 use reth_chainspec::{BaseFeeParams, BaseFeeParamsKind, Chain, ChainSpec, ForkCondition};
 use reth_primitives::constants::ETHEREUM_BLOCK_GAS_LIMIT;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 pub const SUPPORTED_CHAINS: &[&str] = &["mainnet" /* , "devnet", "testnet" */];
@@ -18,6 +19,7 @@ pub static IRYS_MAINNET: Lazy<Arc<ChainSpec>> = Lazy::new(|| {
         // TODO: A proper genesis block
         genesis: Genesis {
             gas_limit: ETHEREUM_BLOCK_GAS_LIMIT,
+            alloc: BTreeMap::new(),
             ..Default::default()
         },
         genesis_hash: OnceCell::new(),
