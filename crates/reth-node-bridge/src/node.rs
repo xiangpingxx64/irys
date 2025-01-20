@@ -281,15 +281,15 @@ pub async fn run_node<T: HasName + HasTableType>(
             )
             // .with_components(EthereumNode::components())
             .with_add_ons(EthereumAddOns::default())
-            .extend_rpc_modules(move |ctx| {
-                let provider = ctx.provider().clone();
-                let irys_ext = ctx.node().components.irys_ext.clone();
-                let network = ctx.network().clone();
-                let ext = AccountStateExt { provider, irys_ext, network };
-                let rpc = ext.into_rpc();
-                ctx.modules.merge_configured(rpc)?;
-                Ok(())
-            })
+            // .extend_rpc_modules(move |ctx| {
+            //     let provider = ctx.provider().clone();
+            //     let irys_ext = ctx.node().components.irys_ext.clone();
+            //     let network = ctx.network().clone();
+            //     let ext = AccountStateExt { provider, irys_ext, network };
+            //     let rpc = ext.into_rpc();
+            //     ctx.modules.merge_configured(rpc)?;
+            //     Ok(())
+            // })
             .launch_with_fn(|builder| {
                 let launcher = CustomEngineNodeLauncher::new(
                     builder.task_executor().clone(),
