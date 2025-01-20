@@ -26,10 +26,14 @@ async fn data_promotion_test() {
         web::{self, JsonConfig},
         App,
     };
+    use alloy_core::primitives::U256;
     use base58::ToBase58;
+    use irys_actors::packing::wait_for_packing;
     use irys_api_server::{routes, ApiState};
-    use irys_chain::start_for_testing_default;
+    use irys_chain::start_for_testing;
+    use irys_testing_utils::utils::setup_tracing_and_temp_dir;
     use irys_types::{irys::IrysSigner, IrysTransaction, IrysTransactionHeader, StorageConfig};
+    use reth_primitives::GenesisAccount;
     use tokio::time::sleep;
     use tracing::info;
 
@@ -48,15 +52,31 @@ async fn data_promotion_test() {
         num_confirmations_for_finality: 1, // Testnet / single node config
     };
 
+    let temp_dir = setup_tracing_and_temp_dir(Some("data_promotion_test"), false);
+    let mut config = irys_config::IrysNodeConfig {
+        base_directory: temp_dir.path().to_path_buf(),
+        ..Default::default()
+    };
+    let signer = IrysSigner::random_signer_with_chunk_size(chunk_size as usize);
+
+    config.extend_genesis_accounts(vec![(
+        signer.address(),
+        GenesisAccount {
+            balance: U256::from(690000000000000000_u128),
+            ..Default::default()
+        },
+    )]);
+
     // This will create 3 storage modules, one for submit, one for publish, and one for capacity
-    let node_context = start_for_testing_default(
-        Some("data_promotion_test"),
-        false,
-        miner_signer,
-        storage_config.clone(),
+    let node_context = start_for_testing(config.clone()).await.unwrap();
+
+    wait_for_packing(
+        node_context.actor_addresses.packing.clone(),
+        Some(Duration::from_secs(10)),
     )
     .await
     .unwrap();
+
     node_context.actor_addresses.start_mining().unwrap();
 
     let app_state = ApiState {
@@ -84,7 +104,7 @@ async fn data_promotion_test() {
 
     // Create a bunch of signed TX from the chunks
     // Loop though all the data_chunks and create wrapper tx for them
-    let signer = IrysSigner::random_signer_with_chunk_size(chunk_size as usize);
+
     let mut txs: Vec<IrysTransaction> = Vec::new();
 
     for (i, chunks) in data_chunks.iter().enumerate() {
