@@ -344,7 +344,7 @@ pub async fn start_irys_node(
                 );
                 let block_producer_addr = block_producer_actor.start();
                 let block_tree = BlockTreeService::from_registry();
-                block_tree.do_send(RegisterBlockProducerMessage(block_producer_addr.clone()));
+                block_tree.send(RegisterBlockProducerMessage(block_producer_addr.clone())).await.unwrap();
 
                 let mut part_actors = Vec::new();
 
@@ -386,7 +386,7 @@ pub async fn start_irys_node(
 
                 // Let the partition actors know about the genesis difficulty
                 let broadcast_mining_service = BroadcastMiningService::from_registry();
-                broadcast_mining_service.do_send(BroadcastDifficultyUpdate(latest_block.map(|b| Arc::new(b)).unwrap_or(arc_genesis.clone())));
+                broadcast_mining_service.send(BroadcastDifficultyUpdate(latest_block.map(|b| Arc::new(b)).unwrap_or(arc_genesis.clone()))).await.unwrap();
 
                 let part_actors_clone = part_actors.clone();
 
