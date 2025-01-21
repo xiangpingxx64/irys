@@ -16,13 +16,13 @@ use crate::{
 use actix::prelude::*;
 use base58::ToBase58;
 use eyre::ensure;
-use irys_database::{block_header_by_hash, tx_header_by_txid, Ledger};
+use irys_database::{block_header_by_hash, tx_header_by_txid, BlockIndex, Initialized, Ledger};
 use irys_types::{
     Address, BlockHash, DatabaseProvider, IrysBlockHeader, IrysTransactionHeader,
     IrysTransactionId, H256, U256,
 };
 use reth_db::{transaction::DbTx, Database};
-use tracing::error;
+use tracing::{debug, error};
 
 //==============================================================================
 // BlockTreeReadGuard
@@ -92,13 +92,15 @@ impl BlockTreeService {
     /// Initializes a BlockTreeActor without a block_producer address
     pub fn new(
         db: DatabaseProvider,
-        genesis_block: &IrysBlockHeader,
+        block_index: Arc<RwLock<BlockIndex<Initialized>>>,
         miner_address: &Address,
     ) -> Self {
+        let cache = BlockTreeCache::initialize_from_list(block_index, db.clone());
+
         Self {
             db: Some(db),
             block_producer: None,
-            cache: Some(Arc::new(RwLock::new(BlockTreeCache::new(genesis_block)))),
+            cache: Some(Arc::new(RwLock::new(cache))),
             miner_address: *miner_address,
         }
     }
@@ -193,12 +195,6 @@ impl Handler<BlockPreValidatedMessage> for BlockTreeService {
         let binding = self.cache.clone().unwrap();
         let mut cache = binding.write().unwrap();
 
-        println!(
-            "adding block: {} height: {}",
-            block.block_hash.0.to_base58(),
-            block.height
-        );
-
         // Handle block addition differently based on origin
         let add_result = if block.miner_address == self.miner_address {
             // For locally mined blocks: Add as `BlockState::Unknown `to allow chain
@@ -222,22 +218,10 @@ impl Handler<BlockPreValidatedMessage> for BlockTreeService {
             {
                 error!("Unable to mark block as ValidationScheduled");
             }
-            println!(
+            debug!(
                 "scheduling block for validation: {}",
                 block_hash.0.to_base58()
             );
-
-            // Mark the previous block for storage finalization
-            // TODO: Replace with confirmation-based finalization using storage_config.num_confirmations_for_finality
-            // We check block_height greater than one because block.height -> 0 is finalized by default
-            if block.height > 1 {
-                if self
-                    .send_storage_finalized_message(finalized_block_hash)
-                    .is_err()
-                {
-                    error!("Unable to send block finalized message");
-                }
-            }
         }
     }
 }
@@ -251,9 +235,10 @@ impl Handler<ValidationResultMessage> for BlockTreeService {
         match validation_result {
             ValidationResult::Valid => {
                 let binding = self.cache.clone().unwrap();
-                let mut cache = binding.write().unwrap();
+                let mut cache: std::sync::RwLockWriteGuard<'_, BlockTreeCache> =
+                    binding.write().unwrap();
 
-                println!("validated: {}", block_hash.0.to_base58());
+                debug!("validated: {}", block_hash.0.to_base58());
                 if cache.mark_block_as_valid(&block_hash).is_err() {
                     error!(
                         "Unable to mark block as Validated: {}",
@@ -270,13 +255,28 @@ impl Handler<ValidationResultMessage> for BlockTreeService {
                         error!("Unable to mark block as tip: {}", block_hash.0.to_base58());
                     } else {
                         // If we have a new tip, let the node know about it
-                        let block_confirm_message = BlockConfirmedMessage(arc_block, arc_all_tx);
+                        let block_confirm_message =
+                            BlockConfirmedMessage(arc_block.clone(), arc_all_tx);
                         let mempool = MempoolService::from_registry();
 
                         if let Some(block_producer) = &self.block_producer {
                             block_producer.do_send(block_confirm_message.clone());
                         }
                         mempool.do_send(block_confirm_message);
+                    }
+
+                    // Mark the previous block for storage finalization
+                    // TODO: Replace with confirmation-based finalization using storage_config.num_confirmations_for_finality
+                    // We check block_height greater than one because block.height -> 0 is finalized by default
+                    if arc_block.height > 1 {
+                        let finalized_block_hash = arc_block.previous_block_hash;
+
+                        if self
+                            .send_storage_finalized_message(finalized_block_hash)
+                            .is_err()
+                        {
+                            error!("Unable to send block finalized message");
+                        }
                     }
                 }
             }
@@ -429,30 +429,91 @@ impl BlockTreeCache {
         }
     }
 
-    // /// Initializes the cache from a list of validated blocks.
-    // /// The most recent block in the list is marked as the tip.
-    // /// The input blocks must be sorted in descending order, from newest to oldest.
-    // pub fn initialize_from_list(blocks: Vec<IrysBlockHeader>) -> Self {
-    //     assert!(!blocks.is_empty(), "Block list must not be empty");
+    /// Initializes the cache from a list of validated blocks.
+    /// The most recent block in the list is marked as the tip.
+    /// The input blocks must be sorted in descending order, from newest to oldest.
+    pub fn initialize_from_list(
+        block_index: Arc<RwLock<BlockIndex<Initialized>>>,
+        db: DatabaseProvider,
+    ) -> Self {
+        let block_index = block_index.read().unwrap();
+        assert!(block_index.num_blocks() > 0, "Block list must not be empty");
 
-    //     // Create a new cache using the most recent block as the starting point.
-    //     let mut cache = Self::new(&blocks[0]);
-    //     let tip_hash = blocks.last().unwrap().block_hash;
+        //block_index.print_items();
 
-    //     // TODO: look up the IrysTransctionHeaders for each block
+        let tx = db.tx().unwrap();
 
-    //     // Iterate through the remaining blocks (from the second newest to the oldest)
-    //     // and add them to the cache. Ownership of each block is transferred to
-    //     // `add_validated_block`.
-    //     for block in blocks.into_iter().skip(1) {
-    //         // We can safely unwrap here because `add_validated_block` assumes the
-    //         // block's parent exists and is already validated. This was ensured
-    //         // when the cache was initialized with the first block.
-    //         cache.add_validated_block(block).unwrap();
-    //     }
-    //     cache.mark_tip(&tip_hash).unwrap();
-    //     cache
-    // }
+        let start = block_index.num_blocks().saturating_sub(BLOCK_CACHE_DEPTH);
+        let end = block_index.num_blocks();
+
+        // Initialize cache with the start block
+        let start_block_hash = block_index.get_item(start as usize).unwrap().block_hash;
+        let start_block = block_header_by_hash(&tx, &start_block_hash)
+            .unwrap()
+            .unwrap();
+        debug!("starting cache block: {}", start_block_hash.0.to_base58());
+        let mut cache = Self::new(&start_block);
+
+        // Add remaining blocks
+        for block_height in (start + 1)..end {
+            let block_hash = block_index
+                .get_item(block_height as usize)
+                .unwrap()
+                .block_hash;
+            let block = block_header_by_hash(&tx, &block_hash).unwrap().unwrap();
+            let all_txs = Arc::new(Self::get_all_txs_for_block(&block, db.clone()).unwrap());
+
+            cache
+                .add_validated_block(block, BlockState::ValidBlock, all_txs)
+                .unwrap();
+        }
+
+        let tip_hash = block_index.get_latest_item().unwrap().block_hash;
+        cache.mark_tip(&tip_hash).unwrap();
+        cache
+    }
+
+    fn get_all_txs_for_block(
+        block: &IrysBlockHeader,
+        db: DatabaseProvider,
+    ) -> Result<Vec<IrysTransactionHeader>, eyre::Report> {
+        // Collect submit transactions
+        let submit_txs = block.ledgers[Ledger::Submit]
+            .txids
+            .iter()
+            .map(|txid| {
+                db.view_eyre(|tx| tx_header_by_txid(tx, txid))
+                    .and_then(|opt| {
+                        opt.ok_or_else(|| eyre::eyre!("No tx header found for txid {:?}", txid))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                error!("Failed to collect submit tx headers: {}", e);
+                e
+            })?;
+
+        // Collect publish transactions
+        let publish_txs = block.ledgers[Ledger::Publish]
+            .txids
+            .iter()
+            .map(|txid| {
+                db.view_eyre(|tx| tx_header_by_txid(tx, txid))
+                    .and_then(|opt| {
+                        opt.ok_or_else(|| eyre::eyre!("No tx header found for txid {:?}", txid))
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                error!("Failed to collect publish tx headers: {}", e);
+                e
+            })?;
+
+        // Combine transactions
+        let mut all_txs = submit_txs;
+        all_txs.extend(publish_txs);
+        Ok(all_txs)
+    }
 
     fn add_common(
         &mut self,
@@ -505,6 +566,13 @@ impl BlockTreeCache {
         all_tx: Arc<Vec<IrysTransactionHeader>>,
     ) -> eyre::Result<()> {
         let hash = block.block_hash;
+
+        debug!(
+            "adding block: {} height: {}",
+            block.block_hash.0.to_base58(),
+            block.height
+        );
+
         if matches!(
             self.blocks.get(&hash).map(|b| b.chain_state.clone()),
             Some(ChainState::Onchain)
@@ -537,6 +605,12 @@ impl BlockTreeCache {
     ) -> eyre::Result<()> {
         let hash = block.block_hash;
         let prev_hash = block.previous_block_hash;
+
+        debug!(
+            "adding validated block - height: {} hash: {}",
+            block.height,
+            block.block_hash.0.to_base58()
+        );
 
         // Verify parent is validated
         ensure!(
@@ -735,7 +809,7 @@ impl BlockTreeCache {
         let block_entry = self
             .blocks
             .get(block_hash)
-            .ok_or_else(|| eyre::eyre!("Block not found"))?;
+            .ok_or_else(|| eyre::eyre!("Block not found in cache"))?;
 
         let block = block_entry.block.clone();
         let old_tip = self.tip;
@@ -751,7 +825,7 @@ impl BlockTreeCache {
         self.tip = *block_hash;
         self.update_longest_chain_cache();
 
-        println!("new tip: {}", block_hash.0.to_base58());
+        debug!("new tip: {}", block_hash.0.to_base58());
 
         Ok(old_tip != *block_hash)
     }
