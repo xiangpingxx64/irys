@@ -156,10 +156,10 @@ pub async fn start_irys_node(
     let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
         let mut idx = BlockIndex::default();
         if !CONFIG.persist_data_on_restart {
-            debug!("Reseting block index");
+            debug!("Resetting block index");
             idx = idx.reset(&arc_config.clone())?
         } else {
-            debug!("Not reseting block index");
+            debug!("Not resetting block index");
         }
         let i = idx.init(arc_config.clone()).await.unwrap();
 
@@ -323,13 +323,14 @@ pub async fn start_irys_node(
                     block_index_guard.clone(),
                     partition_assignments_guard.clone(),
                     storage_config.clone(),
+                    vdf_config.clone(),
                 );
                 Registry::set(validation_service.start());
 
                 let (_new_seed_tx, _new_seed_rx) = mpsc::channel::<H256>();
 
                 let block_tree_service =
-                    BlockTreeService::new(db.clone(), &arc_genesis, &miner_address);
+                    BlockTreeService::new(db.clone(), block_index.clone(), &miner_address);
                 Registry::set(block_tree_service.start());
                 let block_tree_service = BlockTreeService::from_registry();
 

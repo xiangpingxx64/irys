@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use actix::{Actor, ArbiterService, Context, Handler, Message, Supervised};
-use irys_types::{IrysBlockHeader, StorageConfig};
+use irys_types::{IrysBlockHeader, StorageConfig, VDFStepsConfig};
+use irys_vdf::vdf_steps_are_valid;
+use tracing::error;
 
 use crate::{
     block_index_service::BlockIndexReadGuard,
@@ -18,6 +20,8 @@ pub struct ValidationService {
     pub partition_assignments_guard: Option<PartitionAssignmentsReadGuard>,
     /// Reference to global storage config for node
     pub storage_config: StorageConfig,
+    /// Network settings for VDF steps
+    pub vdf_config: VDFStepsConfig,
 }
 
 impl ValidationService {
@@ -26,11 +30,13 @@ impl ValidationService {
         block_index_guard: BlockIndexReadGuard,
         partition_assignments_guard: PartitionAssignmentsReadGuard,
         storage_config: StorageConfig,
+        vdf_config: VDFStepsConfig,
     ) -> Self {
         Self {
             block_index_guard: Some(block_index_guard),
             partition_assignments_guard: Some(partition_assignments_guard),
             storage_config: storage_config,
+            vdf_config: vdf_config,
         }
     }
 }
@@ -67,16 +73,26 @@ impl Handler<RequestValidationMessage> for ValidationService {
         let storage_config = &self.storage_config;
         let miner_address = &block.miner_address;
 
-        // Validates the PoA chunk and vdf steps
-        let validation_result = match poa_is_valid(
-            &block.poa,
-            &block_index_guard,
-            &partitions_guard,
-            storage_config,
-            miner_address,
+        // Check both validations and combine results
+        let validation_result = match (
+            vdf_steps_are_valid(&block.vdf_limiter_info, &self.vdf_config),
+            poa_is_valid(
+                &block.poa,
+                &block_index_guard,
+                &partitions_guard,
+                storage_config,
+                miner_address,
+            ),
         ) {
-            Ok(_) => ValidationResult::Valid,
-            Err(_) => ValidationResult::Invalid,
+            (Ok(_), Ok(_)) => ValidationResult::Valid,
+            (Err(e), _) => {
+                error!("VDF validation failed: {}", e);
+                ValidationResult::Invalid
+            }
+            (_, Err(e)) => {
+                error!("PoA validation failed: {}", e);
+                ValidationResult::Invalid
+            }
         };
 
         let block_tree_service = BlockTreeService::from_registry();
