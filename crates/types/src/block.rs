@@ -117,7 +117,7 @@ pub struct IrysBlockHeader {
 
 impl IrysBlockHeader {
     pub fn new() -> Self {
-        let txids = H256List::new();
+        let tx_ids = H256List::new();
         let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
         // Create a sample IrysBlockHeader object with mock data
@@ -149,7 +149,7 @@ impl IrysBlockHeader {
                 // Permanent Publish Ledger
                 TransactionLedger {
                     tx_root: H256::zero(),
-                    txids,
+                    tx_ids,
                     max_chunk_offset: 0,
                     expires: None,
                     proofs: None,
@@ -157,7 +157,7 @@ impl IrysBlockHeader {
                 // Term Submit Ledger
                 TransactionLedger {
                     tx_root: H256::zero(),
-                    txids: H256List::new(),
+                    tx_ids: H256List::new(),
                     max_chunk_offset: 0,
                     expires: Some(1622543200),
                     proofs: None,
@@ -310,7 +310,7 @@ pub type TxRoot = H256;
 pub struct TransactionLedger {
     pub tx_root: H256,
     /// List of transaction ids included in the block
-    pub txids: H256List,
+    pub tx_ids: H256List,
     #[serde(default, with = "u64_stringify")]
     pub max_chunk_offset: u64,
     /// This ledger expires after how many epochs
@@ -371,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_irys_block_header_serialization() {
-        let txids = H256List::new();
+        let tx_ids = H256List::new();
 
         // Create a sample IrysBlockHeader object with mock data
         let mut header = IrysBlockHeader {
@@ -400,7 +400,7 @@ mod tests {
             timestamp: 1622543200,
             ledgers: vec![TransactionLedger {
                 tx_root: H256::zero(),
-                txids,
+                tx_ids,
                 proofs: None,
                 max_chunk_offset: 100,
                 expires: Some(1622543200),
@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn test_irys_block_header_signing() {
-        let txids = H256List::new();
+        let tx_ids = H256List::new();
 
         // Create a sample IrysBlockHeader object with mock data
         let mut header = IrysBlockHeader {
@@ -486,7 +486,7 @@ mod tests {
             timestamp: 1622543200,
             ledgers: vec![TransactionLedger {
                 tx_root: H256::zero(),
-                txids,
+                tx_ids,
                 max_chunk_offset: 100,
                 expires: Some(1622543200),
                 proofs: None,

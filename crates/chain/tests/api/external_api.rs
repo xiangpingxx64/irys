@@ -265,7 +265,7 @@ async fn external_api() -> eyre::Result<()> {
             // Permanent Publish Ledger
             TransactionLedger {
                 tx_root: H256::zero(),
-                txids: H256List(Vec::new()),
+                tx_ids: H256List(Vec::new()),
                 max_chunk_offset: 0,
                 expires: None,
                 proofs: None,
@@ -273,7 +273,7 @@ async fn external_api() -> eyre::Result<()> {
             // Term Submit Ledger
             TransactionLedger {
                 tx_root: TransactionLedger::merklize_tx_root(&tx_headers).0,
-                txids: H256List(data_tx_ids.clone()),
+                tx_ids: H256List(data_tx_ids.clone()),
                 max_chunk_offset: 0,
                 expires: Some(1622543200),
                 proofs: None,

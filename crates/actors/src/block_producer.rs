@@ -352,7 +352,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     // Permanent Publish Ledger
                     TransactionLedger {
                         tx_root: TransactionLedger::merklize_tx_root(&publish_txs).0,
-                        txids: H256List(publish_txids.clone()),
+                        tx_ids: H256List(publish_txids.clone()),
                         max_chunk_offset: publish_max_chunk_offset,
                         expires: None,
                         proofs: opt_proofs,
@@ -360,7 +360,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     // Term Submit Ledger
                     TransactionLedger {
                         tx_root: TransactionLedger::merklize_tx_root(&submit_txs).0,
-                        txids: H256List(submit_txids.clone()),
+                        tx_ids: H256List(submit_txids.clone()),
                         max_chunk_offset: submit_max_chunk_offset,
                         expires: Some(1622543200),
                         proofs: None,

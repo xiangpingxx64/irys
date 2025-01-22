@@ -104,7 +104,7 @@ impl Handler<BlockDiscoveredMessage> for BlockDiscoveryActor {
         // TODO: in the future we'll retrieve the missing transactions from the block
         // producer and validate them.
         let submit_txs = match new_block_header.ledgers[Ledger::Submit]
-            .txids
+            .tx_ids
             .iter()
             .map(|txid| {
                 self.db
@@ -131,7 +131,7 @@ impl Handler<BlockDiscoveredMessage> for BlockDiscoveryActor {
         //    This keeps the transaction from getting re-promoted each block.
         //    (this last step performed in mempool after the block is confirmed)
         let publish_txs = match new_block_header.ledgers[Ledger::Publish]
-            .txids
+            .tx_ids
             .iter()
             .map(|txid| {
                 self.db

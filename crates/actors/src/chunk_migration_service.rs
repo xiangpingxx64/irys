@@ -85,7 +85,7 @@ impl Handler<BlockFinalizedMessage> for ChunkMigrationService {
         let db = Arc::new(self.db.clone().unwrap());
 
         // Extract transactions for each ledger
-        let submit_tx_count = block.ledgers[Ledger::Submit].txids.len();
+        let submit_tx_count = block.ledgers[Ledger::Submit].tx_ids.len();
         let submit_txs = all_txs[..submit_tx_count].to_vec();
         let publish_txs = all_txs[submit_tx_count..].to_vec();
 
