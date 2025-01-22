@@ -301,11 +301,11 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
             let block_hash = hash_sha256(&current_timestamp.to_le_bytes());
 
             // Use the partition hash to figure out what ledger it belongs to
-            let ledger_num = epoch_service_addr
+            let ledger_id = epoch_service_addr
                 .send(GetPartitionAssignmentMessage(solution.partition_hash))
                 .await
                 .unwrap()
-                .and_then(|pa| pa.ledger_num);
+                .and_then(|pa| pa.ledger_id);
 
 
             let poa = PoaData {
@@ -313,7 +313,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 data_path: solution.data_path.map(Base64),
                 chunk: Base64(solution.chunk),
                 recall_chunk_index: solution.recall_chunk_index,
-                ledger_num,
+                ledger_id,
                 partition_chunk_offset: solution.chunk_offset,
                 partition_hash: solution.partition_hash,
             };
@@ -351,6 +351,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 ledgers: vec![
                     // Permanent Publish Ledger
                     TransactionLedger {
+                        ledger_id: Ledger::Publish.into(),
                         tx_root: TransactionLedger::merklize_tx_root(&publish_txs).0,
                         tx_ids: H256List(publish_txids.clone()),
                         max_chunk_offset: publish_max_chunk_offset,
@@ -359,6 +360,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     },
                     // Term Submit Ledger
                     TransactionLedger {
+                        ledger_id: Ledger::Submit.into(),
                         tx_root: TransactionLedger::merklize_tx_root(&submit_txs).0,
                         tx_ids: H256List(submit_txids.clone()),
                         max_chunk_offset: submit_max_chunk_offset,
