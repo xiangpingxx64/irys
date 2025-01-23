@@ -34,6 +34,43 @@ use std::{
 };
 use tracing::{debug, info};
 
+// Layers of abstraction
+//
+// +------------------+
+// |       Node       |
+// |  +------------+  |  +--------------------------+
+// |  | Partition1 |<----| Storage Module A         |<--+ Submodule i
+// |  +------------+  |  +--------------------------+
+// |                  |
+// |  +------------+  |  +--------------------------+
+// |  | Partition2 |<----| Storage Module B         |<--+ Submodule i
+// |  +------------+  |  |                          |<--+ Submodule ii
+// |                  |  +--------------------------+
+// |                  |
+// |  +------------+  |  +--------------------------+
+// |  | unpledged  |<----| Storage Module C         |<--+ Submodule i
+// |  +------------+  |  |                          |<--+ Submodule ii
+// |                  |  |                          |<--+ Submodule iii
+// |                  |  +--------------------------+
+// +------------------+
+//
+// Node Level:
+// - Node operates only on partitions, identified by partition_hash
+// - Each partition contains CONFIG.num_chunks_in_partition chunks
+// - Partition hashes map to Ledger slots, or capacity partitions lis in the epoch_service
+//
+// Storage Module Level:
+// - Manages reading/writing of chunks (0..CONFIG.num_chunks_in_partition) for a partition
+// - Can operate across multiple physical drives via submodules
+// - Typical deployment: Single 16TB HDD submodule per partition
+// - Alternative setup: Multiple smaller drives (e.g. 4x 4TB) as submodules
+//
+// Submodule Level:
+// - Owned and managed exclusively by Storage Modules
+// - Invisible to rest of application
+// - Storage Module handles chunk offset mapping to appropriate submodule
+//
+
 type SubmodulePath = PathBuf;
 
 // In-memory chunk data indexed by offset within partition
