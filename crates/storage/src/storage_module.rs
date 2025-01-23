@@ -338,8 +338,7 @@ impl StorageModule {
                 {
                     let ie = ii(chunk_offset, chunk_offset);
                     let mut intervals = self.intervals.write().unwrap();
-                    let _ = intervals.cut(ie);
-                    let _ = intervals.insert_merge_touching_if_values_equal(ie, chunk_type);
+                    let _ = intervals.insert_overwrite(ie, chunk_type);
                 }
             }
 
