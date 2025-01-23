@@ -338,7 +338,8 @@ impl StorageModule {
                 {
                     let ie = ii(chunk_offset, chunk_offset);
                     let mut intervals = self.intervals.write().unwrap();
-                    let _ = intervals.insert_overwrite(ie, chunk_type);
+                    let _ = intervals.cut(ie);
+                    let _ = intervals.insert_merge_touching_if_values_equal(ie, chunk_type);
                 }
             }
 
@@ -368,16 +369,20 @@ impl StorageModule {
         // Query overlapping intervals from storage map
         let intervals = self.intervals.read().unwrap();
         let iter = intervals.overlapping(chunk_range);
+        // Clip overlapped intervals to requested range and read chunks
         for (interval, chunk_type) in iter {
-            if *chunk_type != ChunkType::Uninitialized {
-                // For each chunk in the interval
-                for chunk_offset in interval.start()..=interval.end() {
-                    // Read the chunk from disk
-                    let bytes = self.read_chunk_internal(chunk_offset)?;
+            if *chunk_type == ChunkType::Uninitialized {
+                continue;
+            }
 
-                    // Add it to the ChunkMap
-                    chunk_map.insert(chunk_offset, (bytes, chunk_type.clone()));
-                }
+            // Get intersection with requested range
+            let start = chunk_range.start().max(interval.start());
+            let end = chunk_range.end().min(interval.end());
+
+            // Read chunks in clipped range
+            for chunk_offset in start..=end {
+                let bytes = self.read_chunk_internal(chunk_offset)?;
+                chunk_map.insert(chunk_offset, (bytes, chunk_type.clone()));
             }
         }
         Ok(chunk_map)
