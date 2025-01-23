@@ -147,12 +147,11 @@ impl PackingActor {
                             );
 
                             debug!(target: "irys::packing", "Packing chunk offset {} for SM {} partition_hash {} mining_address {} iterations {}", &i, &storage_module.id, &partition_hash, &mining_address, &entropy_packing_iterations);
-                            // computation is done, release semaphore
-                            drop(permit);
                             // write the chunk
                             //debug!(target: "irys::packing", "Writing chunk range {} to SM {}", &i, &storage_module.id);
                             storage_module.write_chunk(i, out, ChunkType::Entropy);
                             let _ = storage_module.sync_pending_chunks();
+                            drop(permit); // drop after chunk write so the SM can apply backpressure to packing
                         });
                     }
                 }
@@ -191,9 +190,9 @@ impl PackingActor {
                                     .to_vec(),
                                 ChunkType::Entropy,
                             );
+                            let _ = storage_module.sync_pending_chunks();
                         }
                     }
-                    let _ = storage_module.sync_pending_chunks();
                 }
                 _ => unimplemented!(),
             }
