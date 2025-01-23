@@ -25,7 +25,7 @@ use openssl::sha;
 use reth::revm::primitives::B256;
 use reth_db::cursor::*;
 use reth_db::Database;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor},
@@ -452,7 +452,12 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 .unwrap();
 
             let block = Arc::new(irys_block);
-            block_discovery_addr.send(BlockDiscoveredMessage(block.clone())).await.unwrap().unwrap();
+            match block_discovery_addr.send(BlockDiscoveredMessage(block.clone())).await {
+                Ok(res) => if res.is_err() {
+                    panic!("Newly produced block failed pre-validation. ")
+                },
+                Err(e) => panic!("Could not deliver BlockDiscoveredMessage: {}", e),
+            }
 
             if is_difficulty_updated {
                 mining_broadcaster_addr.do_send(BroadcastDifficultyUpdate(block.clone()));
