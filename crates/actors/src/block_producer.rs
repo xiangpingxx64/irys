@@ -159,7 +159,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
 
             let block_item = match db.view_eyre(|tx| block_header_by_hash(tx, latest_block_hash)) {
                 Ok(Some(header)) => Ok(header),
-                Ok(None) =>
+                    Ok(None) =>
                     Err(eyre!("No block header found for hash {}", latest_block_hash)),
                 Err(e) =>  Err(eyre!("Failed to get previous block header: {}", e))
             }?;
@@ -172,7 +172,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                 Ok(None) =>
                     Err(eyre!("No block header found for block {} ({}) ", prev_block_hash.0.to_base58(), prev_block_height)),
                 Err(e) =>
-                   Err(eyre!("Failed to get previous block {} ({}) header: {}", prev_block_hash.0.to_base58(), prev_block_height,  e)) 
+                    Err(eyre!("Failed to get previous block {} ({}) header: {}", prev_block_hash.0.to_base58(), prev_block_height,  e)) 
             }?;
 
             if solution.vdf_step <= prev_block_header.vdf_limiter_info.global_step_number {
