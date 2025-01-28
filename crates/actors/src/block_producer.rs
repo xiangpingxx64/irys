@@ -402,7 +402,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
 
             let exec_payload = context
                 .engine_api
-                .build_payload_v1_irys(B256::ZERO, payload_attrs)
+                .build_payload_v1_irys(prev_block_header.evm_block_hash, payload_attrs)
                 .await
                 .unwrap();
 
