@@ -427,7 +427,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
             // make the built evm payload canonical
             context
                 .engine_api
-                .update_forkchoice(v1_payload.parent_hash, v1_payload.block_hash)
+                .update_forkchoice_full(v1_payload.parent_hash, v1_payload.block_hash, None)
                 .await
                 .unwrap();
 
