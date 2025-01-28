@@ -35,7 +35,7 @@ pub struct ApiState {
 
 pub fn routes() -> impl HttpServiceFactory {
     web::scope("v1")
-        .route("/", web::to(proxy))
+        .route("/execution-rpc", web::to(proxy))
         .route("/info", web::get().to(index::info_route))
         .route(
             "/network/config",
