@@ -1,4 +1,3 @@
-use irys_actors::vdf_service::VdfState;
 use ::irys_database::{tables::IrysTables, BlockIndex, Initialized};
 use actix::{Actor, ArbiterService, System, SystemRegistry};
 use actix::{Arbiter, SystemService};
@@ -45,6 +44,7 @@ use reth::{
 };
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c};
 use reth_db::{Database as _, HasName, HasTableType};
+use std::sync::atomic::AtomicU64;
 use std::{
     sync::{mpsc, Arc, OnceLock, RwLock},
     time::{SystemTime, UNIX_EPOCH},
@@ -354,9 +354,11 @@ pub async fn start_irys_node(
                     .await
                     .unwrap();
 
-                let vdf_state = Arc::new(RwLock::new(VdfService::create_state(Some(block_index_guard.clone()), Some(db.clone()))));
-                let vdf_service_actor =
-                    VdfService::from_atomic_state(vdf_state.clone());
+                let vdf_state = Arc::new(RwLock::new(VdfService::create_state(
+                    Some(block_index_guard.clone()),
+                    Some(db.clone()),
+                )));
+                let vdf_service_actor = VdfService::from_atomic_state(vdf_state);
                 let vdf_service = vdf_service_actor.start();
                 SystemRegistry::set(vdf_service.clone()); // register it as a service
 
@@ -364,6 +366,7 @@ pub async fn start_irys_node(
                     vdf_service.send(GetVdfStateMessage).await.unwrap();
 
                 let (global_step_number, seed) = vdf_steps_guard.read().get_last_step_and_seed();
+                info!("Starting at global step number: {}", global_step_number);
 
                 let block_discovery_actor = BlockDiscoveryActor {
                     block_index_guard: block_index_guard.clone(),
@@ -407,15 +410,17 @@ pub async fn start_irys_node(
 
                 let mut part_actors = Vec::new();
 
+                let atomic_global_step_number = Arc::new(AtomicU64::new(global_step_number));
+
                 for sm in &storage_modules {
                     let partition_mining_actor = PartitionMiningActor::new(
                         miner_address,
                         db.clone(),
                         block_producer_addr.clone().recipient(),
-                        vdf_state.clone(),
                         sm.clone(),
                         false, // do not start mining automatically
                         vdf_steps_guard.clone(),
+                        atomic_global_step_number.clone(),
                     );
                     let part_arbiter = Arbiter::new();
                     part_actors.push(PartitionMiningActor::start_in_arbiter(
@@ -429,9 +434,13 @@ pub async fn start_irys_node(
 
                 let sm_ids = storage_modules.iter().map(|s| (*s).id).collect();
 
-                let packing_actor_addr =
-                    PackingActor::new(Handle::current(), reth_node.task_executor.clone(),sm_ids, None)
-                        .start();
+                let packing_actor_addr = PackingActor::new(
+                    Handle::current(),
+                    reth_node.task_executor.clone(),
+                    sm_ids,
+                    None,
+                )
+                .start();
                 // request packing for uninitialized ranges
                 for sm in &storage_modules {
                     let uninitialized = sm.get_intervals(ChunkType::Uninitialized);
@@ -498,6 +507,7 @@ pub async fn start_irys_node(
                         shutdown_rx,
                         broadcast_mining_service.clone(),
                         vdf_service.clone(),
+                        atomic_global_step_number.clone(),
                     )
                 });
 
