@@ -30,7 +30,13 @@ use reth_db::Database;
 use tracing::{debug, error, info};
 
 use crate::{
-    block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor}, block_tree_service::BlockTreeReadGuard, broadcast_mining_service::{BroadcastDifficultyUpdate, BroadcastMiningService}, epoch_service::{EpochServiceActor, GetPartitionAssignmentMessage}, mempool_service::{GetBestMempoolTxs, MempoolService}, reth_service::{BlockHashType, ForkChoiceUpdateMessage, RethServiceActor}, vdf_service::VdfStepsReadGuard
+    block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor},
+    block_tree_service::BlockTreeReadGuard,
+    broadcast_mining_service::{BroadcastDifficultyUpdate, BroadcastMiningService},
+    epoch_service::{EpochServiceActor, GetPartitionAssignmentMessage},
+    mempool_service::{GetBestMempoolTxs, MempoolService},
+    reth_service::{BlockHashType, ForkChoiceUpdateMessage, RethServiceActor},
+    vdf_service::VdfStepsReadGuard,
 };
 
 /// Used to mock up a `BlockProducerActor`
@@ -411,10 +417,9 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
             RethServiceActor::from_registry().send(ForkChoiceUpdateMessage{
                 head_hash: BlockHashType::Evm(prev_block_header.evm_block_hash),
                 confirmed_hash: None,
-                finalized_hash: None, 
+                finalized_hash: None,
             }).await??;
 
-    
             let exec_payload = context
                 .engine_api
                 .build_payload_v1_irys(prev_block_header.evm_block_hash, payload_attrs)
@@ -450,11 +455,10 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
             }?;
 
             // we set the canon head here, as we produced this block, and this lets us build off of it
-   
             RethServiceActor::from_registry().send(ForkChoiceUpdateMessage{
                 head_hash: BlockHashType::Evm(block_hash),
                 confirmed_hash: None,
-                finalized_hash: None, 
+                finalized_hash: None,
             }).await??;
 
             // context
