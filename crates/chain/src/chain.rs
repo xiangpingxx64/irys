@@ -1,6 +1,7 @@
 use ::irys_database::{tables::IrysTables, BlockIndex, Initialized};
-use actix::{Actor, ArbiterService, System, SystemRegistry};
+use actix::{Actor, System, SystemRegistry};
 use actix::{Arbiter, SystemService};
+use irys_actors::reth_service::{BlockHashType, ForkChoiceUpdateMessage, RethServiceActor};
 use irys_actors::{
     block_discovery::BlockDiscoveryActor,
     block_index_service::{BlockIndexReadGuard, BlockIndexService, GetBlockIndexGuardMessage},
@@ -141,7 +142,7 @@ pub async fn start_irys_node(
     let (reth_handle_sender, reth_handle_receiver) =
         oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
-    let mut irys_genesis = node_config.chainspec_builder.genesis();
+    let (reth_chainspec, mut irys_genesis) = node_config.chainspec_builder.build();
     let arc_config = Arc::new(node_config);
     let mut difficulty_adjustment_config = CONFIG.clone().into();
 
@@ -181,13 +182,6 @@ pub async fn start_irys_node(
         i
     }));
 
-    let reth_chainspec = arc_config
-        .clone()
-        .chainspec_builder
-        .reth_builder
-        .clone()
-        .build();
-
     let cloned_arc = arc_config.clone();
 
     // Spawn thread and runtime for actors
@@ -208,11 +202,14 @@ pub async fn start_irys_node(
                 let db = DatabaseProvider(reth_node.provider.database.db.clone());
                 let vdf_config = VDFStepsConfig::default();
 
-                let latest_block = latest_block_index.map(|b| {
-                    database::block_header_by_hash(&db.tx().unwrap(), &b.block_hash)
-                        .unwrap()
-                        .unwrap()
-                });
+                let latest_block = latest_block_index
+                    .map(|b| {
+                        database::block_header_by_hash(&db.tx().unwrap(), &b.block_hash)
+                            .unwrap()
+                            .unwrap()
+                    })
+                    .map(Arc::new)
+                    .unwrap_or(arc_genesis.clone());
 
                 // Initialize the epoch_service actor to handle partition ledger assignments
                 let config = EpochServiceConfig {
@@ -223,11 +220,33 @@ pub async fn start_irys_node(
                 let miner_address = node_config.mining_signer.address();
                 debug!("Miner address {:?}", miner_address);
 
+                let reth_service = RethServiceActor {
+                    handle: Some(reth_node.clone()),
+                    db: Some(db.clone()),
+                };
+                let reth_arbiter = Arbiter::new();
+                SystemRegistry::set(RethServiceActor::start_in_arbiter(
+                    &reth_arbiter.handle(),
+                    |_| reth_service,
+                ));
+
+                // check we can access the EVM block specified by the latest block
+                RethServiceActor::from_registry()
+                    .send(ForkChoiceUpdateMessage {
+                        head_hash: BlockHashType::Evm(latest_block.evm_block_hash),
+                        confirmed_hash: None,
+                        finalized_hash: None,
+                    })
+                    .await
+                    .unwrap()
+                    .unwrap();
+
                 // Initialize the block_index actor and tell it about the genesis block
                 let block_index_actor =
                     BlockIndexService::new(block_index.clone(), storage_config.clone());
                 SystemRegistry::set(block_index_actor.start());
                 let block_index_actor_addr = BlockIndexService::from_registry();
+
                 if at_genesis {
                     let msg = BlockFinalizedMessage {
                         block_header: arc_genesis.clone(),
@@ -358,6 +377,7 @@ pub async fn start_irys_node(
                     Some(block_index_guard.clone()),
                     Some(db.clone()),
                 )));
+
                 let vdf_service_actor = VdfService::from_atomic_state(vdf_state);
                 let vdf_service = vdf_service_actor.start();
                 SystemRegistry::set(vdf_service.clone()); // register it as a service
@@ -463,12 +483,7 @@ pub async fn start_irys_node(
 
                 // Let the partition actors know about the genesis difficulty
                 broadcast_mining_service
-                    .send(BroadcastDifficultyUpdate(
-                        latest_block
-                            .clone()
-                            .map(Arc::new)
-                            .unwrap_or(arc_genesis.clone()),
-                    ))
+                    .send(BroadcastDifficultyUpdate(latest_block.clone()))
                     .await
                     .unwrap();
 
@@ -477,10 +492,7 @@ pub async fn start_irys_node(
 
                 let vdf_config2 = vdf_config.clone();
                 let seed = seed.map_or(arc_genesis.vdf_limiter_info.output, |seed| seed.0);
-                let vdf_reset_seed = latest_block.map_or_else(
-                    || arc_genesis.vdf_limiter_info.seed,
-                    |b| b.vdf_limiter_info.seed,
-                );
+                let vdf_reset_seed = latest_block.vdf_limiter_info.seed;
 
                 info!(
                     "Starting VDF thread seed {:?} reset_seed {:?} step_number: {:?}",
