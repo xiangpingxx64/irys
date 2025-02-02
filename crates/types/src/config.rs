@@ -60,7 +60,7 @@ pub const CONFIG: Config = load_toml!(
         vdf_reset_frequency: 10 * 120, // Reset the nonce limiter (vdf) once every 1200 steps/seconds or every ~20 min
         vdf_parallel_verification_thread_limit: 4,
         num_checkpoints_in_vdf_step: 25, // 25 checkpoints 40 ms each = 1000 ms
-        vdf_sha_1s: 530_000,
+        vdf_sha_1s: 7_000,
         entropy_packing_iterations: 22_500_000,
         irys_chain_id: 1275, // mainnet chainID (testnet is 1270)
         capacity_scalar: 100,
