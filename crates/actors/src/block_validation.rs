@@ -390,11 +390,13 @@ mod tests {
 
     use irys_config::IrysNodeConfig;
     use irys_database::{BlockIndex, Initialized};
+    use irys_testing_utils::utils::temporary_directory;
     use irys_types::{
         irys::IrysSigner, partition::PartitionAssignment, Address, Base64, H256List,
         IrysTransaction, IrysTransactionHeader, Signature, TransactionLedger, H256, U256,
     };
     use std::sync::{Arc, RwLock};
+    use tempfile::TempDir;
     use tracing::log::LevelFilter;
     use tracing::{debug, info};
 
@@ -410,7 +412,7 @@ mod tests {
         pub partition_assignment: PartitionAssignment,
     }
 
-    async fn init() -> TestContext {
+    async fn init() -> (TempDir, TestContext) {
         let _ = env_logger::builder()
             // Include all events in tests
             .filter_level(LevelFilter::max())
@@ -418,6 +420,8 @@ mod tests {
             .is_test(true)
             // Ignore errors initializing the logger if tests race to configure it
             .try_init();
+
+        let data_dir = temporary_directory(Some("block_validation_tests"), false);
 
         let mut genesis_block = IrysBlockHeader::new();
         genesis_block.height = 0;
@@ -469,7 +473,11 @@ mod tests {
 
         let partition_hash = sub_slots[0].partitions[0];
 
-        let arc_config = Arc::new(IrysNodeConfig::default());
+        let arc_config = Arc::new(IrysNodeConfig {
+            base_directory: data_dir.path().to_path_buf(),
+            ..Default::default()
+        });
+
         let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new(
             BlockIndex::default()
                 .reset(&arc_config.clone())
@@ -500,21 +508,24 @@ mod tests {
 
         debug!("Partition assignment {:?}", partition_assignment);
 
-        TestContext {
-            block_index,
-            block_index_actor,
-            partitions_guard,
-            storage_config,
-            miner_address,
-            partition_hash,
-            partition_assignment,
-        }
+        (
+            data_dir,
+            TestContext {
+                block_index,
+                block_index_actor,
+                partitions_guard,
+                storage_config,
+                miner_address,
+                partition_hash,
+                partition_assignment,
+            },
+        )
     }
 
     #[actix::test]
     async fn poa_test_3_complete_txs() {
         let chunk_size: usize = 32;
-        let context = init().await;
+        let (_tmp, context) = init().await;
         // Create a bunch of TX chunks
         let data_chunks = vec![
             vec![[0; 32], [1; 32], [2; 32]], // tx0
@@ -556,7 +567,7 @@ mod tests {
 
     #[actix::test]
     async fn poa_not_complete_last_chunk_test() {
-        let context = init().await;
+        let (_tmp, context) = init().await;
         let chunk_size: usize = 32;
 
         // Create a signed TX from the chunks
