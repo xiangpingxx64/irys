@@ -5,8 +5,8 @@ use irys_database::{
     submodule::{
         add_data_path_hash_to_offset_index, add_full_data_path, add_full_tx_path,
         add_start_offset_to_data_root_index, add_tx_path_hash_to_offset_index,
-        create_or_open_submodule_db, get_data_path_by_offset, get_start_offsets_by_data_root,
-        get_tx_path_by_offset, tables::RelativeStartOffsets,
+        clear_submodule_database, create_or_open_submodule_db, get_data_path_by_offset,
+        get_start_offsets_by_data_root, get_tx_path_by_offset, tables::RelativeStartOffsets,
     },
     Ledger,
 };
@@ -346,6 +346,31 @@ impl StorageModule {
         } else {
             None
         }
+    }
+
+    /// Reinit intervals setting them as Uninitialized, and erase db
+    pub fn reset(&self) -> eyre::Result<Interval<PartitionChunkOffset>> {
+        let storage_interval = {
+            let mut intervals = self.intervals.write().unwrap();
+            let start = intervals.first_key_value().unwrap().0.start();
+            let end = intervals.last_key_value().unwrap().0.end();
+            let storage_interval = ii(start, end);
+            *intervals = StorageIntervals::new();
+            intervals
+                .insert_strict(storage_interval, ChunkType::Uninitialized)
+                .expect("Failed to create new interval, should never happen as interval is empty!");
+            storage_interval
+        };
+        Self::write_intervals_to_submodules(&self.intervals, &self.submodules)
+            .wrap_err("Could not update submodule interval files")?;
+
+        for (_interval, submodule) in self.submodules.iter() {
+            submodule
+                .db
+                .update_eyre(|tx| clear_submodule_database(tx))?;
+        }
+
+        Ok(storage_interval)
     }
 
     /// Returns whether the given chunk offset falls within this StorageModules assigned range
@@ -1281,10 +1306,31 @@ mod tests {
         // Load up the intervals from file
         let intervals = StorageModule::load_intervals_from_submodules(&storage_module.submodules);
 
-        let file_intervals = intervals.into_iter().collect::<Vec<_>>();
-        let ints = storage_module.intervals.read().unwrap();
-        let module_intervals = ints.clone().into_iter().collect::<Vec<_>>();
-        assert_eq!(file_intervals, module_intervals);
+        {
+            let file_intervals = intervals.into_iter().collect::<Vec<_>>();
+            let ints = storage_module.intervals.read().unwrap();
+            let module_intervals = ints.clone().into_iter().collect::<Vec<_>>();
+            assert_eq!(file_intervals, module_intervals);
+        }
+        // Test intervals reset
+        let intervals = storage_module.reset().unwrap();
+
+        // The hole storage interval is returned
+        assert_eq!(intervals, partition_chunk_offset_ii!(0, 19));
+
+        // Verify the entire storage module range is uninitialized again
+        let unpacked = storage_module.get_intervals(ChunkType::Uninitialized);
+        assert_eq!(unpacked, [partition_chunk_offset_ii!(0, 19)]);
+
+        // Check intervals file is also reinitialized
+        let intervals = StorageModule::load_intervals_from_submodules(&storage_module.submodules);
+
+        {
+            let file_intervals = intervals.into_iter().collect::<Vec<_>>();
+            let ints = storage_module.intervals.read().unwrap();
+            let module_intervals = ints.clone().into_iter().collect::<Vec<_>>();
+            assert_eq!(file_intervals, module_intervals);
+        }
 
         Ok(())
     }
@@ -1342,6 +1388,14 @@ mod tests {
         let (_, ret_path) = storage_module.read_tx_data_path(LedgerChunkOffset::from(0))?;
 
         assert_eq!(ret_path, Some(data_path));
+
+        // check db is cleared
+        let _intervals = storage_module.reset().unwrap();
+
+        let (tx_path, ret_path) = storage_module.read_tx_data_path(LedgerChunkOffset::from(0))?;
+
+        assert!(tx_path.is_none());
+        assert!(ret_path.is_none());
 
         Ok(())
     }

@@ -1,7 +1,11 @@
+use std::sync::Arc;
+
 use crate::block_producer::SolutionFoundMessage;
 use crate::broadcast_mining_service::{
-    BroadcastDifficultyUpdate, BroadcastMiningSeed, BroadcastMiningService, Subscribe, Unsubscribe,
+    BroadcastDifficultyUpdate, BroadcastMiningSeed, BroadcastMiningService,
+    BroadcastPartitionsExpiration, Subscribe, Unsubscribe,
 };
+use crate::packing::PackingRequest;
 use actix::prelude::*;
 use actix::{Actor, Context, Handler, Message};
 use eyre::WrapErr;
@@ -12,11 +16,10 @@ use irys_types::block_production::Seed;
 use irys_types::{block_production::SolutionContext, H256, U256};
 use irys_types::{
     partition_chunk_offset_ie, Address, AtomicVdfStepNumber, H256List, LedgerChunkOffset,
-    PartitionChunkOffset,
+    PartitionChunkOffset, PartitionChunkRange,
 };
 use irys_vdf::vdf_state::VdfStepsReadGuard;
 use openssl::sha;
-use std::sync::Arc;
 use tracing::{debug, error, info, warn};
 
 #[derive(Debug, Clone)]
@@ -24,6 +27,7 @@ pub struct PartitionMiningActor {
     mining_address: Address,
     _database_provider: DatabaseProvider,
     block_producer_actor: Recipient<SolutionFoundMessage>,
+    packing_actor: Recipient<PackingRequest>,
     storage_module: Arc<StorageModule>,
     should_mine: bool,
     difficulty: U256,
@@ -40,6 +44,7 @@ impl PartitionMiningActor {
         mining_address: Address,
         _database_provider: DatabaseProvider,
         block_producer_addr: Recipient<SolutionFoundMessage>,
+        packing_actor: Recipient<PackingRequest>,
         storage_module: Arc<StorageModule>,
         start_mining: bool,
         steps_guard: VdfStepsReadGuard,
@@ -49,6 +54,7 @@ impl PartitionMiningActor {
             mining_address,
             _database_provider,
             block_producer_actor: block_producer_addr,
+            packing_actor,
             ranges: Ranges::new(
                 (storage_module.storage_config.num_chunks_in_partition
                     / storage_module.storage_config.num_chunks_in_recall_range)
@@ -303,6 +309,35 @@ impl Handler<BroadcastDifficultyUpdate> for PartitionMiningActor {
     }
 }
 
+impl Handler<BroadcastPartitionsExpiration> for PartitionMiningActor {
+    type Result = ();
+
+    fn handle(&mut self, msg: BroadcastPartitionsExpiration, _ctx: &mut Context<Self>) {
+        self.storage_module.partition_hash().map(|partition_hash| {
+            let msg = msg.0;
+            if msg.0.contains(&partition_hash) {
+                if let Ok(interval) = self.storage_module.reset() {
+                    debug!(?partition_hash, ?interval, "Expiring partition hash");
+                    self.packing_actor.do_send(PackingRequest {
+                        storage_module: self.storage_module.clone(),
+                        chunk_range: PartitionChunkRange(interval),
+                    });
+                } else {
+                    error!(
+                        ?partition_hash,
+                        "Expiring partition hash, could not reset its storage module!"
+                    );
+                    return Err(eyre::eyre!(
+                        "Could not reset storage module with partition hash {}",
+                        partition_hash
+                    ));
+                }
+            }
+            Ok(())
+        });
+    }
+}
+
 #[derive(Message, Debug)]
 #[rtype(result = "()")]
 /// Message type for controlling mining
@@ -339,7 +374,9 @@ mod tests {
     };
     use crate::broadcast_mining_service::{BroadcastMiningSeed, BroadcastMiningService};
     use crate::mining::{PartitionMiningActor, Seed};
+    use crate::packing::PackingActor;
     use crate::vdf_service::{GetVdfStateMessage, VdfSeed, VdfService};
+    use actix::actors::mocker::Mocker;
     use actix::{Actor, Addr, Recipient};
     use alloy_rpc_types_engine::ExecutionPayloadEnvelopeV1Irys;
     use irys_database::{open_or_create_db, tables::IrysTables};
@@ -391,6 +428,10 @@ mod tests {
         let closure_arc = arc_rwlock.clone();
 
         let mocked_block_producer = get_mocked_block_producer(closure_arc);
+
+        let packing = Mocker::<PackingActor>::mock(Box::new(move |msg, _ctx| {
+            Box::new(Some(())) as Box<dyn Any>
+        }));
 
         let block_producer_actor_addr: Addr<BlockProducerMockActor> = mocked_block_producer.start();
         let recipient: Recipient<SolutionFoundMessage> = block_producer_actor_addr.recipient();
@@ -478,6 +519,7 @@ mod tests {
             mining_address,
             database_provider.clone(),
             mocked_addr.0,
+            packing.start().recipient(),
             storage_module,
             true,
             vdf_steps_guard.clone(),
@@ -610,10 +652,15 @@ mod tests {
 
         let atomic_global_step_number = Arc::new(AtomicU64::new(1));
 
+        let packing = Mocker::<PackingActor>::mock(Box::new(move |msg, _ctx| {
+            Box::new(Some(())) as Box<dyn Any>
+        }));
+
         let mut partition_mining_actor = PartitionMiningActor::new(
             mining_address,
             database_provider.clone(),
             mocked_addr.0,
+            packing.start().recipient(),
             storage_module,
             false,
             vdf_steps_guard.clone(),
