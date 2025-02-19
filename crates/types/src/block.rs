@@ -4,6 +4,7 @@
 //! making them easy to reference and maintain.
 use std::fmt;
 
+use crate::storage_pricing::{phantoms::IrysPrice, phantoms::Usd, Amount};
 use crate::{
     generate_data_root, generate_leaves_from_data_roots, option_u64_stringify,
     partition::PartitionHash, resolve_proofs, string_u128, u64_stringify, Arbitrary, Base64,
@@ -11,13 +12,27 @@ use crate::{
     Proof, H256, U256,
 };
 use alloy_primitives::{keccak256, Address, B256};
-use irys_storage_pricing::{Amount, IrysPrice, Usd};
+use alloy_rlp::{Encodable, RlpDecodable, RlpEncodable};
+use rust_decimal_macros::dec;
 use serde::{Deserialize, Serialize};
 
 pub type BlockHash = H256;
 
 /// Stores the `vdf_limiter_info` in the [`IrysBlockHeader`]
-#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Arbitrary, Compact)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Arbitrary,
+    Compact,
+    RlpEncodable,
+    RlpDecodable,
+)]
+#[rlp(trailing)]
 #[serde(rename_all = "camelCase")]
 pub struct VDFLimiterInfo {
     /// The output of the latest step - the source of the entropy for the mining nonces.
@@ -48,12 +63,29 @@ pub struct VDFLimiterInfo {
 }
 
 /// Stores deserialized fields from a JSON formatted Irys block header.
-#[derive(Clone, Debug, Eq, Default, Serialize, Deserialize, PartialEq, Arbitrary, Compact)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    Default,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Arbitrary,
+    Compact,
+    RlpEncodable,
+    RlpDecodable,
+)]
+#[rlp(trailing)]
 #[serde(rename_all = "camelCase")]
 pub struct IrysBlockHeader {
+    #[rlp(skip)]
+    #[rlp(default)]
     /// The block identifier.
     pub block_hash: BlockHash,
 
+    #[rlp(skip)]
+    #[rlp(default)]
     /// The block signature
     pub signature: IrysSignature,
 
@@ -67,12 +99,12 @@ pub struct IrysBlockHeader {
     /// produce the past blocks including this one.
     pub cumulative_diff: U256,
 
+    /// The solution hash for the block hash(chunk_bytes + partition_chunk_offset + mining_seed)
+    pub solution_hash: H256,
+
     /// timestamp (in milliseconds) since UNIX_EPOCH of the last difficulty adjustment
     #[serde(with = "string_u128")]
     pub last_diff_timestamp: u128,
-
-    /// The solution hash for the block hash(chunk_bytes + partition_chunk_offset + mining_seed)
-    pub solution_hash: H256,
 
     /// The solution hash of the previous block in the chain.
     pub previous_solution_hash: H256,
@@ -111,31 +143,25 @@ pub struct IrysBlockHeader {
     /// Evm block hash (32 bytes)
     pub evm_block_hash: B256,
 
-    /// $IRYS token price expressed in $USD
-    pub irys_price: IrysTokenPrice,
-
     /// Metadata about the verifiable delay function, used for block verification purposes
     pub vdf_limiter_info: VDFLimiterInfo,
+
+    /// $IRYS token price expressed in $USD
+    pub irys_price: IrysTokenPrice,
 }
 
 pub type IrysTokenPrice = Amount<(IrysPrice, Usd)>;
 
 impl IrysBlockHeader {
-    /// Proxy method for `Compact::to_compact`
+    /// Proxy method for `Encodable::encode`
     ///
-    /// packs all the header data into a byte buffer.
-    ///
-    /// ## Warning
-    ///
-    /// This approach is unsafe and prone to attacks.
-    /// ideally we should use udigest crate - https://docs.rs/udigest/latest/udigest/
-    /// for reference on why https://www.dfns.co/article/unambiguous-hashing
+    /// Packs all the header data into a byte buffer, using RLP encoding.
     pub fn digest_for_signing<B>(&self, buf: &mut B)
     where
         B: bytes::BufMut + AsMut<[u8]>,
     {
-        // todo use rlp encoding, same like in IrysTransactionHeader
-        self.to_compact(buf);
+        // Using trait directly because `reth_db_api` also has an `encode` method.
+        Encodable::encode(&self, buf);
     }
 
     /// Create a `keccak256` hash of the [`IrysBlockHeader`]
@@ -143,9 +169,7 @@ impl IrysBlockHeader {
         // allocate the buffer, guesstimate the required capacity
         let mut bytes = Vec::with_capacity(size_of::<Self>() * 3);
         self.digest_for_signing(&mut bytes);
-        // we trim the `BlockHash` and `Signature` from the signing scheme
-        let bytes = &bytes[size_of::<BlockHash>() + size_of::<IrysSignature>()..];
-        keccak256(&bytes).0
+        keccak256(bytes).0
     }
 
     /// Validates the block hash signature by:
@@ -157,22 +181,48 @@ impl IrysBlockHeader {
     }
 }
 
-#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact, Arbitrary)]
+#[derive(
+    Default,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    Compact,
+    Arbitrary,
+    RlpDecodable,
+    RlpEncodable,
+)]
+#[rlp(trailing)]
 #[serde(rename_all = "camelCase")]
 /// Stores deserialized fields from a `poa` (Proof of Access) JSON
 pub struct PoaData {
-    pub tx_path: Option<Base64>,
-    pub data_path: Option<Base64>,
-    pub chunk: Base64,
     pub recall_chunk_index: u32,
-    pub ledger_id: Option<u32>,
     pub partition_chunk_offset: u32,
     pub partition_hash: PartitionHash,
+    pub chunk: Base64,
+    pub ledger_id: Option<u32>,
+    pub tx_path: Option<Base64>,
+    pub data_path: Option<Base64>,
 }
 
 pub type TxRoot = H256;
 
-#[derive(Default, Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Compact, Arbitrary)]
+#[derive(
+    Default,
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    Compact,
+    Arbitrary,
+    RlpDecodable,
+    RlpEncodable,
+)]
+#[rlp(trailing)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionLedger {
     /// Unique identifier for this ledger, maps to discriminant in `Ledger` enum
@@ -279,6 +329,8 @@ impl IrysBlockHeader {
             ],
             evm_block_hash: B256::ZERO,
             miner_address: Address::ZERO,
+            irys_price: Amount::token(dec!(1.0))
+                .expect("dec!(1.0) must evaluate to a valid token amount"),
             ..Default::default()
         }
     }
@@ -286,15 +338,84 @@ impl IrysBlockHeader {
 
 #[cfg(test)]
 mod tests {
-    use crate::{irys::IrysSigner, validate_path, CONFIG, MAX_CHUNK_SIZE};
+    use crate::{irys::IrysSigner, validate_path, TxIngressProof, CONFIG, MAX_CHUNK_SIZE};
 
     use super::*;
     use alloy_primitives::Signature;
+    use alloy_rlp::Decodable;
     use k256::ecdsa::SigningKey;
     use rand::{rngs::StdRng, Rng, SeedableRng};
     use serde_json;
-    use std::str::FromStr;
     use zerocopy::IntoBytes;
+
+    #[test]
+    fn test_poa_data_rlp_round_trip() {
+        // setup
+        let data = PoaData {
+            recall_chunk_index: 123,
+            partition_chunk_offset: 321,
+            partition_hash: H256::random(),
+            chunk: Base64(vec![42; 16]),
+            ledger_id: Some(44),
+            tx_path: None,
+            data_path: Some(Base64(vec![13; 16])),
+        };
+
+        // action
+        let mut buffer = vec![];
+        data.encode(&mut buffer);
+        let decoded = Decodable::decode(&mut buffer.as_slice()).unwrap();
+
+        // Assert
+        assert_eq!(data, decoded);
+    }
+
+    #[test]
+    fn test_vdf_limiter_info_compact_round_trip() {
+        let data = VDFLimiterInfo {
+            output: H256::random(),
+            global_step_number: 42,
+            seed: H256::random(),
+            next_seed: H256::random(),
+            prev_output: H256::random(),
+            last_step_checkpoints: H256List(vec![H256::random(), H256::random()]),
+            steps: H256List(vec![H256::random(), H256::random()]),
+            vdf_difficulty: Some(123),
+            next_vdf_difficulty: Some(321),
+        };
+
+        // action
+        let mut buffer = vec![];
+        data.encode(&mut buffer);
+        let decoded = Decodable::decode(&mut buffer.as_slice()).unwrap();
+
+        // Assert
+        assert_eq!(data, decoded);
+    }
+
+    #[test]
+    fn test_transaction_ledger_rlp_round_trip() {
+        // setup
+        let data = TransactionLedger {
+            ledger_id: 1,
+            tx_root: H256::random(),
+            tx_ids: H256List(vec![]),
+            max_chunk_offset: 55,
+            expires: None,
+            proofs: Some(IngressProofsList(vec![TxIngressProof {
+                proof: H256::random(),
+                signature: IrysSignature::new(Signature::test_signature()),
+            }])),
+        };
+
+        // action
+        let mut buffer = vec![];
+        data.encode(&mut buffer);
+        let decoded = Decodable::decode(&mut buffer.as_slice()).unwrap();
+
+        // Assert
+        assert_eq!(data, decoded);
+    }
 
     #[test]
     fn test_irys_block_header_serde_round_trip() {
@@ -310,7 +431,24 @@ mod tests {
     }
 
     #[test]
-    fn test_irys_header_compacat_round_trip() {
+    fn test_irys_block_header_rlp_round_trip() {
+        // setup
+        let mut data = mock_header();
+
+        // action
+        let mut buffer = vec![];
+        Encodable::encode(&data, &mut buffer);
+        let decoded = Decodable::decode(&mut buffer.as_slice()).unwrap();
+
+        // Assert
+        // (the following fields just get zeroed out once encoded)
+        data.block_hash = H256::zero();
+        data.signature = IrysSignature::new(Signature::try_from([0_u8; 65].as_slice()).unwrap());
+        assert_eq!(data, decoded);
+    }
+
+    #[test]
+    fn test_irys_header_compact_round_trip() {
         // setup
         let header = mock_header();
         let mut buf = vec![];
@@ -380,7 +518,6 @@ mod tests {
             |h: &mut IrysBlockHeader| h.timestamp.as_mut_bytes(),
             |h: &mut IrysBlockHeader| h.ledgers[0].ledger_id.as_mut_bytes(),
             |h: &mut IrysBlockHeader| h.ledgers[0].max_chunk_offset.as_mut_bytes(),
-            |h: &mut IrysBlockHeader| h.ledgers[0].expires.as_mut().unwrap().as_mut_bytes(),
             |h: &mut IrysBlockHeader| h.evm_block_hash.as_mut_bytes(),
             |h: &mut IrysBlockHeader| h.vdf_limiter_info.global_step_number.as_mut_bytes(),
         ];
@@ -397,42 +534,6 @@ mod tests {
     }
 
     fn mock_header() -> IrysBlockHeader {
-        let tx_ids = H256List::new();
-        IrysBlockHeader {
-            diff: U256::from(1000),
-            cumulative_diff: U256::from(5000),
-            last_diff_timestamp: 1622543200,
-            solution_hash: H256::zero(),
-            previous_solution_hash: H256::zero(),
-            last_epoch_hash: H256::random(),
-            chunk_hash: H256::zero(),
-            height: 42,
-            block_hash: H256::zero(),
-            previous_block_hash: H256::zero(),
-            previous_cumulative_diff: U256::from(4000),
-            poa: PoaData {
-                tx_path: None,
-                data_path: None,
-                chunk: Base64::from_str("").unwrap(),
-                partition_hash: H256::zero(),
-                partition_chunk_offset: 0,
-                recall_chunk_index: 0,
-                ledger_id: None,
-            },
-            reward_address: Address::ZERO,
-            signature: Signature::test_signature().into(),
-            timestamp: 1622543200,
-            ledgers: vec![TransactionLedger {
-                ledger_id: 0, // Publish ledger_id
-                tx_root: H256::zero(),
-                tx_ids,
-                proofs: None,
-                max_chunk_offset: 100,
-                expires: Some(1622543200),
-            }],
-            evm_block_hash: B256::ZERO,
-            miner_address: Address::ZERO,
-            ..Default::default()
-        }
+        IrysBlockHeader::new_mock_header()
     }
 }
