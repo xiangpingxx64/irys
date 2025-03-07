@@ -5,10 +5,9 @@ use serde::{Deserialize, Serialize};
 use crate::{
     irys::IrysSigner,
     storage_pricing::{
-        phantoms::{Percentage, Usd},
+        phantoms::{IrysPrice, Percentage, Usd},
         Amount,
     },
-    IrysTokenPrice,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,7 +59,7 @@ pub struct Config {
     pub genesis_price_valid_for_n_epochs: u8,
     /// defines the genesis price of the $IRYS, expressed in $USD
     #[serde(deserialize_with = "serde_utils::token_amount")]
-    pub genesis_token_price: Amount<(IrysTokenPrice, Usd)>,
+    pub genesis_token_price: Amount<(IrysPrice, Usd)>,
     /// defines the range of how much can the token fluctuate since the last EMA price for it to be accepted
     #[serde(deserialize_with = "serde_utils::percentage_amount")]
     pub token_price_safe_range: Amount<Percentage>,
@@ -70,6 +69,19 @@ pub struct Config {
     pub cpu_packing_concurrency: u16,
     /// GPU kernel batch size
     pub gpu_packing_batch_size: u32,
+    pub oracle_config: OracleConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum OracleConfig {
+    Mock {
+        #[serde(deserialize_with = "serde_utils::token_amount")]
+        initial_price: Amount<(IrysPrice, Usd)>,
+        #[serde(deserialize_with = "serde_utils::percentage_amount")]
+        percent_change: Amount<Percentage>,
+        smoothing_interval: u64,
+    },
 }
 
 impl Config {
@@ -126,6 +138,13 @@ impl Config {
             cache_clean_lag: 2,
             cpu_packing_concurrency: 4,
             gpu_packing_batch_size: 1024,
+            oracle_config: OracleConfig::Mock {
+                initial_price: Amount::token(rust_decimal_macros::dec!(1))
+                    .expect("valid token amount"),
+                percent_change: Amount::percentage(rust_decimal_macros::dec!(0.01))
+                    .expect("valid percentage"),
+                smoothing_interval: 15,
+            },
         }
     }
 }
@@ -243,6 +262,12 @@ mod tests {
             cpu_packing_concurrency = 4
             gpu_packing_batch_size = 1024   
             cache_clean_lag = 2
+
+            [oracle_config]
+            type = "mock"
+            initial_price = "1"
+            percent_change = "0.01"
+            smoothing_interval = 15
             "#;
 
         // Attempt to deserialize the TOML string into a Config
