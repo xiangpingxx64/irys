@@ -35,7 +35,9 @@ use crate::{
     block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor},
     block_tree_service::BlockTreeReadGuard,
     broadcast_mining_service::{BroadcastDifficultyUpdate, BroadcastMiningService},
-    epoch_service::{EpochServiceActor, GetPartitionAssignmentMessage},
+    epoch_service::{
+        EpochServiceActor, EpochServiceConfig, GetPartitionAssignmentMessage, NewEpochMessage,
+    },
     mempool_service::{GetBestMempoolTxs, MempoolService},
     reth_service::{BlockHashType, ForkChoiceUpdateMessage, RethServiceActor},
 };
@@ -70,6 +72,8 @@ pub struct BlockProducerActor {
     pub vdf_steps_guard: VdfStepsReadGuard,
     /// Get the head of the chain
     pub block_tree_guard: BlockTreeReadGuard,
+    /// Epoch config
+    pub epoch_config: EpochServiceConfig,
     /// The Irys price oracle
     pub price_oracle: Arc<IrysPriceOracle>,
 }
@@ -115,7 +119,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
         let difficulty_config = self.difficulty_config;
         let chunk_size = self.storage_config.chunk_size;
         let block_tree_guard = self.block_tree_guard.clone();
-
+        let blocks_in_epoch = self.epoch_config.num_blocks_in_epoch;
         let vdf_steps = self.vdf_steps_guard.clone();
         let price_oracle = self.price_oracle.clone();
 
@@ -442,6 +446,10 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
 
             if is_difficulty_updated {
                 mining_broadcaster_addr.do_send(BroadcastDifficultyUpdate(block.clone()));
+            }
+
+            if block_height > 0 && block_height % blocks_in_epoch == 0 {
+                epoch_service_addr.do_send(NewEpochMessage(block.clone()));
             }
 
             info!("Finished producing block {}, ({})", &block_hash.0.to_base58(),&block_height);
