@@ -35,11 +35,13 @@ use crate::{
     block_discovery::{BlockDiscoveredMessage, BlockDiscoveryActor},
     block_tree_service::BlockTreeReadGuard,
     broadcast_mining_service::{BroadcastDifficultyUpdate, BroadcastMiningService},
+    ema_service::EmaServiceMessage,
     epoch_service::{
         EpochServiceActor, EpochServiceConfig, GetPartitionAssignmentMessage, NewEpochMessage,
     },
     mempool_service::{GetBestMempoolTxs, MempoolService},
     reth_service::{BlockHashType, ForkChoiceUpdateMessage, RethServiceActor},
+    services::ServiceSenders,
 };
 
 /// Used to mock up a `BlockProducerActor`
@@ -60,6 +62,8 @@ pub struct BlockProducerActor {
     pub block_discovery_addr: Addr<BlockDiscoveryActor>,
     /// Tracks the global state of partition assignments on the protocol
     pub epoch_service: Addr<EpochServiceActor>,
+    /// Tracks the global state of partition assignments on the protocol
+    pub service_senders: ServiceSenders,
     /// Reference to the VM node
     pub reth_provider: RethNodeProvider,
     /// Storage config
@@ -122,6 +126,7 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
         let blocks_in_epoch = self.epoch_config.num_blocks_in_epoch;
         let vdf_steps = self.vdf_steps_guard.clone();
         let price_oracle = self.price_oracle.clone();
+        let ema_service = self.service_senders.ema.clone();
 
         AtomicResponse::new(Box::pin( async move {
             // Get the current head of the longest chain, from the block_tree, to build off of
@@ -293,9 +298,13 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
             steps.push(solution.seed.0);
 
             // fetch the irys price from the oracle
-            let irys_price = price_oracle.current_price().await?;
+            let oracle_irys_price = price_oracle.current_price().await?;
+            // fetch the ema price to use
+            let (tx, rx) = tokio::sync::oneshot::channel();
+            ema_service.send(EmaServiceMessage::GetEmaForNewBlock { response: tx, height_of_new_block: block_height, oracle_price: oracle_irys_price })?;
+            let ema_irys_price = rx.await??;
 
-            // build a new block header 
+            // build a new block header
             let mut irys_block = IrysBlockHeader {
                 block_hash,
                 height: block_height,
@@ -343,7 +352,8 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
                     steps,
                     ..Default::default()
                 },
-                irys_price
+                oracle_irys_price,
+                ema_irys_price
             };
 
             // RethNodeContext is a type-aware wrapper that lets us interact with the reth node
