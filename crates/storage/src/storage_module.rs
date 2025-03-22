@@ -449,6 +449,26 @@ impl StorageModule {
         Ok(())
     }
 
+    /// Persists partition interval data to individual submodules.
+    ///
+    /// # Overview
+    /// While the parent StorageModule maintains a global view of all partition intervals
+    /// across its submodules, each submodule records its own localized view. This function:
+    ///
+    /// 1. Takes the global intervals from the StorageModule
+    /// 2. For each submodule, extracts only the interval portions relevant to that submodule
+    /// 3. Writes the filtered intervals to an `intervals.json` file in each submodule's directory
+    ///
+    /// # Parameters
+    /// * `intervals` - Reference to the global StorageIntervals containing all chunk mappings
+    /// * `submodules` - Map of submodule intervals to their respective submodule instances
+    ///
+    /// # Returns
+    /// * `eyre::Result<()>` - Success or error during the write operation
+    ///
+    /// # Note
+    /// If a submodule has no intervals after filtering, a default `Uninitialized` interval
+    /// is created spanning the submodule's entire range to ensure consistency.
     fn write_intervals_to_submodules(
         intervals: &Arc<RwLock<StorageIntervals>>,
         submodules: &SubmoduleMap,
@@ -482,6 +502,25 @@ impl StorageModule {
         Ok(())
     }
 
+    /// Reconstructs the global StorageIntervals by loading and merging interval data from all submodules.
+    ///
+    /// # Overview
+    /// This function rebuilds a complete view of all chunk storage intervals by:
+    ///
+    /// 1. Creating an empty global intervals container
+    /// 2. Reading each submodule's `intervals.json` file
+    /// 3. Merging all submodule intervals into the global container
+    ///
+    /// # Parameters
+    /// * `submodules` - Map containing all storage submodules
+    ///
+    /// # Returns
+    /// * `StorageIntervals` - A complete, merged map of all intervals across all submodules
+    ///
+    /// # Panics
+    /// * If unable to lock a submodule's intervals file mutex
+    /// * If reading a submodule's intervals file fails
+    /// * If interval insertion into the global map fails due to overlapping intervals
     fn load_intervals_from_submodules(submodules: &SubmoduleMap) -> StorageIntervals {
         let mut global_intervals = StorageIntervals::new();
         for (_, submodule) in submodules.iter() {
