@@ -714,7 +714,30 @@ impl StorageModule {
         }
     }
 
-    /// Gets the list of partition-relative offsets in this partition that the chunk should be written to
+    /// Gets the list of partition-relative offsets where a chunk should be written (and verifying packing at those offsets)
+    ///
+    /// # Overview
+    /// This function determines the valid write locations for a chunk based on:
+    /// 1. Finding all potential starting offsets for the chunk's data root
+    /// 2. Calculating the actual offset by adding the chunk's transaction offset
+    /// 3. Validating the entropy at each offset using the Entropy Check
+    ///
+    /// # Entropy Check
+    /// The function only returns write offsets where the existing chunk data is specifically `ChunkType::Entropy`.
+    ///
+    /// This ensures unpacked data chunks are only written to packed entropy locations that:
+    /// - Have been allocated for storage
+    /// - Are in an unwritten state (containing packed chunk entropy)
+    /// - Have not been previously filled with unpacked chunk data
+    ///
+    /// # Parameters
+    /// * `chunk` - The unpacked chunk data to be written
+    ///
+    /// # Returns
+    /// * `eyre::Result<Vec<PartitionChunkOffset>>` - List of valid offsets where the chunk may be written
+    ///
+    /// # Errors
+    /// * Returns an error if the chunk's data root is not found in the storage module
     pub fn get_write_offsets(
         &self,
         chunk: &UnpackedChunk,
