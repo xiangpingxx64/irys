@@ -1,3 +1,41 @@
+//! # Storage Abstraction Layers
+//!
+//! ```text
+//! +------------------+
+//! |       Node       |
+//! |  +------------+  |  +--------------------------+
+//! |  | Partition1 |<----| Storage Module A         |<--+ Submodule i
+//! |  +------------+  |  +--------------------------+
+//! |                  |
+//! |  +------------+  |  +--------------------------+
+//! |  | Partition2 |<----| Storage Module B         |<--+ Submodule i
+//! |  +------------+  |  |                          |<--+ Submodule ii
+//! |                  |  +--------------------------+
+//! |                  |
+//! |  +------------+  |  +--------------------------+
+//! |  | unpledged  |<----| Storage Module C         |<--+ Submodule i
+//! |  +------------+  |  |                          |<--+ Submodule ii
+//! |                  |  |                          |<--+ Submodule iii
+//! |                  |  +--------------------------+
+//! +------------------+
+//! ```
+//!
+//! ## Node Level of Abstraction
+//! - Node operates only on partitions, identified by partition_hash
+//! - Each partition contains CONFIG.num_chunks_in_partition chunks
+//! - Partition hashes map to Ledger slots, or the capacity partitions list in the epoch_service
+//!
+//! ## Storage Module Level of Abstraction
+//! - Storage modules manage reading/writing of chunks for an entire partition
+//! - Storage modules can span multiple physical drives via submodules
+//! - Typical deployment: Single 16TB HDD submodule per partition (and storage module)
+//! - Alternative setup: Multiple smaller drives (e.g., 4x 4TB) as submodules to the storage module
+//!
+//! ## Submodule Level of Abstraction
+//! - Submodules are owned and managed exclusively by Storage Modules
+//! - Invisible to rest of the node
+//! - Storage Module handles mapping of partition chunk offsets to appropriate submodule
+
 use base58::ToBase58;
 use derive_more::derive::{Deref, DerefMut};
 use eyre::{eyre, Context, OptionExt, Result};
@@ -32,43 +70,6 @@ use std::{
     sync::{Arc, Mutex, RwLock},
 };
 use tracing::{debug, error, info};
-
-// Layers of abstraction
-//
-// +------------------+
-// |       Node       |
-// |  +------------+  |  +--------------------------+
-// |  | Partition1 |<----| Storage Module A         |<--+ Submodule i
-// |  +------------+  |  +--------------------------+
-// |                  |
-// |  +------------+  |  +--------------------------+
-// |  | Partition2 |<----| Storage Module B         |<--+ Submodule i
-// |  +------------+  |  |                          |<--+ Submodule ii
-// |                  |  +--------------------------+
-// |                  |
-// |  +------------+  |  +--------------------------+
-// |  | unpledged  |<----| Storage Module C         |<--+ Submodule i
-// |  +------------+  |  |                          |<--+ Submodule ii
-// |                  |  |                          |<--+ Submodule iii
-// |                  |  +--------------------------+
-// +------------------+
-//
-// Node Level:
-// - Node operates only on partitions, identified by partition_hash
-// - Each partition contains CONFIG.num_chunks_in_partition chunks
-// - Partition hashes map to Ledger slots, or capacity partitions lis in the epoch_service
-//
-// Storage Module Level:
-// - Manages reading/writing of chunks (0..CONFIG.num_chunks_in_partition) for a partition
-// - Can operate across multiple physical drives via submodules
-// - Typical deployment: Single 16TB HDD submodule per partition
-// - Alternative setup: Multiple smaller drives (e.g. 4x 4TB) as submodules
-//
-// Submodule Level:
-// - Owned and managed exclusively by Storage Modules
-// - Invisible to rest of application
-// - Storage Module handles chunk offset mapping to appropriate submodule
-//
 
 type SubmodulePath = PathBuf;
 
