@@ -25,7 +25,7 @@ use crate::utils::capacity_chunk_solution;
 /// Create a valid capacity PoA solution
 
 #[tokio::test]
-async fn serial_test_blockprod() -> eyre::Result<()> {
+async fn heavy_test_blockprod() -> eyre::Result<()> {
     std::env::set_var("RUST_LOG", "debug");
     let temp_dir = setup_tracing_and_temp_dir(Some("test_blockprod"), false);
     let testnet_config = Config::testnet();
@@ -80,7 +80,7 @@ async fn serial_test_blockprod() -> eyre::Result<()> {
     }
 
     let poa_solution = capacity_chunk_solution(
-        node.config.mining_signer.address(),
+        node.node_config.mining_signer.address(),
         node.vdf_steps_guard.clone(),
         &node.vdf_config,
         &node.storage_config,
@@ -129,7 +129,7 @@ async fn serial_test_blockprod() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn serial_mine_ten_blocks_with_capacity_poa_solution() -> eyre::Result<()> {
+async fn heavy_mine_ten_blocks_with_capacity_poa_solution() -> eyre::Result<()> {
     let temp_dir = setup_tracing_and_temp_dir(Some("test_blockprod"), false);
     let testnet_config = Config::testnet();
     let mut config = IrysNodeConfig::new(&testnet_config);
@@ -142,7 +142,7 @@ async fn serial_mine_ten_blocks_with_capacity_poa_solution() -> eyre::Result<()>
     for i in 1..10 {
         info!("manually producing block {}", i);
         let poa_solution = capacity_chunk_solution(
-            node.config.mining_signer.address(),
+            node.node_config.mining_signer.address(),
             node.vdf_steps_guard.clone(),
             &node.vdf_config,
             &node.storage_config,
@@ -178,7 +178,7 @@ async fn serial_mine_ten_blocks_with_capacity_poa_solution() -> eyre::Result<()>
 }
 
 #[tokio::test]
-async fn serial_mine_ten_blocks() -> eyre::Result<()> {
+async fn heavy_mine_ten_blocks() -> eyre::Result<()> {
     let temp_dir = setup_tracing_and_temp_dir(Some("test_blockprod"), false);
     let testnet_config = Config::testnet();
     let mut config = IrysNodeConfig::new(&testnet_config);
@@ -225,7 +225,7 @@ async fn serial_mine_ten_blocks() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn serial_test_basic_blockprod() -> eyre::Result<()> {
+async fn heavy_test_basic_blockprod() -> eyre::Result<()> {
     let temp_dir = setup_tracing_and_temp_dir(Some("test_blockprod"), false);
 
     let testnet_config = Config::testnet();
@@ -236,7 +236,7 @@ async fn serial_test_basic_blockprod() -> eyre::Result<()> {
     let node = start_irys_node(config, storage_config, testnet_config.clone()).await?;
 
     let poa_solution = capacity_chunk_solution(
-        node.config.mining_signer.address(),
+        node.node_config.mining_signer.address(),
         node.vdf_steps_guard.clone(),
         &node.vdf_config,
         &node.storage_config,
@@ -273,7 +273,7 @@ async fn serial_test_basic_blockprod() -> eyre::Result<()> {
 }
 
 #[tokio::test]
-async fn serial_test_blockprod_with_evm_txs() -> eyre::Result<()> {
+async fn heavy_test_blockprod_with_evm_txs() -> eyre::Result<()> {
     let temp_dir = setup_tracing_and_temp_dir(Some("test_blockprod"), false);
     let testnet_config = Config {
         chunk_size: 32,
@@ -385,7 +385,7 @@ async fn serial_test_blockprod_with_evm_txs() -> eyre::Result<()> {
     }
 
     let poa_solution = capacity_chunk_solution(
-        node.config.mining_signer.address(),
+        node.node_config.mining_signer.address(),
         node.vdf_steps_guard.clone(),
         &node.vdf_config,
         &node.storage_config,

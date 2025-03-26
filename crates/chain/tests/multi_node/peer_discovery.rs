@@ -19,7 +19,7 @@ use irys_types::{build_user_agent, irys::IrysSigner, PeerResponse, VersionReques
 use reth_primitives::GenesisAccount;
 
 #[actix_web::test]
-async fn serial_peer_discovery() -> eyre::Result<()> {
+async fn heavy_peer_discovery() -> eyre::Result<()> {
     let chunk_size = 32; // 32Byte chunks
 
     let mut test_config = Config::testnet();
@@ -61,6 +61,7 @@ async fn serial_peer_discovery() -> eyre::Result<()> {
 
     let app_state = ApiState {
         reth_provider: None,
+        reth_http_url: None,
         block_index: None,
         block_tree: None,
         db: node.db.clone(),

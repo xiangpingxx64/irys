@@ -30,7 +30,7 @@ use irys_actors::{
     vdf_service::{GetVdfStateMessage, VdfService},
     ActorAddresses, BlockFinalizedMessage,
 };
-use irys_api_server::{run_server, ApiState};
+use irys_api_server::{create_listener, run_server, ApiState};
 use irys_config::{IrysNodeConfig, StorageSubmodulesConfig};
 use irys_database::database;
 use irys_database::migration::check_db_version_and_run_migrations_if_needed;
@@ -63,9 +63,10 @@ use reth::{
 };
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c_or_channel_message};
 use reth_db::{Database as _, HasName, HasTableType};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener};
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
 use std::{
     fs,
     sync::{mpsc, Arc, RwLock},
@@ -83,7 +84,8 @@ pub struct IrysNodeCtx {
     pub reth_handle: RethNodeProvider,
     pub actor_addresses: ActorAddresses,
     pub db: DatabaseProvider,
-    pub config: Arc<IrysNodeConfig>,
+    pub node_config: Arc<IrysNodeConfig>,
+    pub config: Arc<Config>,
     pub chunk_provider: Arc<ChunkProvider>,
     pub block_index_guard: BlockIndexReadGuard,
     pub block_tree_guard: BlockTreeReadGuard,
@@ -124,6 +126,10 @@ impl IrysNodeCtx {
         info!("Sync complete.");
         Ok(())
     }
+
+    pub fn get_port(&self) -> u16 {
+        self.config.port
+    }
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -149,7 +155,7 @@ impl StopGuard {
 impl Drop for StopGuard {
     fn drop(&mut self) {
         // Only check if this is the last reference to the guard
-        if Arc::strong_count(&self.0) == 1 && !self.is_stopped() {
+        if Arc::strong_count(&self.0) == 1 && !self.is_stopped() && !thread::panicking() {
             panic!("IrysNodeCtx must be stopped before all instances are dropped");
         }
     }
@@ -164,7 +170,7 @@ impl Clone for StopGuard {
 pub async fn start_irys_node(
     node_config: IrysNodeConfig,
     storage_config: StorageConfig,
-    config: Config,
+    mut config: Config,
 ) -> eyre::Result<IrysNodeCtx> {
     info!("Using directory {:?}", &node_config.base_directory);
 
@@ -183,11 +189,28 @@ pub async fn start_irys_node(
         error!("GPU packing only supports chunk size {}!", CHUNK_SIZE)
     }
 
+    // we create the listener here so we know the port before we start passing around `config`
+    let listener = create_listener(SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::LOCALHOST),
+        config.port,
+    ))?;
+    // if `config.port` == 0, the assigned port will be random (decided by the OS)
+    // we re-assign the configuration with the actual port here.
+    let random_ports = if config.port == 0 {
+        config.port = listener
+            .local_addr()
+            .map_err(|e| eyre::eyre!("Error getting local address: {:?}", &e))?
+            .port();
+        true
+    } else {
+        false
+    };
+
     let (reth_handle_sender, reth_handle_receiver) =
         oneshot::channel::<FullNode<RethNode, RethNodeAddOns>>();
     let (irys_node_handle_sender, irys_node_handle_receiver) = oneshot::channel::<IrysNodeCtx>();
     let (reth_chainspec, mut irys_genesis) = node_config.chainspec_builder.build();
-    let arc_config = Arc::new(node_config);
+    let arc_node_config = Arc::new(node_config);
     let difficulty_adjustment_config = DifficultyAdjustmentConfig::new(&config);
 
     // TODO: Hard coding 3 for storage module count isn't great here,
@@ -208,7 +231,7 @@ pub async fn start_irys_node(
     let latest_block_height;
     let block_index: Arc<RwLock<BlockIndex<Initialized>>> = Arc::new(RwLock::new({
         let idx = BlockIndex::default();
-        let i = idx.init(arc_config.clone()).await.unwrap();
+        let i = idx.init(arc_node_config.clone()).await.unwrap();
 
         at_genesis = i.get_item(0).is_none();
         if at_genesis {
@@ -226,10 +249,10 @@ pub async fn start_irys_node(
         i
     }));
 
-    let cloned_arc = arc_config.clone();
+    let cloned_arc = arc_node_config.clone();
 
     // Spawn thread and runtime for actors
-    let arc_config_copy = arc_config.clone();
+    let arc_config_copy = arc_node_config.clone();
     let irys_provider = irys_storage::reth_provider::create_provider();
 
     // clone as this gets `move`d into the thread
@@ -252,7 +275,7 @@ pub async fn start_irys_node(
             let reth_node_handle = System::new().block_on(async move {
                 let mut arbiters = Vec::new();
                 let irys_db_env = open_or_create_irys_consensus_data_db(
-                    &arc_config.irys_consensus_data_dir(),
+                    &arc_node_config.irys_consensus_data_dir(),
                 ).unwrap();
                 // the RethNodeHandle doesn't *need* to be Arc, but it will reduce the copy cost
                 let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await.unwrap()));
@@ -401,7 +424,7 @@ pub async fn start_irys_node(
                 for info in storage_module_infos {
                     let arc_module = Arc::new(
                         StorageModule::new(
-                            &arc_config.storage_module_dir(),
+                            &arc_node_config.storage_module_dir(),
                             &info,
                             storage_config.clone(),
                         )
@@ -614,14 +637,21 @@ pub async fn start_irys_node(
                     "Starting VDF thread",
                 );
 
+                // we can't use `cfg!(test)` to detect integration tests, so we check that the path is of form `(...)/.tmp/<random folder>`
+                let is_test = node_config.base_directory.parent().is_some_and(|p| p.ends_with(".tmp"));
+
                 let vdf_thread_handler = std::thread::spawn(move || {
-                    // Setup core affinity
-                    let core_ids = core_affinity::get_core_ids().expect("Failed to get core IDs");
-                    for core in core_ids {
-                        let success = core_affinity::set_for_current(core);
-                        if success {
-                            info!("VDF thread pinned to core {:?}", core);
-                            break;
+
+                    if !is_test {
+                        // Setup core affinity in prod only (perf gain shouldn't matter for tests, and we don't want pinning overlap)
+                        let core_ids = core_affinity::get_core_ids().expect("Failed to get core IDs");
+
+                        for core in core_ids {
+                            let success = core_affinity::set_for_current(core);
+                            if success {
+                                info!("VDF thread pinned to core {:?}", core);
+                                break;
+                            }
                         }
                     }
 
@@ -656,12 +686,11 @@ pub async fn start_irys_node(
                 *irys_provider_1.write().unwrap() = Some(IrysRethProviderInner {
                     chunk_provider: arc_chunk_provider.clone(),
                 });
-
                 let _ = irys_node_handle_sender.send(IrysNodeCtx {
                     actor_addresses: actor_addresses.clone(),
                     reth_handle: reth_node.clone(),
                     db: irys_db.clone(),
-                    config: arc_config.clone(),
+                    node_config: arc_node_config.clone(),
                     chunk_provider: arc_chunk_provider.clone(),
                     block_index_guard: block_index_guard.clone(),
                     vdf_steps_guard: vdf_steps_guard.clone(),
@@ -671,6 +700,7 @@ pub async fn start_irys_node(
                     reth_shutdown_sender,
                     reth_thread_handle: None,
                     block_tree_guard: block_tree_guard.clone(),
+                    config: Arc::new(config.clone()),
                     _stop_guard: StopGuard::new()
                 });
 
@@ -681,8 +711,9 @@ pub async fn start_irys_node(
                     reth_provider: Some(reth_node.clone()),
                     block_tree: Some(block_tree_guard.clone()),
                     block_index: Some(block_index_guard.clone()),
-                    config
-                })
+                    reth_http_url: reth_node.rpc_server_handle().http_url(),
+                    config: config.clone()
+                }, listener)
                 .await;
 
                 let server_handle = server.handle();
@@ -749,6 +780,7 @@ pub async fn start_irys_node(
                             reth_handle_sender,
                             irys_provider.clone(),
                             latest_block_height,
+                            random_ports,
                         ),
                         reth_shutdown_receiver,
                     ),
@@ -788,6 +820,7 @@ async fn start_reth_node<T: HasName + HasTableType>(
     sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
     irys_provider: IrysRethProvider,
     latest_block: u64,
+    random_ports: bool,
 ) -> eyre::Result<NodeExitReason> {
     let node_handle = irys_reth_node_bridge::run_node(
         Arc::new(chainspec),
@@ -796,6 +829,7 @@ async fn start_reth_node<T: HasName + HasTableType>(
         tables,
         irys_provider,
         latest_block,
+        random_ports,
     )
     .await?;
     debug!("Reth node started");
@@ -861,7 +895,7 @@ impl IrysNode {
     }
 
     /// Initializes the node (genesis or non-genesis).
-    pub async fn init(&self) -> eyre::Result<IrysNodeCtx> {
+    pub async fn init(&mut self) -> eyre::Result<IrysNodeCtx> {
         info!(miner_address = ?self.config.miner_address(), "Starting Irys Node");
 
         // figure out the init mode
@@ -886,6 +920,23 @@ impl IrysNode {
             .build()?;
         let task_manager = TaskManager::new(tokio_runtime.handle().clone());
 
+        // we create the listener here so we know the port before we start passing around `config`
+        let listener = create_listener(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::LOCALHOST),
+            self.config.port,
+        ))?;
+        // if `config.port` == 0, the assigned port will be random (decided by the OS)
+        // we re-assign the configuration with the actual port here.
+        let random_ports = if self.config.port == 0 {
+            self.config.port = listener
+                .local_addr()
+                .map_err(|e| eyre::eyre!("Error getting local address: {:?}", &e))?
+                .port();
+            true
+        } else {
+            false
+        };
+
         // Common node startup logic (common for genesis and peer mode nodes)
         // There are a lot of cross dependencies between reth and irys components, the channels mediate the comms
         let (reth_shutdown_sender, reth_shutdown_receiver) = tokio::sync::mpsc::channel::<()>(1);
@@ -909,6 +960,7 @@ impl IrysNode {
             irys_node_ctx_tx,
             &irys_provider,
             task_manager.executor(),
+            listener,
         )?;
 
         // await the latest height to be reported
@@ -925,6 +977,7 @@ impl IrysNode {
             latest_height,
             task_manager,
             tokio_runtime,
+            random_ports,
         )?;
 
         let mut ctx = irys_node_ctx_rx.await?;
@@ -968,12 +1021,13 @@ impl IrysNode {
         latest_block_height_tx: oneshot::Sender<u64>,
         reth_shutdown_sender: tokio::sync::mpsc::Sender<()>,
         mut main_actor_thread_shutdown_rx: tokio::sync::mpsc::Receiver<()>,
-        vdf_sthutodwn_sender: mpsc::Sender<()>,
-        vdf_sthutodwn_receiver: mpsc::Receiver<()>,
+        vdf_shutdown_sender: mpsc::Sender<()>,
+        vdf_shutdown_receiver: mpsc::Receiver<()>,
         reth_handle_receiver: oneshot::Receiver<FullNode<RethNode, RethNodeAddOns>>,
         irys_node_ctx_tx: oneshot::Sender<IrysNodeCtx>,
         irys_provider: &Arc<RwLock<Option<IrysRethProviderInner>>>,
         task_exec: TaskExecutor,
+        http_listener: TcpListener,
     ) -> Result<JoinHandle<RethNodeProvider>, eyre::Error> {
         let actor_main_thread_handle = std::thread::Builder::new()
             .name("actor-main-thread".to_string())
@@ -996,13 +1050,14 @@ impl IrysNode {
                         let (irys_node, actix_server, vdf_thread, arbiters, reth_node) = node
                             .init_services(
                                 reth_shutdown_sender,
-                                vdf_sthutodwn_receiver,
+                                vdf_shutdown_receiver,
                                 reth_handle_receiver,
                                 block_index,
                                 latest_block.clone(),
                                 irys_provider.clone(),
                                 block_index_service_actor,
                                 &task_exec,
+                                http_listener
                             )
                             .await
                             .expect("initializng services should not fail");
@@ -1033,7 +1088,7 @@ impl IrysNode {
                         debug!("Actors stopped");
 
                         // Send shutdown signal
-                        vdf_sthutodwn_sender.send(()).unwrap();
+                        vdf_shutdown_sender.send(()).unwrap();
 
                         debug!("Waiting for VDF thread to finish");
                         // Wait for vdf thread to finish & save steps
@@ -1076,6 +1131,7 @@ impl IrysNode {
         latest_block_height: u64,
         mut task_manager: TaskManager,
         tokio_runtime: Runtime,
+        random_ports: bool,
     ) -> eyre::Result<JoinHandle<()>> {
         let node_config = Arc::new(self.irys_node_config.clone());
         let reth_thread_handler = std::thread::Builder::new()
@@ -1097,6 +1153,7 @@ impl IrysNode {
                                 reth_handle_sender,
                                 irys_provider.clone(),
                                 latest_block_height,
+                                random_ports,
                             ),
                             reth_shutdown_receiver,
                         ),
@@ -1130,13 +1187,14 @@ impl IrysNode {
     async fn init_services(
         &self,
         reth_shutdown_sender: tokio::sync::mpsc::Sender<()>,
-        vdf_sthutodwn_receiver: std::sync::mpsc::Receiver<()>,
+        vdf_shutdown_receiver: std::sync::mpsc::Receiver<()>,
         reth_handle_receiver: oneshot::Receiver<FullNode<RethNode, RethNodeAddOns>>,
         block_index: Arc<RwLock<BlockIndex<Initialized>>>,
         latest_block: Arc<IrysBlockHeader>,
         irys_provider: IrysRethProvider,
         block_index_service_actor: Addr<BlockIndexService>,
         task_exec: &TaskExecutor,
+        http_listener: TcpListener,
     ) -> eyre::Result<(
         IrysNodeCtx,
         Server,
@@ -1302,7 +1360,7 @@ impl IrysNode {
 
         // set up the vdf thread
         let vdf_thread_handler = self.init_vdf_thread(
-            vdf_sthutodwn_receiver,
+            vdf_shutdown_receiver,
             latest_block,
             seed,
             global_step_number,
@@ -1313,7 +1371,6 @@ impl IrysNode {
 
         // set up chunk provider
         let chunk_provider = self.init_chunk_provider(storage_modules);
-
         // set up IrysNodeCtx
         let irys_node_ctx = IrysNodeCtx {
             actor_addresses: ActorAddresses {
@@ -1326,7 +1383,7 @@ impl IrysNode {
             },
             reth_handle: reth_node.clone(),
             db: irys_db.clone(),
-            config: node_config.clone(),
+            node_config: node_config.clone(),
             chunk_provider: chunk_provider.clone(),
             block_index_guard: block_index_guard.clone(),
             vdf_steps_guard: vdf_steps_guard.clone(),
@@ -1336,17 +1393,22 @@ impl IrysNode {
             reth_shutdown_sender,
             reth_thread_handle: None,
             block_tree_guard: block_tree_guard.clone(),
+            config: Arc::new(self.config.clone()),
             _stop_guard: StopGuard::new(),
         };
-        let server = run_server(ApiState {
-            mempool: mempool_service,
-            chunk_provider: chunk_provider.clone(),
-            db: irys_db,
-            reth_provider: Some(reth_node.clone()),
-            block_tree: Some(block_tree_guard.clone()),
-            block_index: Some(block_index_guard.clone()),
-            config: self.config.clone(),
-        })
+        let server = run_server(
+            ApiState {
+                mempool: mempool_service,
+                chunk_provider: chunk_provider.clone(),
+                db: irys_db,
+                reth_provider: Some(reth_node.clone()),
+                block_tree: Some(block_tree_guard.clone()),
+                block_index: Some(block_index_guard.clone()),
+                config: self.config.clone(),
+                reth_http_url: reth_node.rpc_server_handle().http_url(),
+            },
+            http_listener,
+        )
         .await;
 
         // this OnceLock is due to the cyclic chain between Reth & the Irys node, where the IrysRethProvider requires both
