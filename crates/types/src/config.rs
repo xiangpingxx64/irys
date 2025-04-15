@@ -10,6 +10,7 @@ use crate::{
         phantoms::{CostPerGb, DecayRate, IrysPrice, Percentage, Usd},
         Amount,
     },
+    PeerAddress,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,6 +78,8 @@ pub struct Config {
     /// The base directory where to look for artifact data
     #[serde(default = "default_irys_path")]
     pub base_directory: PathBuf,
+    /// The initial list of peers to contact for block sync
+    pub trusted_peers: Vec<PeerAddress>,
     /// The IP address of the gossip service
     pub gossip_service_bind_ip: String,
     /// The port of the gossip service
@@ -177,6 +180,10 @@ impl Config {
                 smoothing_interval: 15,
             },
             base_directory: default_irys_path(),
+            trusted_peers: vec![PeerAddress {
+                api: "127.0.0.1:8080".parse().expect("valid SocketAddr expected"),
+                gossip: "127.0.0.1:8081".parse().expect("valid SocketAddr expected"),
+            }],
             gossip_service_bind_ip: "127.0.0.1".into(),
             gossip_service_port: 0,
             annual_cost_per_gb: Amount::token(dec!(0.01)).unwrap(), // 0.01$
@@ -300,9 +307,10 @@ mod tests {
             token_price_safe_range = "0.25"
             price_adjustment_interval = 10
             cpu_packing_concurrency = 4
-            gpu_packing_batch_size = 1024   
+            gpu_packing_batch_size = 1024
             cache_clean_lag = 2
             base_directory = "~/.irys"
+            trusted_peers = [{api = "127.0.0.1:8080", gossip = "127.0.0.1:8081"}]
             gossip_service_bind_ip = "127.0.0.1"
             gossip_service_port = 8081
             annual_cost_per_gb = "0.01"
