@@ -36,7 +36,7 @@ impl PeerListService {
     /// Create a new instance of the peer_list_service actor passing in a reference
     /// counted reference to a `DatabaseEnv`
     pub fn new(db: DatabaseProvider, config: &Config) -> Self {
-        println!("service started: peer_list");
+        tracing::info!("service started: peer_list");
         Self {
             db: Some(db),
             gossip_addr_to_mining_addr_map: HashMap::new(),
@@ -45,18 +45,21 @@ impl PeerListService {
             client: Client::new(),
 
             irys_api: IrysApiClient::new(),
-            chain_id: config.chain_id,
-            miner_address: config.miner_address(),
+            chain_id: config.consensus.chain_id,
+            miner_address: config.node_config.miner_address(),
             peer_address: PeerAddress {
                 gossip: format!(
                     "{}:{}",
-                    config.gossip_service_bind_ip, config.gossip_service_port
+                    config.node_config.gossip.bind_ip, config.node_config.gossip.port
                 )
                 .parse()
                 .expect("valid SocketAddr expected"),
-                api: format!("{}:{}", config.api_bind_ip, config.api_port)
-                    .parse()
-                    .expect("valid SocketAddr expected"),
+                api: format!(
+                    "{}:{}",
+                    config.node_config.gossip.bind_ip, config.node_config.gossip.port
+                )
+                .parse()
+                .expect("valid SocketAddr expected"),
             },
         }
     }
@@ -482,7 +485,7 @@ mod tests {
     use irys_storage::irys_consensus_data_db::open_or_create_irys_consensus_data_db;
     use irys_testing_utils::utils::setup_tracing_and_temp_dir;
     use irys_types::peer_list::PeerScore;
-    use irys_types::VersionRequest;
+    use irys_types::{NodeConfig, VersionRequest};
     use std::collections::HashSet;
     use std::net::IpAddr;
     use std::str::FromStr;
@@ -519,7 +522,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_add_peer() {
         let temp_dir = setup_tracing_and_temp_dir(None, false);
-        let config = Config::testnet();
+        let config = NodeConfig::testnet().into();
         let db = DatabaseProvider(Arc::new(
             open_or_create_irys_consensus_data_db(&temp_dir.path().to_path_buf())
                 .expect("can't open temp dir"),
@@ -560,7 +563,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_peer_score_management() {
         let temp_dir = setup_tracing_and_temp_dir(None, false);
-        let config = Config::testnet();
+        let config = NodeConfig::testnet().into();
         let db = DatabaseProvider(Arc::new(
             open_or_create_irys_consensus_data_db(&temp_dir.path().to_path_buf())
                 .expect("can't open temp dir"),
@@ -623,7 +626,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_active_peers_request() {
         let temp_dir = setup_tracing_and_temp_dir(None, false);
-        let config = Config::testnet();
+        let config = NodeConfig::testnet().into();
         let db = DatabaseProvider(Arc::new(
             open_or_create_irys_consensus_data_db(&temp_dir.path().to_path_buf())
                 .expect("can't open temp dir"),
@@ -697,7 +700,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_edge_cases() {
         let temp_dir = setup_tracing_and_temp_dir(None, false);
-        let config = Config::testnet();
+        let config = NodeConfig::testnet().into();
         let db = DatabaseProvider(Arc::new(
             open_or_create_irys_consensus_data_db(&temp_dir.path().to_path_buf())
                 .expect("can't open temp dir"),
@@ -780,7 +783,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_periodic_flush() {
         let temp_dir = setup_tracing_and_temp_dir(None, false);
-        let config = Config::testnet();
+        let config = NodeConfig::testnet().into();
         let db = DatabaseProvider(Arc::new(
             open_or_create_irys_consensus_data_db(&temp_dir.path().to_path_buf())
                 .expect("can't open temp dir"),
@@ -832,7 +835,7 @@ mod tests {
     #[actix_rt::test]
     async fn test_load_from_database() {
         let temp_dir = setup_tracing_and_temp_dir(None, false);
-        let config = Config::testnet();
+        let config = NodeConfig::testnet().into();
         let db = DatabaseProvider(Arc::new(
             open_or_create_irys_consensus_data_db(&temp_dir.path().to_path_buf())
                 .expect("can't open temp dir"),
