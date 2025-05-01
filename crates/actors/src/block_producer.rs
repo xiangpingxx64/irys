@@ -123,24 +123,13 @@ impl Handler<SolutionFoundMessage> for BlockProducerActor {
             let (latest_block_hash, prev_block_height, _publish_tx, _submit_tx) = canonical_blocks.last().unwrap();
             info!(?latest_block_hash, ?prev_block_height, "Starting block production, previous block");
 
-            let block_item = match db.view_eyre(|tx| block_header_by_hash(tx, latest_block_hash, false)) {
+            let prev_block_header = match db.view_eyre(|tx| block_header_by_hash(tx, latest_block_hash, false)) {
                 Ok(Some(header)) => Ok(header),
-                    Ok(None) =>
-                    Err(eyre!("No block header found for hash {} ({})", latest_block_hash, prev_block_height + 1)),
+                Ok(None) => Err(eyre!("No block header found for hash {} ({})", latest_block_hash, prev_block_height + 1)),
                 Err(e) =>  Err(eyre!("Failed to get previous block ({}) header: {}", prev_block_height, e))
             }?;
-
-            // Retrieve the previous block header and hash
-
-            let prev_block_hash = block_item.block_hash;
-            let prev_block_header: IrysBlockHeader = match db.view_eyre(|tx| block_header_by_hash(tx, &prev_block_hash, false)) {
-                Ok(Some(header)) => Ok(header),
-                Ok(None) =>
-                    Err(eyre!("No block header found for block {} ({}) ", prev_block_hash.0.to_base58(), prev_block_height)),
-                Err(e) =>
-                    Err(eyre!("Failed to get previous block {} ({}) header: {}", prev_block_hash.0.to_base58(), prev_block_height,  e))
-            }?;
-
+            let prev_block_hash = prev_block_header.block_hash;
+           
             if solution.vdf_step <= prev_block_header.vdf_limiter_info.global_step_number {
                 warn!("Skipping solution for old step number {}, previous block step number {} for block {} ({}) ", solution.vdf_step, prev_block_header.vdf_limiter_info.global_step_number, prev_block_hash.0.to_base58(),  prev_block_height);
                 return Ok(None)
