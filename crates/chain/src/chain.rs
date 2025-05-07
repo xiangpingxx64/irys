@@ -1,10 +1,11 @@
 use crate::arbiter_handle::{ArbiterHandle, CloneableJoinHandle};
-use crate::peer_utilities::sync_state_from_peers;
+use crate::genesis_utilities::{genesis_block_exists_on_disk, save_genesis_block_to_disk};
+use crate::peer_utilities::{
+    fetch_genesis_block, fetch_genesis_commitments, sync_state_from_peers,
+};
 use crate::vdf::run_vdf;
 use actix::{Actor, Addr, Arbiter, System, SystemRegistry};
 use actix_web::dev::Server;
-use irys_actors::ema_service::EmaServiceMessage;
-use irys_actors::packing::PackingConfig;
 use irys_actors::{
     block_discovery::BlockDiscoveryActor,
     block_index_service::{BlockIndexReadGuard, BlockIndexService, GetBlockIndexGuardMessage},
@@ -14,13 +15,15 @@ use irys_actors::{
     broadcast_mining_service::{BroadcastMiningSeed, BroadcastMiningService},
     cache_service::ChunkCacheService,
     chunk_migration_service::ChunkMigrationService,
-    ema_service::EmaService,
+    ema_service::{EmaService, EmaServiceMessage},
     epoch_service::{EpochServiceActor, GetPartitionAssignmentsGuardMessage},
     mempool_service::MempoolService,
     mining::PartitionMiningActor,
-    packing::{PackingActor, PackingRequest},
-    peer_list_service::{AddPeer, PeerListService},
-    reth_service::{BlockHashType, ForkChoiceUpdateMessage, RethServiceActor},
+    packing::{PackingActor, PackingConfig, PackingRequest},
+    peer_list_service::PeerListService,
+    reth_service::{
+        BlockHashType, ForkChoiceUpdateMessage, GetPeeringInfoMessage, RethServiceActor,
+    },
     services::ServiceSenders,
     validation_service::ValidationService,
     vdf_service::{GetVdfStateMessage, VdfService},
@@ -33,15 +36,12 @@ use irys_api_server::{create_listener, run_server, ApiState};
 use irys_config::chain::chainspec::IrysChainSpecBuilder;
 use irys_config::StorageSubmodulesConfig;
 use irys_database::{
-    add_genesis_commitments, database, get_genesis_commitments, insert_commitment_tx,
-    migration::check_db_version_and_run_migrations_if_needed, tables::IrysTables, BlockIndex,
+    add_genesis_commitments, database, get_genesis_commitments, insert_commitment_tx, BlockIndex,
 };
 use irys_gossip_service::ServiceHandleWithShutdownSignal;
 use irys_price_oracle::{mock_oracle::MockOracle, IrysPriceOracle};
-
-pub use irys_reth_node_bridge::node::{
-    RethNode, RethNodeAddOns, RethNodeExitHandle, RethNodeProvider,
-};
+use irys_reth_node_bridge::node::RethNode;
+pub use irys_reth_node_bridge::node::{RethNodeAddOns, RethNodeProvider};
 use irys_storage::{
     irys_consensus_data_db::open_or_create_irys_consensus_data_db,
     reth_provider::{IrysRethProvider, IrysRethProviderInner},
@@ -50,10 +50,9 @@ use irys_storage::{
 
 use irys_types::U256;
 use irys_types::{
-    app_state::DatabaseProvider, calculate_initial_difficulty, Address, CommitmentTransaction,
-    GossipData, IrysBlockHeader, OracleConfig, PartitionChunkRange, PeerListItem, H256,
+    app_state::DatabaseProvider, calculate_initial_difficulty, CommitmentTransaction, Config,
+    GossipData, IrysBlockHeader, NodeConfig, NodeMode, OracleConfig, PartitionChunkRange, H256,
 };
-use irys_types::{Config, NodeConfig, NodeMode};
 use irys_vdf::vdf_state::VdfStepsReadGuard;
 use reth::{
     builder::FullNode,
@@ -62,10 +61,11 @@ use reth::{
     tasks::{TaskExecutor, TaskManager},
 };
 use reth_cli_runner::{run_to_completion_or_panic, run_until_ctrl_c_or_channel_message};
-use reth_db::{Database as _, HasName, HasTableType};
+use reth_db::Database as _;
 use std::{
     fs,
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+    net::TcpListener,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     sync::atomic::AtomicU64,
     sync::{Arc, RwLock},
@@ -136,6 +136,7 @@ impl IrysNodeCtx {
     }
 }
 
+use irys_actors::peer_list_service::PeerListServiceFacade;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 // Shared stop guard that can be cloned
@@ -171,21 +172,19 @@ impl Clone for StopGuard {
     }
 }
 
-async fn start_reth_node<T: HasName + HasTableType>(
+async fn start_reth_node(
     task_executor: TaskExecutor,
     chainspec: ChainSpec,
     config: Config,
-    tables: &[T],
     sender: oneshot::Sender<FullNode<RethNode, RethNodeAddOns>>,
     irys_provider: IrysRethProvider,
     latest_block: u64,
     random_ports: bool,
 ) -> eyre::Result<NodeExitReason> {
-    let node_handle = irys_reth_node_bridge::run_node(
+    let node_handle = irys_reth_node_bridge::node::run_node(
         Arc::new(chainspec),
         task_executor,
         config.node_config.clone(),
-        tables,
         irys_provider,
         latest_block,
         random_ports,
@@ -193,9 +192,13 @@ async fn start_reth_node<T: HasName + HasTableType>(
     .await
     .expect("expected reth node to have started");
     debug!("Reth node started");
-    sender
-        .send(node_handle.node.clone())
-        .expect("unable to send reth node handle");
+
+    sender.send(node_handle.node.clone()).map_err(|e| {
+        eyre::eyre!(
+            "Failed to send reth node handle to main actor thread: {:?}",
+            &e
+        )
+    })?;
 
     node_handle.node_exit_future.await
 }
@@ -203,7 +206,7 @@ async fn start_reth_node<T: HasName + HasTableType>(
 /// Builder pattern for configuring and bootstrapping an Irys blockchain node.
 pub struct IrysNode {
     pub config: Config,
-    pub data_exists: bool,
+    // pub data_exists: bool,
     pub random_ports: bool,
     pub http_listener: TcpListener,
 }
@@ -229,9 +232,7 @@ impl IrysNode {
             false
         };
         let config = Config::new(node_config);
-
         Ok(IrysNode {
-            data_exists: Self::blockchain_data_exists(&config.node_config.base_directory),
             config,
             random_ports,
             http_listener,
@@ -255,11 +256,15 @@ impl IrysNode {
 
         // figure out the init mode
         let (latest_block_height_tx, latest_block_height_rx) = oneshot::channel::<u64>();
-        match (self.data_exists, &self.config.node_config.mode) {
+        let data_exists = Self::blockchain_data_exists(&self.config.node_config.base_directory);
+
+        error!("Data exists: {}", data_exists);
+        // note: if you need the genesis header later, you can easily make this match block return it
+        match (data_exists, &self.config.node_config.mode) {
             (true, NodeMode::Genesis { .. }) => {
                 eyre::bail!("You cannot start a genesis chain with existing data")
             }
-            (false, _) => {
+            (false, &NodeMode::Genesis { .. }) => {
                 let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
                 // special handling for genesis node
                 let commitments = get_genesis_commitments(&self.config);
@@ -276,7 +281,16 @@ impl IrysNode {
                     ..irys_genesis
                 };
                 add_genesis_commitments(&mut irys_genesis, &self.config);
+
                 let irys_genesis_block = Arc::new(irys_genesis);
+
+                // write genesis.json to disk
+                if let Err(e) = save_genesis_block_to_disk(
+                    irys_genesis_block.clone(),
+                    &self.config.node_config.base_directory,
+                ) {
+                    panic!("unable to save genesis block to disk: {:?}", e);
+                }
 
                 // special handilng for genesis node
                 Self::init_genesis_thread(
@@ -287,8 +301,51 @@ impl IrysNode {
                 .join()
                 .map_err(|_| eyre::eyre!("genesis init thread panicked"))?;
             }
-            _ => {
-                // no special handling for `peer` mode node
+            (false, &NodeMode::PeerSync) => {
+                let genesis_file_exists =
+                    genesis_block_exists_on_disk(&self.config.node_config.base_directory);
+
+                error!("genesis file exists: {}", genesis_file_exists);
+                if !genesis_file_exists {
+                    let trusted_peer = &self
+                        .config
+                        .node_config
+                        .trusted_peers
+                        .first()
+                        .expect("expected at least one trusted peer in config")
+                        .api;
+                    info!("fetching genesis block from trusted peer because genesis file does not exist on disk");
+                    let awc_client = awc::Client::new();
+                    let irys_genesis_block = fetch_genesis_block(trusted_peer, &awc_client)
+                        .await
+                        .expect("expected genesis block from http api");
+
+                    let irys_genesis_block = Arc::new(irys_genesis_block);
+
+                    // write genesis.json to disk
+                    if let Err(e) = save_genesis_block_to_disk(
+                        irys_genesis_block.clone(),
+                        &self.config.node_config.base_directory,
+                    ) {
+                        panic!("unable to save genesis block to disk: {:?}", e);
+                    }
+
+                    let commitments =
+                        fetch_genesis_commitments(trusted_peer, &irys_genesis_block).await?;
+
+                    Self::init_genesis_thread(
+                        self.config.clone(),
+                        irys_genesis_block.clone(),
+                        commitments,
+                    )?
+                    .join()
+                    .map_err(|_| eyre::eyre!("genesis init thread panicked"))?;
+                }
+
+                // no special handling for if the genesis block exists on disk already
+            }
+            (true, &NodeMode::PeerSync) => {
+                // no special handling for initialized PeerSync nodes
             }
         };
 
@@ -347,28 +404,8 @@ impl IrysNode {
         let mut ctx = irys_node_ctx_rx.await?;
         ctx.reth_thread_handle = Some(reth_thread.into());
 
-        // load peers from config into our database
-        for peer_address in ctx.config.node_config.trusted_peers.iter() {
-            let peer_list_entry = PeerListItem {
-                address: peer_address.clone(),
-                ..Default::default()
-            };
-
-            if let Err(e) = ctx
-                .actor_addresses
-                .peer_list
-                .send(AddPeer {
-                    mining_addr: Address::random(),
-                    peer: peer_list_entry,
-                })
-                .await
-            {
-                error!("Unable to send AddPeerMessage message {e}");
-            };
-        }
-
         // if we are an empty node joining an existing network
-        if !self.data_exists && !matches!(self.config.node_config.mode, NodeMode::Genesis) {
+        if !data_exists && !matches!(self.config.node_config.mode, NodeMode::Genesis) {
             sync_state_from_peers(
                 ctx.config.node_config.trusted_peers.clone(),
                 ctx.actor_addresses.block_discovery_addr.clone(),
@@ -529,7 +566,6 @@ impl IrysNode {
                                 exec,
                                 reth_chainspec,
                                 config,
-                                IrysTables::ALL,
                                 reth_handle_sender,
                                 irys_provider.clone(),
                                 latest_block_height,
@@ -558,7 +594,6 @@ impl IrysNode {
 
                 reth_node.provider.database.db.close();
                 irys_storage::reth_provider::cleanup_provider(&irys_provider);
-
                 info!("Reth thread finished");
             })?;
 
@@ -588,22 +623,23 @@ impl IrysNode {
         let irys_db = init_irys_db(&config)?;
 
         // initialize the databases
-        let (reth_node, reth_db) = init_reth_db(reth_handle_receiver, &irys_db).await?;
+        let (reth_node, reth_db) = init_reth_db(reth_handle_receiver).await?;
         debug!("Reth DB initiailsed");
 
         // start services
         let (service_senders, receivers) = ServiceSenders::new();
-        let _handle = ChunkCacheService::spawn_service(
-            &task_exec,
-            irys_db.clone(),
-            receivers.chunk_cache,
-            config.clone(),
-        );
-        debug!("Chunk cache initiailsed");
 
         // start reth service
         let (reth_service_actor, reth_arbiter) = init_reth_service(&irys_db, &reth_node);
         debug!("Reth Service Actor initiailsed");
+        // Get the correct Reth peer info
+        let reth_peering = reth_service_actor.send(GetPeeringInfoMessage {}).await??;
+
+        // overwrite config as we now have reth peering information
+        // TODO: Consider if starting the reth service should happen outside of init_services() instead of overwriting config here
+        let mut node_config = config.node_config.clone();
+        node_config.reth_peer_info = reth_peering;
+        let config = Config::new(node_config);
 
         // update reth service about the latest block data it must use
         reth_service_actor
@@ -614,6 +650,14 @@ impl IrysNode {
             })
             .await??;
         debug!("Reth Service Actor updated about fork choice");
+
+        let _handle = ChunkCacheService::spawn_service(
+            &task_exec,
+            irys_db.clone(),
+            receivers.chunk_cache,
+            config.clone(),
+        );
+        debug!("Chunk cache initiailsed");
 
         let block_index_guard = block_index_service_actor
             .send(GetBlockIndexGuardMessage)
@@ -640,6 +684,7 @@ impl IrysNode {
         let (gossip_service, gossip_tx) = irys_gossip_service::GossipService::new(
             &config.node_config.gossip.bind_ip,
             config.node_config.gossip.port,
+            config.node_config.miner_address(),
         );
 
         // start the block tree service
@@ -665,7 +710,8 @@ impl IrysNode {
         );
 
         // Spawn peer list service
-        let (peer_list_service, peer_list_arbiter) = init_peer_list_service(&irys_db, &config);
+        let (peer_list_service, peer_list_arbiter) =
+            init_peer_list_service(&irys_db, &config, reth_service_actor.clone());
 
         // Spawn the mempool service
         let (mempool_service, mempool_arbiter) = Self::init_mempools_service(
@@ -705,7 +751,7 @@ impl IrysNode {
 
         // spawn block discovery
         let (block_discovery, block_discovery_arbiter) = Self::init_block_discovery_service(
-            config,
+            &config,
             &irys_db,
             &service_senders,
             &epoch_service_actor,
@@ -721,6 +767,8 @@ impl IrysNode {
             irys_api_client::IrysApiClient::new(),
             task_exec,
             peer_list_service.clone(),
+            irys_db.clone(),
+            vdf_sender.clone(),
         )?;
 
         // set up the price oracle
@@ -751,7 +799,7 @@ impl IrysNode {
 
         // set up storage modules
         let (part_actors, part_arbiters) = Self::init_partition_mining_actor(
-            config,
+            &config,
             &storage_modules,
             &vdf_steps_guard,
             &block_producer_addr,
@@ -1300,16 +1348,17 @@ async fn genesis_initialization(
 fn init_peer_list_service(
     irys_db: &DatabaseProvider,
     config: &Config,
-) -> (Addr<PeerListService>, Arbiter) {
+    reth_service_addr: Addr<RethServiceActor>,
+) -> (PeerListServiceFacade, Arbiter) {
     let peer_list_arbiter = Arbiter::new();
-    let mut peer_list_service = PeerListService::new(irys_db.clone(), config);
+    let mut peer_list_service = PeerListService::new(irys_db.clone(), config, reth_service_addr);
     peer_list_service
         .initialize()
         .expect("to initialize peer_list_service");
     let peer_list_service =
         PeerListService::start_in_arbiter(&peer_list_arbiter.handle(), |_| peer_list_service);
     SystemRegistry::set(peer_list_service.clone());
-    (peer_list_service, peer_list_arbiter)
+    (peer_list_service.into(), peer_list_arbiter)
 }
 
 fn init_broadcaster_service() -> (actix::Addr<BroadcastMiningService>, Arbiter) {
@@ -1336,11 +1385,12 @@ fn init_reth_service(
 
 async fn init_reth_db(
     reth_handle_receiver: oneshot::Receiver<FullNode<RethNode, RethNodeAddOns>>,
-    irys_db: &DatabaseProvider,
 ) -> Result<(RethNodeProvider, irys_database::db::RethDbWrapper), eyre::Error> {
     let reth_node = RethNodeProvider(Arc::new(reth_handle_receiver.await?));
     let reth_db = reth_node.provider.database.db.clone();
-    check_db_version_and_run_migrations_if_needed(&reth_db, irys_db)?;
+    // TODO: fix this so we can migrate the consensus/irys DB
+    // we no longer extend the reth database with our own tables/metadata
+    // check_db_version_and_run_migrations_if_needed(&reth_db, irys_db)?;
     Ok((reth_node, reth_db))
 }
 
