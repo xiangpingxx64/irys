@@ -65,7 +65,6 @@ use reth_db::Database as _;
 use std::{
     fs,
     net::TcpListener,
-    net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     sync::atomic::AtomicU64,
     sync::{Arc, RwLock},
@@ -181,16 +180,33 @@ async fn start_reth_node(
     latest_block: u64,
     random_ports: bool,
 ) -> eyre::Result<NodeExitReason> {
-    let node_handle = irys_reth_node_bridge::node::run_node(
-        Arc::new(chainspec),
-        task_executor,
+    let node_handle = match irys_reth_node_bridge::node::run_node(
+        Arc::new(chainspec.clone()),
+        task_executor.clone(),
         config.node_config.clone(),
-        irys_provider,
+        irys_provider.clone(),
         latest_block,
         random_ports,
     )
     .await
-    .expect("expected reth node to have started");
+    {
+        Ok(handle) => handle,
+        Err(e) => {
+            error!("Restarting reth thread - reason: {:?}", &e);
+            // One retry attempt
+            irys_reth_node_bridge::node::run_node(
+                Arc::new(chainspec.clone()),
+                task_executor.clone(),
+                config.node_config.clone(),
+                irys_provider.clone(),
+                latest_block,
+                random_ports,
+            )
+            .await
+            .expect("expected reth node to have started")
+        }
+    };
+
     debug!("Reth node started");
 
     sender.send(node_handle.node.clone()).map_err(|e| {
