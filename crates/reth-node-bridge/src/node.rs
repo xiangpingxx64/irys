@@ -148,7 +148,7 @@ pub async fn run_node(
         // "debug,rpc,reth,eth,trace",
         "eth",
         "--http.addr",
-        "0.0.0.0",
+        &node_config.http.bind_ip,
         "--datadir",
         format!("{}", node_config.reth_data_dir().to_str().unwrap()),
         "--log.file.directory",
