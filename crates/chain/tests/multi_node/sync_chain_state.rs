@@ -11,7 +11,7 @@ use irys_chain::{
 use irys_database::block_header_by_hash;
 use irys_types::{
     irys::IrysSigner, Address, BlockIndexItem, Config, GossipConfig, HttpConfig, IrysTransaction,
-    NodeConfig, NodeMode, PeerAddress, RethPeerInfo, H256,
+    NodeConfig, NodeMode, PeerAddress, RethConfig, RethPeerInfo, H256,
 };
 use k256::ecdsa::SigningKey;
 use reth::rpc::{eth::EthApiServer as _, types::engine::PayloadStatusEnum};
@@ -20,7 +20,9 @@ use reth_db::Database;
 use reth_primitives::irys_primitives::IrysTxId;
 use reth_primitives::GenesisAccount;
 use std::{
-    collections::HashMap, net::TcpListener, time::{SystemTime, UNIX_EPOCH}
+    collections::HashMap,
+    net::TcpListener,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
@@ -691,6 +693,9 @@ fn init_configs() -> (
         )
         .expect("valid key"),
         mode: NodeMode::PeerSync,
+        reth: RethConfig {
+            use_random_ports: true,
+        },
         ..NodeConfig::testnet()
     };
     let mut testnet_config_peer2 = NodeConfig {
@@ -712,6 +717,9 @@ fn init_configs() -> (
         )
         .expect("valid key"),
         mode: NodeMode::PeerSync,
+        reth: RethConfig {
+            use_random_ports: true,
+        },
         ..NodeConfig::testnet()
     };
     let trusted_peers = vec![PeerAddress {
