@@ -27,7 +27,7 @@ use tokio::{
     sync::{mpsc::UnboundedReceiver /*, oneshot*/},
     task::JoinHandle,
 };
-use tracing::{debug, warn};
+use tracing::{debug, warn, Span};
 
 use crate::{
     block_tree_service::BlockTreeReadGuard, mining::PartitionMiningActor, packing::PackingRequest,
@@ -180,6 +180,7 @@ impl StorageModuleServiceInner {
                 self.vdf_steps_guard.clone(),
                 atomic_global_step_number.clone(),
                 initial_difficulty,
+                Some(Span::current()),
             );
             let part_arbiter = Arbiter::new();
             let partition_mining_actor =

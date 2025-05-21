@@ -705,7 +705,7 @@ impl IrysNode {
             .stack_size(32 * 1024 * 1024)
             .spawn(move || {
                 let exec = task_manager.executor();
-                let _ = span2.clone().enter();
+                let _span = span.enter();
                 let run_reth_until_ctrl_c_or_signal = async || {
                     _ = run_to_completion_or_panic(
                         &mut task_manager,
@@ -738,8 +738,7 @@ impl IrysNode {
                     reth_node_handle
                 };
 
-                let reth_node =
-                    tokio_runtime.block_on(run_reth_until_ctrl_c_or_signal().instrument(span));
+                let reth_node = tokio_runtime.block_on(run_reth_until_ctrl_c_or_signal());
 
                 debug!("Shutting down the rest of the reth jobs in case there are unfinished ones");
                 task_manager.graceful_shutdown();
@@ -1166,9 +1165,14 @@ impl IrysNode {
             .base_directory
             .parent()
             .is_some_and(|p| p.ends_with(".tmp"));
+        let span = Span::current();
+
         let vdf_thread_handler = std::thread::spawn({
             let vdf_config = config.consensus.vdf.clone();
+
             move || {
+                let _span = span.enter();
+
                 if !is_test {
                     // Setup core affinity in prod only (perf gain shouldn't matter for tests, and we don't want pinning overlap)
                     let core_ids = core_affinity::get_core_ids().expect("Failed to get core IDs");
@@ -1220,6 +1224,7 @@ impl IrysNode {
                 vdf_steps_guard.clone(),
                 atomic_global_step_number.clone(),
                 initial_difficulty,
+                Some(Span::current()),
             );
             let part_arbiter = Arbiter::new();
             let partition_mining_actor =
