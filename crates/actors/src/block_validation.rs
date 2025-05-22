@@ -18,7 +18,7 @@ use irys_types::{
 };
 use irys_vdf::last_step_checkpoints_is_valid;
 use openssl::sha;
-use tracing::{debug, info, Span};
+use tracing::{debug, info};
 
 /// Full pre-validation steps for a block
 pub async fn prevalidate_block(
@@ -29,9 +29,7 @@ pub async fn prevalidate_block(
     reward_curve: Arc<HalvingCurve>,
     steps_guard: VdfStepsReadGuard,
     ema_service_sender: tokio::sync::mpsc::UnboundedSender<EmaServiceMessage>,
-    span: Span,
 ) -> eyre::Result<()> {
-    let _span = span.enter();
     debug!(
         block_hash = ?block.block_hash.0.to_base58(),
         ?block.height,

@@ -19,7 +19,7 @@ use irys_types::{
 };
 use reth_db::Database;
 use std::sync::Arc;
-use tracing::{debug, error, info, Span};
+use tracing::{debug, error, info, Instrument, Span};
 
 /// `BlockDiscoveryActor` listens for discovered blocks & validates them.
 #[derive(Debug)]
@@ -256,8 +256,12 @@ impl Handler<BlockDiscoveredMessage> for BlockDiscoveryActor {
         let gossip_sender = self.gossip_sender.clone();
         let reward_curve = Arc::clone(&self.reward_curve);
         Box::pin(async move {
+            let span3 = span2.clone();
+            let _span = span3.enter();
+
             info!("Pre-validating block");
-            let validation_future = tokio::task::spawn_blocking(move || {
+
+            let validation_result = tokio::task::spawn_blocking(move || {
                 prevalidate_block(
                     block_header,
                     previous_block_header,
@@ -266,11 +270,14 @@ impl Handler<BlockDiscoveredMessage> for BlockDiscoveryActor {
                     reward_curve,
                     vdf_steps_guard,
                     ema_service_sender,
-                    span2,
                 )
-            });
+                .instrument(span2)
+            })
+            .await
+            .unwrap()
+            .await;
 
-            match validation_future.await.unwrap().await {
+            match validation_result {
                 Ok(_) => {
                     // Attempt to validate / update the epoch commitment cache
                     for commitment_tx in commitments.iter() {
