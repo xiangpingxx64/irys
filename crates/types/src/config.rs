@@ -327,7 +327,7 @@ pub struct EmaConfig {
 /// Settings for the time-delay proof mechanism used in consensus.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VdfConfig {
-    /// How often the VDF parameters are reset (in blocks)
+    /// The interval at which the VDF resets, measured in VDF steps.
     pub reset_frequency: usize,
 
     /// Maximum number of threads to use for parallel VDF verification
