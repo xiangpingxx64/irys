@@ -532,7 +532,7 @@ impl ConsensusConfig {
                 parallel_verification_thread_limit: 4,
                 num_checkpoints_in_vdf_step: 25,
                 max_allowed_vdf_fork_steps: 60_000,
-                sha_1s_difficulty: 7_000,
+                sha_1s_difficulty: 70_000,
             },
             chunk_size: Self::CHUNK_SIZE,
             num_chunks_in_partition: 10,
@@ -934,7 +934,7 @@ mod tests {
         parallel_verification_thread_limit = 4
         num_checkpoints_in_vdf_step = 25
 
-        sha_1s_difficulty = 7000
+        sha_1s_difficulty = 70000
 
         [block_reward_config]
         inflation_cap = 100000000
