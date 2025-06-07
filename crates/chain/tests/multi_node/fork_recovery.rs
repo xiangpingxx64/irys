@@ -187,6 +187,12 @@ async fn heavy_fork_recovery_test() -> eyre::Result<()> {
 
     let reorg_future = genesis_node.wait_for_reorg(seconds_to_wait);
 
+    let canon_before = genesis_node
+        .node_ctx
+        .block_tree_guard
+        .read()
+        .get_canonical_chain();
+
     // Determine which peer lost the fork race and extend the other peer's chain
     // to trigger a reorganization. The losing peer's transaction will be evicted
     // and returned to the mempool.
@@ -212,12 +218,6 @@ async fn heavy_fork_recovery_test() -> eyre::Result<()> {
         peer1_node.get_block_by_height(4).await?
     };
 
-    let canon_before = genesis_node
-        .node_ctx
-        .block_tree_guard
-        .read()
-        .get_canonical_chain();
-
     let reorg_event = reorg_future.await?;
     let _genesis_block = genesis_node.get_block_by_height(4).await?;
 
@@ -227,6 +227,14 @@ async fn heavy_fork_recovery_test() -> eyre::Result<()> {
         .block_tree_guard
         .read()
         .get_canonical_chain();
+
+    let old_fork_hashes: Vec<_> = reorg_event.old_fork.iter().map(|b| b.block_hash).collect();
+    let new_fork_hashes: Vec<_> = reorg_event.new_fork.iter().map(|b| b.block_hash).collect();
+
+    println!(
+        "\nReorgEvent:\n fork_parent: {:?}\n old_fork: {:?}\n new_fork:{:?}",
+        reorg_event.fork_parent.block_hash, old_fork_hashes, new_fork_hashes
+    );
 
     println!("\nreorg_tx: {:?}", reorg_tx.header.id);
     println!("canonical_before:");
