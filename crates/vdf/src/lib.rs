@@ -265,7 +265,7 @@ pub trait MiningBroadcaster {
 
 /// Runs the VDF, starting with the testnet config's step count, calibrating the iterations between runs to get to ~1s/step - returning the value once `runs` runs are complete
 /// Note: please set `runs` to a decently high value, so calibration can occur on the maximum sustained performance, instead of the short lived peak performance
-/// This function may not accurately provide an interation count for tests, or when many VDF threads are run at the same time
+/// This function may not accurately provide an iteration count for tests, or when many VDF threads are run at the same time
 /// to calibrate that, run multiple instances of this function at the same time and take the lowest value
 /// (this is particularly notable on Heterogenous CPUs, with some higher and some lower performance cores)
 pub fn calibrate_vdf(runs: u64) -> u64 {
