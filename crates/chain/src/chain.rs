@@ -33,8 +33,7 @@ use irys_api_server::{create_listener, run_server, ApiState};
 use irys_config::chain::chainspec::IrysChainSpecBuilder;
 use irys_config::submodules::StorageSubmodulesConfig;
 use irys_database::{
-    add_genesis_commitments, database, get_genesis_commitments, insert_commitment_tx, BlockIndex,
-    SystemLedger,
+    add_genesis_commitments, database, get_genesis_commitments, BlockIndex, SystemLedger,
 };
 use irys_p2p::{
     BlockStatusProvider, P2PService, PeerListService, PeerListServiceFacade,
@@ -344,9 +343,7 @@ impl IrysNode {
         match node_mode {
             NodeMode::Genesis => {
                 // Create a new genesis block for network initialization
-                return self
-                    .create_new_genesis_block(irys_db, genesis_block.clone())
-                    .await;
+                return self.create_new_genesis_block(genesis_block.clone()).await;
             }
             NodeMode::PeerSync => {
                 // Fetch genesis data from trusted peer when joining network
@@ -396,7 +393,6 @@ impl IrysNode {
 
     async fn create_new_genesis_block(
         &self,
-        irys_db: &DatabaseProvider,
         mut genesis_block: IrysBlockHeader,
     ) -> (IrysBlockHeader, Vec<CommitmentTransaction>) {
         // Generate genesis commitments from configuration
