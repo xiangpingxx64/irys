@@ -417,10 +417,7 @@ impl IrysNode {
         // Add commitment transactions to genesis block
         add_genesis_commitments(&mut genesis_block, &self.config);
 
-        // Also persist them to the db
-        for commitment_tx in commitments.iter() {
-            let _ = irys_db.update(|tx| insert_commitment_tx(tx, commitment_tx));
-        }
+        // Note: commitments are persisted to DB in `persist_genesis_block_and_commitments()` later on
 
         run_vdf_for_genesis_block(&mut genesis_block, &self.config.consensus.vdf);
 
