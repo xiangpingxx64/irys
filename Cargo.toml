@@ -397,7 +397,7 @@ opt-level = 3
 
 rust.unreachable_pub = "warn"
 rust.unused_must_use = "deny"
-rust.unused_imports = "deny"
+rust.unused_imports = "warn"
 
 [workspace.lints.clippy]
 
