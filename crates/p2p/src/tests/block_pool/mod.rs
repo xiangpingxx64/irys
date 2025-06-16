@@ -1,10 +1,10 @@
 use crate::block_pool::{BlockPool, BlockPoolError};
 use crate::peer_list::PeerListServiceWithClient;
 use crate::tests::util::{FakeGossipServer, MockRethServiceActor};
-use crate::{BlockStatusProvider, PeerList, SyncState};
-use actix::{Actor, Addr};
+use crate::{BlockStatusProvider, PeerList as _, SyncState};
+use actix::{Actor as _, Addr};
 use async_trait::async_trait;
-use base58::ToBase58;
+use base58::ToBase58 as _;
 use irys_actors::block_discovery::BlockDiscoveryFacade;
 use irys_api_client::ApiClient;
 use irys_storage::irys_consensus_data_db::open_or_create_irys_consensus_data_db;
