@@ -193,7 +193,7 @@ mod tests {
     use super::*;
     use crate::block_tree_service::test_utils::genesis_tree;
     use crate::block_tree_service::{BlockState, ChainState};
-    use crate::CommitmentCache;
+    use crate::CommitmentSnapshot;
     use futures::future::{pending, ready};
     use irys_types::{IrysBlockHeader, H256};
     use itertools::Itertools as _;
@@ -418,28 +418,28 @@ mod tests {
             tree.add_common(
                 fork_block_11.block_hash,
                 &fork_block_11,
-                Arc::new(CommitmentCache::default()),
+                Arc::new(CommitmentSnapshot::default()),
                 ChainState::NotOnchain(BlockState::ValidationScheduled),
             )
             .unwrap();
             tree.add_common(
                 fork_block_12.block_hash,
                 &fork_block_12,
-                Arc::new(CommitmentCache::default()),
+                Arc::new(CommitmentSnapshot::default()),
                 ChainState::NotOnchain(BlockState::ValidationScheduled),
             )
             .unwrap();
             tree.add_common(
                 extension_block_21.block_hash,
                 &extension_block_21,
-                Arc::new(CommitmentCache::default()),
+                Arc::new(CommitmentSnapshot::default()),
                 ChainState::NotOnchain(BlockState::ValidationScheduled),
             )
             .unwrap();
             tree.add_common(
                 extension_block_22.block_hash,
                 &extension_block_22,
-                Arc::new(CommitmentCache::default()),
+                Arc::new(CommitmentSnapshot::default()),
                 ChainState::NotOnchain(BlockState::ValidationScheduled),
             )
             .unwrap();
@@ -709,7 +709,7 @@ mod tests {
                 tree.add_common(
                     header.block_hash,
                     &header,
-                    Arc::new(CommitmentCache::default()),
+                    Arc::new(CommitmentSnapshot::default()),
                     ChainState::NotOnchain(BlockState::ValidationScheduled),
                 )
                 .unwrap();
@@ -753,7 +753,7 @@ mod tests {
                 tree.add_common(
                     header.block_hash,
                     &header,
-                    Arc::new(CommitmentCache::default()),
+                    Arc::new(CommitmentSnapshot::default()),
                     ChainState::NotOnchain(BlockState::ValidationScheduled),
                 )
                 .unwrap();
