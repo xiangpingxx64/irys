@@ -58,9 +58,6 @@ async fn heavy_test_commitments_3epochs_test() -> eyre::Result<()> {
             .start_and_wait_for_packing("GENESIS", 10)
             .await;
 
-        // Initialize blockchain components
-        node.start_mining().await;
-
         // Get access to commitment and partition services for verification
         let epoch_service = node.node_ctx.actor_addresses.epoch_service.clone();
         let commitment_state_guard = epoch_service
@@ -227,6 +224,9 @@ async fn heavy_test_commitments_3epochs_test() -> eyre::Result<()> {
     info!("Restarting node");
     let stopped_node = node.stop().await;
     let restarted_node = stopped_node.start().await;
+
+    // wait a few seconds for node to wake up
+    restarted_node.wait_for_packing(10).await;
 
     // Get access to commitment and partition services for verification
     let epoch_service = restarted_node
