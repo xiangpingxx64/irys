@@ -287,12 +287,13 @@ pub fn vdf_steps_are_valid(
     config: &VdfConfig,
     vdf_steps_guard: &VdfStateReadonly,
 ) -> eyre::Result<()> {
+    let reset_seed = vdf_info.seed;
     info!(
         "Checking seed {:?} reset_seed {:?}",
-        vdf_info.prev_output, vdf_info.seed
+        vdf_info.prev_output, reset_seed
     );
 
-    let start = vdf_info.global_step_number - vdf_info.steps.len() as u64 + 1_u64;
+    let start = vdf_info.first_step_number();
     let end: u64 = vdf_info.global_step_number;
 
     match vdf_steps_guard.read().get_steps(ii(start, end)) {
@@ -309,8 +310,6 @@ pub fn vdf_steps_are_valid(
         Err(err) =>
             tracing::debug!("Error getting steps from VdfStepsReadGuard: {:?} so calculating vdf steps for validation", err.to_string())
     };
-
-    let reset_seed = vdf_info.seed;
 
     let mut step_hashes = vdf_info.steps.clone();
 
