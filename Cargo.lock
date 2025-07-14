@@ -5234,6 +5234,7 @@ dependencies = [
  "derive_more",
  "eyre",
  "fixed-hash",
+ "futures",
  "hex",
  "irys-primitives",
  "k256",
