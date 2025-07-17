@@ -9,6 +9,7 @@ use irys_types::{Address, GossipData, GossipRequest, PeerListItem};
 use reqwest::Client;
 use reqwest::Response;
 use serde::Serialize;
+use std::sync::Arc;
 use tracing::error;
 
 #[derive(Debug, Clone)]
@@ -114,7 +115,7 @@ impl GossipClient {
     /// # Errors
     ///
     /// If the peer is offline or the request fails, an error is returned.
-    pub async fn send_data_and_update_score<P>(
+    async fn send_data_and_update_score_internal<P>(
         &self,
         peer: (&Address, &PeerListItem),
         data: &GossipData,
@@ -149,6 +150,32 @@ impl GossipClient {
                 Err(error)
             }
         }
+    }
+
+    /// Sends data to a peer and update their score in a detached task
+    pub fn send_data_and_update_the_score_detached<P: PeerList>(
+        &self,
+        peer: (&Address, &PeerListItem),
+        data: Arc<GossipData>,
+        peer_list: &P,
+    ) {
+        let client = self.clone();
+        let peer_list = peer_list.clone();
+        let peer_miner_address = *peer.0;
+        let peer = peer.1.clone();
+
+        tokio::spawn(async move {
+            if let Err(e) = client
+                .send_data_and_update_score_internal(
+                    (&peer_miner_address, &peer),
+                    &data,
+                    &peer_list,
+                )
+                .await
+            {
+                error!("Error sending data to peer: {}", e);
+            }
+        });
     }
 
     fn create_request<T>(&self, data: T) -> GossipRequest<T> {
