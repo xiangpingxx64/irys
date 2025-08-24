@@ -973,11 +973,11 @@ impl NodeConfig {
                 bandwidth_adjustment_interval: Duration::from_secs(5),
                 chunk_request_timeout: Duration::from_secs(10),
             },
-            trusted_peers: vec![PeerAddress {
+            trusted_peers: vec![/* PeerAddress {
                 api: "127.0.0.1:8080".parse().expect("valid SocketAddr expected"),
                 gossip: "127.0.0.1:8081".parse().expect("valid SocketAddr expected"),
                 execution: crate::RethPeerInfo::default(), // TODO: figure out how to pre-compute peer IDs
-            }],
+            } */],
             gossip: GossipConfig {
                 public_ip: "127.0.0.1".parse().expect("valid IP address"),
                 public_port: 0,
@@ -1550,13 +1550,18 @@ mod tests {
         let mut expected_config = NodeConfig::testing();
         expected_config.consensus = ConsensusOptions::Testing;
         expected_config.base_directory = PathBuf::from("~/.tmp/.irys");
-        expected_config.trusted_peers.get_mut(0).unwrap().execution = RethPeerInfo {
+        expected_config.trusted_peers = vec![ PeerAddress {
+            api: "127.0.0.1:8080".parse().expect("valid SocketAddr expected"),
+            gossip: "127.0.0.1:8081".parse().expect("valid SocketAddr expected"),
+            execution: RethPeerInfo {
             peering_tcp_addr: "127.0.0.1:30303".parse().unwrap(),
             peer_id: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000".parse().unwrap(),
-        };
-        let expected_toml_data = toml::to_string(&expected_config).unwrap();
+        }
+        }];
         // for debugging purposes
-        println!("{}", expected_toml_data);
+
+        // let expected_toml_data = toml::to_string(&expected_config).unwrap();
+        // println!("{}", expected_toml_data);
 
         // Deserialize the TOML string into a NodeConfig
         let config = toml::from_str::<NodeConfig>(toml_data)

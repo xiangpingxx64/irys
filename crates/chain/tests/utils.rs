@@ -20,6 +20,7 @@ use irys_actors::{
     mempool_service::{MempoolServiceMessage, MempoolTxs, TxIngressError},
     packing::wait_for_packing,
 };
+use irys_api_client::{ApiClientExt as _, IrysApiClient};
 use irys_api_server::routes::price::{CommitmentPriceInfo, PriceInfo};
 use irys_api_server::{create_listener, routes};
 use irys_chain::{IrysNode, IrysNodeCtx};
@@ -46,13 +47,14 @@ use irys_types::{
     U256,
 };
 use irys_types::{
-    Base64, CommitmentTransaction, Config, ConsensusConfig, DataTransaction, DataTransactionHeader,
-    DatabaseProvider, IrysBlockHeader, IrysTransactionId, LedgerChunkOffset, NodeConfig, NodeMode,
-    PackedChunk, PeerAddress, RethPeerInfo, TxChunkOffset, UnpackedChunk,
+    Base64, ChunkBytes, CommitmentTransaction, Config, ConsensusConfig, DataTransaction,
+    DataTransactionHeader, DatabaseProvider, IrysBlockHeader, IrysTransactionId, LedgerChunkOffset,
+    NodeConfig, NodeMode, PackedChunk, PeerAddress, RethPeerInfo, TxChunkOffset, UnpackedChunk,
 };
 use irys_vdf::state::VdfStateReadonly;
 use irys_vdf::{step_number_to_salt_number, vdf_sha};
 use itertools::Itertools as _;
+use rand::{Rng as _, SeedableRng as _};
 use reth::{
     api::Block as _,
     network::{PeerInfo, Peers as _},
@@ -282,6 +284,7 @@ pub struct IrysNodeTest<T = ()> {
     pub node_ctx: T,
     pub cfg: NodeConfig,
     pub temp_dir: TempDir,
+    pub name: Option<String>,
 }
 
 impl IrysNodeTest<()> {
@@ -309,23 +312,38 @@ impl IrysNodeTest<()> {
             cfg: config,
             temp_dir,
             node_ctx: (),
+            name: None,
         }
     }
 
     pub async fn start(self) -> IrysNodeTest<IrysNodeCtx> {
-        let node = IrysNode::new(self.cfg.clone()).unwrap();
+        let span = self.get_span();
+        let _enter = span.enter();
+
+        let node = IrysNode::new(self.cfg).unwrap();
         let node_ctx = node.start().await.expect("node cannot be initialized");
         IrysNodeTest {
-            cfg: self.cfg,
+            cfg: node_ctx.config.node_config.clone(),
             node_ctx,
             temp_dir: self.temp_dir,
+            name: self.name,
         }
     }
 
+    fn get_span(&self) -> tracing::Span {
+        match &self.name {
+            Some(name) => debug_span!("NODE", name = %name),
+            None => tracing::Span::none(),
+        }
+    }
+
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = Some(name.to_string());
+        self
+    }
+
     pub async fn start_with_name(self, log_name: &str) -> IrysNodeTest<IrysNodeCtx> {
-        let span = debug_span!("NODE", name = %log_name);
-        let _enter = span.enter();
-        self.start().await
+        self.with_name(log_name).start().await
     }
 
     pub async fn start_and_wait_for_packing(
@@ -1155,29 +1173,10 @@ impl IrysNodeTest<IrysNodeCtx> {
         ledger: DataLedger,
         data_size: u64,
     ) -> eyre::Result<PriceInfo> {
-        let client = awc::Client::default();
-        let api_uri = self.node_ctx.config.node_config.api_uri();
-        let url = format!("{}/v1/price/{}/{}", api_uri, ledger as u32, data_size);
-
-        let mut response = client
-            .get(url)
-            .send()
+        let client = self.get_api_client();
+        client
+            .get_data_price(self.get_peer_addr(), ledger, data_size)
             .await
-            .map_err(|e| eyre::eyre!("Failed to get price: {}", e))?;
-
-        if response.status() != awc::http::StatusCode::OK {
-            return Err(eyre::eyre!(
-                "Price endpoint returned status: {}",
-                response.status()
-            ));
-        }
-
-        let price_info: PriceInfo = response
-            .json()
-            .await
-            .map_err(|e| eyre::eyre!("Failed to parse price response: {}", e))?;
-
-        Ok(price_info)
     }
 
     pub async fn create_publish_data_tx(
@@ -1419,6 +1418,7 @@ impl IrysNodeTest<IrysNodeCtx> {
             node_ctx: (),
             cfg,
             temp_dir: self.temp_dir,
+            name: self.name,
         }
     }
 
@@ -1662,31 +1662,17 @@ impl IrysNodeTest<IrysNodeCtx> {
         assert_eq!(response.status(), StatusCode::OK);
     }
 
+    pub fn get_api_client(&self) -> IrysApiClient {
+        IrysApiClient::new()
+    }
+
+    pub fn get_peer_addr(&self) -> SocketAddr {
+        self.node_ctx.config.node_config.peer_address().api
+    }
+
     pub async fn upload_chunks(&self, tx: &DataTransaction) -> eyre::Result<()> {
-        let data = tx.data.clone().unwrap().0;
-
-        let client = awc::Client::default();
-        let api_uri = self.node_ctx.config.node_config.api_uri();
-        let url = format!("{}/v1/chunk", api_uri);
-
-        for (idx, chunk) in tx.chunks.iter().enumerate() {
-            let unpacked_chunk = UnpackedChunk {
-                data_root: tx.header.data_root,
-                data_size: tx.header.data_size,
-                data_path: Base64(tx.proofs[idx].proof.clone()),
-                bytes: Base64(data[chunk.min_byte_range..chunk.max_byte_range].to_vec()),
-                tx_offset: TxChunkOffset::from(idx as u32),
-            };
-            let response = client
-                .post(&url)
-                .send_json(&unpacked_chunk) // Send the tx as JSON in the request body
-                .await
-                .expect("client post failed");
-
-            assert_eq!(response.status(), StatusCode::OK);
-        }
-
-        Ok(())
+        let client = self.get_api_client();
+        client.upload_chunks(self.get_peer_addr(), tx).await
     }
 
     pub async fn post_commitment_tx(
@@ -2106,6 +2092,30 @@ impl IrysNodeTest<IrysNodeCtx> {
 
         Ok(())
     }
+
+    pub fn chunk_bytes_gen(
+        count: u64,
+        chunk_size: usize,
+        seed: u64,
+    ) -> impl Iterator<Item = eyre::Result<ChunkBytes>> {
+        chunk_bytes_gen(count, chunk_size, seed)
+    }
+}
+
+// simple "generator" that produces an iterator of deterministically random chunk bytes
+// this is used to create & verify large txs without having to write them to an intermediary
+pub fn chunk_bytes_gen(
+    count: u64,
+    chunk_size: usize,
+    seed: u64,
+) -> impl Iterator<Item = eyre::Result<ChunkBytes>> {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
+    (0..count).map(move |i| {
+        debug!("generated chunk {}", &i);
+        let mut chunk_bytes = vec![0; chunk_size];
+        rng.fill(&mut chunk_bytes[..]);
+        Ok(chunk_bytes)
+    })
 }
 
 /// Construct a SolutionContext using a provided PoA chunk for the current step.
