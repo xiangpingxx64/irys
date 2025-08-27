@@ -1152,6 +1152,7 @@ impl IrysNode {
             Arc::clone(&block_pool),
             gossip_data_handler,
             (chain_sync_tx, chain_sync_rx),
+            reth_service_actor.clone(),
         );
 
         // set up IrysNodeCtx
@@ -1599,6 +1600,7 @@ impl IrysNode {
             UnboundedSender<SyncChainServiceMessage>,
             UnboundedReceiver<SyncChainServiceMessage>,
         ),
+        reth_service_addr: Addr<RethServiceActor>,
     ) -> (SyncChainServiceFacade, TokioServiceHandle) {
         let facade = SyncChainServiceFacade::new(tx);
 
@@ -1609,6 +1611,7 @@ impl IrysNode {
             block_index_guard,
             block_pool,
             gossip_data_handler,
+            Some(reth_service_addr),
         );
 
         let handle = ChainSyncService::spawn_service(inner, rx, runtime_handle);
