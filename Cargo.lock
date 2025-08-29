@@ -5068,6 +5068,7 @@ dependencies = [
  "async-trait",
  "dashmap 6.1.0",
  "eyre",
+ "futures",
  "irys-actors",
  "irys-api-client",
  "irys-database",
