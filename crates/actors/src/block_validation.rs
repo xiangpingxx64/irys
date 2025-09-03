@@ -51,7 +51,7 @@ use std::{
 use thiserror::Error;
 use tracing::{debug, error, info, warn, Instrument as _};
 
-#[derive(Debug, Error)]
+#[derive(Debug, PartialEq, Error)]
 pub enum PreValidationError {
     #[error("Failed to get block bounds: {0}")]
     BlockBoundsLookupError(String),
@@ -205,6 +205,8 @@ pub enum PreValidationError {
     InvalidIngressProof { tx_id: H256, reason: String },
     #[error("Ingress proof mismatch for transaction {tx_id}")]
     IngressProofMismatch { tx_id: H256 },
+    #[error("Duplicate ingress proof signer {signer} for transaction {tx_id}")]
+    DuplicateIngressProofSigner { tx_id: H256, signer: Address },
     #[error("Database Error {error}")]
     DatabaseError { error: String },
 }
@@ -393,6 +395,14 @@ pub async fn prevalidate_block(
             expected: reward.amount,
         });
     }
+
+    // Validate ingress proof signer uniqueness
+    validate_unique_ingress_proof_signers(&block)?;
+    debug!(
+        block_hash = ?block.block_hash,
+        ?block.height,
+        "ingress_proof_signers_unique",
+    );
 
     // After pre-validating a bunch of quick checks we validate the signature
     // TODO: We may want to further check if the signer is a staked address
@@ -1647,7 +1657,6 @@ pub async fn data_txs_are_valid(
         });
     }
 
-    // Validate ingress proofs list matches Publish ledger transactions
     if let Some(proofs_list) = &publish_ledger.proofs {
         let expected_proof_count =
             publish_txs.len() * (config.consensus.number_of_ingress_proofs_total as usize);
@@ -1712,6 +1721,71 @@ fn extract_data_ledgers(
         [..] => eyre::bail!("Expect exactly 2 data ledgers to be present on the block"),
     };
     Ok((publish_ledger, submit_ledger))
+}
+
+/// Validates that all ingress proof signers are unique for each transaction in the Publish ledger
+fn validate_unique_ingress_proof_signers(
+    block: &IrysBlockHeader,
+) -> Result<(), PreValidationError> {
+    // Extract publish ledger
+    let publish_ledger = block
+        .data_ledgers
+        .iter()
+        .find(|ledger| ledger.ledger_id == DataLedger::Publish as u32)
+        .ok_or_else(|| {
+            PreValidationError::DataLedgerExtractionFailed("Publish ledger not found".to_string())
+        })?;
+
+    // Early return if no proofs
+    let Some(proofs_list) = &publish_ledger.proofs else {
+        return Ok(());
+    };
+
+    // If we have proofs but no transactions, that's an error
+    if publish_ledger.tx_ids.is_empty() && !proofs_list.is_empty() {
+        return Err(PreValidationError::PublishLedgerProofCountMismatch {
+            proof_count: proofs_list.len(),
+            tx_count: 0,
+        });
+    }
+
+    // For each transaction in the publish ledger, validate unique signers
+    for tx_id in &publish_ledger.tx_ids.0 {
+        let tx_proofs = get_ingress_proofs(publish_ledger, tx_id).map_err(|e| {
+            PreValidationError::InvalidIngressProof {
+                tx_id: *tx_id,
+                reason: e.to_string(),
+            }
+        })?;
+
+        // Track signer counts for this transaction to ensure each appears exactly once
+        let mut signer_counts = std::collections::HashMap::new();
+
+        for ingress_proof in tx_proofs.iter() {
+            // Recover the signer address
+            let signer = ingress_proof.recover_signer().map_err(|e| {
+                PreValidationError::InvalidIngressProof {
+                    tx_id: *tx_id,
+                    reason: e.to_string(),
+                }
+            })?;
+
+            // Increment the count for this signer
+            *signer_counts.entry(signer).or_insert(0) += 1;
+        }
+
+        // Check that each signer appears exactly once
+        for (signer, count) in signer_counts.iter() {
+            if *count != 1 {
+                return Err(PreValidationError::DuplicateIngressProofSigner {
+                    tx_id: *tx_id,
+                    signer: *signer,
+                });
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// State for tracking transaction inclusion search
