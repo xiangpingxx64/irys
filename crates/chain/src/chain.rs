@@ -1807,6 +1807,19 @@ async fn stake_and_pledge(
     latest_block_hash: BlockHash,
     mempool_pledge_provider: Arc<MempoolPledgeProvider>,
 ) -> eyre::Result<()> {
+    // get all SMs with and without a partition assignment
+    let (assigned_modules, unassigned_modules): (Vec<Arc<StorageModule>>, Vec<Arc<StorageModule>>) = {
+        let sms = storage_modules_guard.read();
+        sms.iter()
+            .cloned()
+            .partition(|sm| sm.partition_assignment().is_some())
+    };
+
+    if unassigned_modules.is_empty() {
+        debug!("No unassigned modules locally, skipping...");
+        return Ok(());
+    }
+
     debug!("Checking Stake & Pledge status");
     // NOTE: this assumes we're caught up with the chain
     // primarily for the anchor used for the produced txs
@@ -1861,14 +1874,6 @@ async fn stake_and_pledge(
         latest_block_hash
     };
 
-    // get all SMs with and without a partition assignment
-    let (assigned_modules, unassigned_modules): (Vec<Arc<StorageModule>>, Vec<Arc<StorageModule>>) = {
-        let sms = storage_modules_guard.read();
-        sms.iter()
-            .cloned()
-            .partition(|sm| sm.partition_assignment().is_some())
-    };
-
     // get the number of pending & historic commitment txs for partitions, if the count is >= the unassigned len, do nothing
     let pending_pledge_count = pending_commitments.map(|pc| pc.pledges.len()).unwrap_or(0);
     let historic_pledge_count = epoch_snapshot.get_partition_assignments(address).len();
@@ -1876,13 +1881,13 @@ async fn stake_and_pledge(
         .len()
         .saturating_sub(pending_pledge_count);
 
-    ensure!(historic_pledge_count == assigned_modules.len(), "Historic pledge count ({}) and assigned module count ({}) are different! this indicates an issue with storage module partition assignment logic!\nDEBUG\n historic_pledges {:?}, assigned_modules: {:?}, unassigned modules: {:?}",
-&historic_pledge_count, assigned_modules.len(), epoch_snapshot.get_partition_assignments(address), assigned_modules, unassigned_modules  );
-
     debug!(
         "Found {} SMs without partition assignments ({} pending pledges, {} historic, {} assigned SMs) - sending {} pledges",
         &unassigned_modules.len(), &pending_pledge_count, &historic_pledge_count, &assigned_modules.len(), &to_pledge_count
     );
+
+    ensure!(historic_pledge_count == assigned_modules.len(), "Historic pledge count ({}) and assigned module count ({}) are different! this indicates an issue with storage module partition assignment logic!\nDEBUG\n historic_pledges {:?}, assigned_modules: {:?}, unassigned modules: {:?}",
+&historic_pledge_count, assigned_modules.len(), epoch_snapshot.get_partition_assignments(address), assigned_modules, unassigned_modules  );
 
     for idx in 0..to_pledge_count {
         // post a pledge tx
