@@ -1,5 +1,5 @@
 
-## forked from irys offical github,  using for learning.
+## Forked from irys offical github,  using for learning.
 # irys
 
 ## Development setup
